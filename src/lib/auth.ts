@@ -5,7 +5,6 @@ import { stripe as baStripe } from "@better-auth/stripe"
 import Stripe from "stripe"
 
 import { tanstackStartCookies } from "better-auth/tanstack-start";
-console.log("STRIPE_SECRET_KEY:", process.env.STRIPE_SK_KEY);
 const stripeClient = new Stripe(process.env.STRIPE_SK_KEY!, {
     apiVersion: "2025-12-15.clover", // Latest API version as of Stripe SDK v20.0.0
 })
