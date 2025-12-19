@@ -1,14 +1,14 @@
+"use client";
+
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { Button } from "../components/ui/button";
-import { authClient } from "../lib/auth-client";
-
-export const Route = createFileRoute("/")({ component: LandingPage });
+import { Button } from "@/components/ui/button";
+import { authClient } from "@/lib/auth-client";
 
 import { Card, CardContent } from "@/components/ui/card";
 
-function LandingPage() {
+export default function Home() {
 	return (
 		<main className="min-h-screen flex items-center justify-center px-6">
 			<motion.div
