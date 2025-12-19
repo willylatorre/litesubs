@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { db } from "@/db"; // your drizzle instance
+import { db } from "@/app/db"; // your drizzle instance
 import { stripe as baStripe } from "@better-auth/stripe"
 import Stripe from "stripe"
 

@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { signup } from '@/app/actions/auth'
+
 
 export function LoginForm({
 	className,
@@ -30,7 +32,7 @@ export function LoginForm({
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<form>
+					<form action={signup}>
 						<FieldGroup>
 							<Field>
 								<Button variant="outline" type="button">

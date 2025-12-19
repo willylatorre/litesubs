@@ -50,6 +50,9 @@ export default function Home() {
 					<Button size="lg" className="px-10" asChild>
 						<a href="/dashboard">Go to dashboard</a>
 					</Button>
+					<Button size="lg" className="px-10" asChild>
+						<a href="/auth/sign-in">Go to login</a>
+					</Button>
 					<span className="text-xs text-muted-foreground">
 						Free during early access
 					</span>
