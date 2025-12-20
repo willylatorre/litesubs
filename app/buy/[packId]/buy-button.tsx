@@ -11,7 +11,9 @@ export function BuyButton({ productId, price }: { productId: string, price: numb
         <Button 
             className="w-full" 
             size="lg" 
-            onClick={() => startTransition(() => createCheckoutSession(productId))}
+            onClick={() => startTransition(async () => {
+                await createCheckoutSession(productId)
+            })}
             disabled={isPending}
         >
             {isPending ? 'Processing...' : `Proceed to Payment ($${(price / 100).toFixed(2)})`}
