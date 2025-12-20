@@ -1,6 +1,6 @@
 'use client'
 
-import { createProduct } from '@/app/actions/products'
+import { createProduct, type ProductActionState } from '@/app/actions/products'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -18,7 +18,7 @@ import { Loader2, Plus } from 'lucide-react'
 import { useActionState, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
-const initialState = {
+const initialState: ProductActionState = {
   error: '',
   fieldErrors: {},
   success: false,

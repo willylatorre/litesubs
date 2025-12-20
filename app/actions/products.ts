@@ -15,7 +15,18 @@ const createProductSchema = z.object({
   credits: z.coerce.number().int().min(1, 'Credits must be at least 1'),
 })
 
-export async function createProduct(prevState: any, formData: FormData) {
+export type ProductActionState = {
+  error?: string
+  fieldErrors?: {
+    name?: string[]
+    description?: string[]
+    price?: string[]
+    credits?: string[]
+  }
+  success?: boolean
+}
+
+export async function createProduct(prevState: ProductActionState, formData: FormData): Promise<ProductActionState> {
   const session = await auth.api.getSession({
     headers: await headers(),
   })
