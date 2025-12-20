@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import {
+  IconChecklist,
   IconDashboard,
   IconHelp,
   IconInnerShadowTop,
@@ -10,6 +11,7 @@ import {
   IconSettings,
   IconUsers,
 } from "@tabler/icons-react"
+import Link from "next/link"
 
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
@@ -18,6 +20,9 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -26,7 +31,14 @@ import {
 import { authClient } from "@/lib/auth-client"
 
 const data = {
-  navMain: [
+  navSubscriptions: [
+    {
+      title: "Active Subscriptions",
+      url: "/dashboard/subscriptions",
+      icon: IconChecklist,
+    },
+  ],
+  navCreator: [
     {
       title: "Dashboard",
       url: "/dashboard",
@@ -88,7 +100,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        {/* Active Subscriptions Group */}
+        <SidebarGroup>
+          <SidebarGroupLabel>My Subscriptions</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {data.navSubscriptions.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild tooltip={item.title}>
+                    <Link href={item.url}>
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Creator Group */}
+        <NavMain items={data.navCreator} label="Creator" />
+        
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>

@@ -3,7 +3,7 @@
 import { db } from '@/app/db'
 import { transactions, products, userBalances } from '@/app/db/schema'
 import { auth } from '@/lib/auth'
-import { eq, and, count, sum } from 'drizzle-orm'
+import { eq, and, count, sum, inArray } from 'drizzle-orm'
 import { headers } from 'next/headers'
 
 export async function getDashboardStats() {
@@ -68,5 +68,21 @@ export async function getUserSubscriptions() {
     },
   })
 
-  return balances
+  if (balances.length === 0) {
+    return []
+  }
+
+  const creatorIds = balances.map((b) => b.creatorId)
+  
+  const creatorProducts = await db.query.products.findMany({
+    where: and(
+        inArray(products.creatorId, creatorIds),
+        eq(products.active, true)
+    )
+  })
+
+  return balances.map((balance) => ({
+      ...balance,
+      packs: creatorProducts.filter((p) => p.creatorId === balance.creatorId)
+  }))
 }
