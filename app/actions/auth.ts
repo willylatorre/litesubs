@@ -1,6 +1,6 @@
 import { authClient } from "@/lib/auth-client"
 
-export async function signup(state: FormState, formData: FormData) {
+export async function signup(formData: FormData) {
 
     const email = formData.get('email')
     const password = formData.get('password')
