@@ -84,7 +84,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const user = session.data?.user || {
     name: "User",
     email: "user@example.com",
-    avatar: "",
+    image: "",
   }
 
   return (

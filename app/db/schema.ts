@@ -44,7 +44,10 @@ export const products = pgTable('products', {
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
-})
+}, (table) => [
+  index('product_creator_idx').on(table.creatorId),
+  index('product_created_at_idx').on(table.createdAt),
+])
 
 export const userBalances = pgTable(
   'user_balances',
@@ -94,6 +97,8 @@ export const transactions = pgTable(
   (table) => [
     index('tx_user_idx').on(table.userId),
     index('tx_creator_idx').on(table.creatorId),
+    index('tx_product_idx').on(table.productId),
+    index('tx_created_at_idx').on(table.createdAt),
   ]
 )
 
@@ -112,7 +117,10 @@ export const invites = pgTable('invites', {
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
-})
+}, (table) => [
+  index('invite_creator_idx').on(table.creatorId),
+  index('invite_email_idx').on(table.email),
+])
 
 // Relations
 

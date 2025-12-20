@@ -59,7 +59,7 @@ export default async function Page() {
                         {sub.packs.length > 0 ? (
                            <div className="flex flex-wrap gap-2">
                              {sub.packs.slice(0, 2).map(pack => (
-                               <Button key={pack.id} asChild variant="secondary" size="xs" className="h-7 text-xs">
+                               <Button key={pack.id} asChild variant="secondary" size="sm" className="h-7 text-xs">
                                  <Link href={`/buy/${pack.id}`}>
                                    <IconShoppingCart className="mr-1 size-3" />
                                    {pack.name} (${(pack.price/100).toFixed(0)})
@@ -67,7 +67,7 @@ export default async function Page() {
                                </Button>
                              ))}
                              {sub.packs.length > 2 && (
-                                <Button asChild variant="ghost" size="xs" className="h-7 text-xs">
+                                <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
                                   <Link href="/dashboard/subscriptions">+{sub.packs.length - 2} more</Link>
                                 </Button>
                              )}
