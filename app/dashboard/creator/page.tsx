@@ -10,6 +10,7 @@ import { IconArrowRight } from "@tabler/icons-react"
 import { CreatePackDialog } from "../packs/create-pack-dialog"
 import { InviteUserDialog } from "./invite-user-dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { PackItem } from "@/components/pack-item"
 
 export default async function CreatorDashboardPage() {
   const [stats, products, invites] = await Promise.all([
@@ -57,17 +58,17 @@ export default async function CreatorDashboardPage() {
               ) : (
                 <div className="grid gap-4">
                   {livePacks.slice(0, 5).map((pack) => (
-                    <div key={pack.id} className="flex items-center justify-between space-x-4 rounded-md border p-4">
-                      <div className="flex flex-col space-y-1">
-                        <span className="font-medium leading-none">{pack.name}</span>
-                        <span className="text-sm text-muted-foreground">
-                          {pack.credits} Credits • ${(pack.price / 100).toFixed(2)}
-                        </span>
-                      </div>
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/dashboard/packs`}>Manage</Link>
-                      </Button>
-                    </div>
+                    <PackItem
+                      key={pack.id}
+                      name={pack.name}
+                      credits={pack.credits}
+                      price={pack.price}
+                      action={
+                        <Button asChild variant="outline" size="sm">
+                          <Link href={`/dashboard/packs`}>Manage</Link>
+                        </Button>
+                      }
+                    />
                   ))}
                 </div>
               )}

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { IconShoppingCart } from "@tabler/icons-react"
 import { PendingInviteActions } from "@/components/pending-invite-actions"
+import { PackItem } from "@/components/pack-item"
 
 export default async function SubscriptionsPage() {
     const [subscriptions, pendingInvites] = await Promise.all([
@@ -63,17 +64,20 @@ export default async function SubscriptionsPage() {
                                 ) : (
                                     <div className="space-y-2">
                                         {sub.packs.map((pack) => (
-                                            <div key={pack.id} className="flex items-center justify-between rounded-md border p-2 text-sm">
-                                                <div className="flex flex-col">
-                                                    <span className="font-medium">{pack.name}</span>
-                                                    <span className="text-muted-foreground">{pack.credits} Credits • ${(pack.price / 100).toFixed(2)}</span>
-                                                </div>
-                                                <Button asChild size="sm" variant="secondary">
-                                                    <Link href={`/buy/${pack.id}`}>
-                                                        Buy
-                                                    </Link>
-                                                </Button>
-                                            </div>
+                                            <PackItem
+                                                key={pack.id}
+                                                name={pack.name}
+                                                credits={pack.credits}
+                                                price={pack.price}
+                                                className="p-2 text-sm"
+                                                action={
+                                                    <Button asChild size="sm" variant="secondary">
+                                                        <Link href={`/buy/${pack.id}`}>
+                                                            Buy
+                                                        </Link>
+                                                    </Button>
+                                                }
+                                            />
                                         ))}
                                     </div>
                                 )}
