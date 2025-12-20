@@ -1,5 +1,3 @@
-"use client";
-
 import { getDashboardStats, getUserSubscriptions } from "@/app/actions/dashboard"
 import { getCreatorProducts } from "@/app/actions/products"
 import { SectionCards } from "@/components/section-cards"
