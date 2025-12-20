@@ -1,30 +1,29 @@
-import { getDashboardStats, getUserSubscriptions } from "@/app/actions/dashboard"
-import { getCreatorProducts } from "@/app/actions/products"
-import { SectionCards } from "@/components/section-cards"
+import { getConsumerStats, getUserSubscriptions } from "@/app/actions/dashboard"
+import { ConsumerStatsCards } from "@/components/consumer-stats-cards"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { IconArrowRight, IconShoppingCart } from "@tabler/icons-react"
 
 export default async function Page() {
-  const [stats, subscriptions, products] = await Promise.all([
-    getDashboardStats(),
+  const [stats, subscriptions] = await Promise.all([
+    getConsumerStats(),
     getUserSubscriptions(),
-    getCreatorProducts(),
   ])
-
-  const livePacks = products.filter((p) => p.active)
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-2">
       <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-        <SectionCards 
-          totalRevenue={stats.totalRevenue} 
-          activeProducts={stats.activeProducts} 
-          totalCustomers={stats.totalCustomers} 
+        <div className="flex items-center justify-between px-4 lg:px-6">
+             <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        </div>
+
+        <ConsumerStatsCards 
+          totalSpent={stats.totalSpent} 
+          activeSubscriptionsCount={stats.activeSubscriptionsCount}
         />
         
-        <div className="grid gap-4 px-4 lg:px-6 md:grid-cols-2">
+        <div className="grid gap-4 px-4 lg:px-6">
            {/* Active Subscriptions Section (Consumers) */}
            <Card className="flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -80,42 +79,6 @@ export default async function Page() {
                     </div>
                   ))}
                  </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Live Packs Section (Creators) */}
-          <Card className="flex flex-col">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <div className="grid gap-1">
-                <CardTitle>Your Live Packs</CardTitle>
-                <CardDescription>Packs you are selling.</CardDescription>
-              </div>
-              <Button asChild variant="ghost" size="sm" className="hidden sm:flex">
-                <Link href="/dashboard/packs">
-                  View All <IconArrowRight className="ml-2 size-4" />
-                </Link>
-              </Button>
-            </CardHeader>
-            <CardContent className="grid gap-4 pt-4">
-              {livePacks.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No active packs created yet.</p>
-              ) : (
-                <div className="grid gap-4">
-                  {livePacks.slice(0, 5).map((pack) => (
-                    <div key={pack.id} className="flex items-center justify-between space-x-4 rounded-md border p-4">
-                      <div className="flex flex-col space-y-1">
-                        <span className="font-medium leading-none">{pack.name}</span>
-                        <span className="text-sm text-muted-foreground">
-                          {pack.credits} Credits • ${(pack.price / 100).toFixed(2)}
-                        </span>
-                      </div>
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/dashboard/packs`}>Manage</Link>
-                      </Button>
-                    </div>
-                  ))}
-                </div>
               )}
             </CardContent>
           </Card>

@@ -6,7 +6,7 @@ import { auth } from '@/lib/auth'
 import { eq, and, count, sum, inArray } from 'drizzle-orm'
 import { headers } from 'next/headers'
 
-export async function getDashboardStats() {
+export async function getCreatorStats() {
   const session = await auth.api.getSession({
     headers: await headers(),
   })
@@ -49,6 +49,40 @@ export async function getDashboardStats() {
     totalRevenue: Number(revenueResult?.value || 0),
     activeProducts: Number(productsResult?.count || 0),
     totalCustomers: Number(customersResult?.count || 0),
+  }
+}
+
+export async function getConsumerStats() {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  })
+
+  if (!session?.user) {
+    return {
+      totalSpent: 0,
+      activeSubscriptionsCount: 0,
+    }
+  }
+
+  const [spentResult] = await db
+    .select({ value: sum(products.price) })
+    .from(transactions)
+    .innerJoin(products, eq(transactions.productId, products.id))
+    .where(
+      and(
+        eq(transactions.userId, session.user.id),
+        eq(transactions.type, 'purchase')
+      )
+    )
+
+  const [subsResult] = await db
+    .select({ count: count() })
+    .from(userBalances)
+    .where(eq(userBalances.userId, session.user.id))
+
+  return {
+    totalSpent: Number(spentResult?.value || 0),
+    activeSubscriptionsCount: Number(subsResult?.count || 0),
   }
 }
 

@@ -33,6 +33,11 @@ import { authClient } from "@/lib/auth-client"
 const data = {
   navSubscriptions: [
     {
+      title: "Dashboard",
+      url: "/dashboard",
+      icon: IconDashboard,
+    },
+    {
       title: "Active Subscriptions",
       url: "/dashboard/subscriptions",
       icon: IconChecklist,
@@ -41,7 +46,7 @@ const data = {
   navCreator: [
     {
       title: "Dashboard",
-      url: "/dashboard",
+      url: "/dashboard/creator",
       icon: IconDashboard,
     },
     {
@@ -102,7 +107,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
         {/* Active Subscriptions Group */}
         <SidebarGroup>
-          <SidebarGroupLabel>My Subscriptions</SidebarGroupLabel>
+          <SidebarGroupLabel>My Account</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {data.navSubscriptions.map((item) => (
