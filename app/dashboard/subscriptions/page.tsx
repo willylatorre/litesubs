@@ -1,12 +1,16 @@
-
 import { getUserSubscriptions } from "@/app/actions/dashboard"
+import { getUserPendingInvites } from "@/app/actions/invites"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { IconShoppingCart } from "@tabler/icons-react"
+import { PendingInviteActions } from "@/components/pending-invite-actions"
 
 export default async function SubscriptionsPage() {
-    const subscriptions = await getUserSubscriptions()
+    const [subscriptions, pendingInvites] = await Promise.all([
+        getUserSubscriptions(),
+        getUserPendingInvites()
+    ])
 
     return (
         <div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
@@ -16,6 +20,27 @@ export default async function SubscriptionsPage() {
                     <p className="text-muted-foreground text-sm">Manage your credits and purchase new packs.</p>
                 </div>
             </div>
+
+            {/* Pending Invites Section */}
+            {pendingInvites.length > 0 && (
+                <Card className="border-primary/20 bg-primary/5">
+                    <CardHeader>
+                        <CardTitle className="text-lg">Pending Invites</CardTitle>
+                        <CardDescription>You have been invited to connect with these creators.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-4">
+                        {pendingInvites.map((invite) => (
+                            <div key={invite.id} className="flex items-center justify-between rounded-md border bg-card p-4">
+                                <div className="flex flex-col">
+                                    <span className="font-medium text-base">{invite.creator.name}</span>
+                                    <span className="text-sm text-muted-foreground">Invited you on {new Date(invite.createdAt).toLocaleDateString()}</span>
+                                </div>
+                                <PendingInviteActions inviteId={invite.id} />
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+            )}
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {subscriptions.length === 0 ? (

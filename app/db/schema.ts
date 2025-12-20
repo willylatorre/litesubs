@@ -22,6 +22,7 @@ export const transactionTypeEnum = pgEnum('transaction_type', [
   'usage',
   'refund',
 ])
+export const inviteStatusEnum = pgEnum('invite_status', ['pending', 'accepted', 'rejected'])
 
 // Tables
 
@@ -96,6 +97,23 @@ export const transactions = pgTable(
   ]
 )
 
+export const invites = pgTable('invites', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  creatorId: text('creator_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  email: text('email').notNull(),
+  status: inviteStatusEnum('status').default('pending').notNull(),
+  token: text('token').notNull().unique(), // unique string for the link
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+})
+
 // Relations
 
 export const productsRelations = relations(products, ({ one, many }) => ({
@@ -131,5 +149,12 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
   product: one(products, {
     fields: [transactions.productId],
     references: [products.id],
+  }),
+}))
+
+export const invitesRelations = relations(invites, ({ one }) => ({
+  creator: one(user, {
+    fields: [invites.creatorId],
+    references: [user.id],
   }),
 }))

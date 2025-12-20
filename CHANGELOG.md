@@ -37,3 +37,9 @@ All notable changes to this project will be documented in this file.
 - Created `app/dashboard/creator/page.tsx` for creator-specific stats and actions.
 - Added `getConsumerStats` and `getCreatorStats` to `app/actions/dashboard.ts`.
 - Added `components/consumer-stats-cards.tsx` for displaying consumer-specific metrics.
+- Implemented invitation system:
+    - Added `invites` table and `inviteStatusEnum` to database schema.
+    - Created `app/actions/invites.ts` for managing invites (create, list, respond).
+    - Added "Invite Customer" dialog in Creator Dashboard.
+    - Added "Pending Invites" section in Consumer Subscriptions page.
+    - Implemented logic to create 0-credit subscriptions upon accepting an invite.

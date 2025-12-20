@@ -15,6 +15,13 @@
       "when": 1766227593174,
       "tag": "0001_lean_iron_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1766232484710,
+      "tag": "0002_mute_jackal",
+      "breakpoints": true
     }
   ]
 }
