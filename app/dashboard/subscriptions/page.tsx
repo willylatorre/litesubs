@@ -66,10 +66,12 @@ export default async function SubscriptionsPage() {
                                         {sub.packs.map((pack) => (
                                             <PackItem
                                                 key={pack.id}
-                                                name={pack.name}
-                                                credits={pack.credits}
-                                                price={pack.price}
-                                                className="p-2 text-sm"
+                                                product={{
+                                                    name: pack.name,
+                                                    credits: pack.credits,
+                                                    price: pack.price,
+                                                    description: pack.description
+                                                }}
                                                 action={
                                                     <Button asChild size="sm" variant="secondary">
                                                         <Link href={`/buy/${pack.id}`}>

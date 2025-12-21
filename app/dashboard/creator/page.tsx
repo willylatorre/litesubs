@@ -60,9 +60,13 @@ export default async function CreatorDashboardPage() {
                   {livePacks.slice(0, 5).map((pack) => (
                     <PackItem
                       key={pack.id}
-                      name={pack.name}
-                      credits={pack.credits}
-                      price={pack.price}
+                      product={{
+                        name: pack.name,
+                        credits: pack.credits,
+                        price: pack.price,
+                        description: pack.description,
+                        badge: "Active"
+                      }}
                       action={
                         <Button asChild variant="outline" size="sm">
                           <Link href={`/dashboard/packs`}>Manage</Link>

@@ -1,40 +1,82 @@
-import { cn } from "@/lib/utils"
-import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { Coins } from "lucide-react";
 
-interface PackItemProps {
-  name: string
-  credits: number
-  price: number
-  action?: React.ReactNode
-  className?: string
-  onCreditsHover?: (hovering: boolean) => void
-  onPriceHover?: (hovering: boolean) => void
+export interface PackItemProduct {
+	name: string;
+	credits: number;
+	price: number;
+	description?: string | null;
+	badge?: string | null;
 }
 
-export function PackItem({ name, credits, price, action, className, onCreditsHover, onPriceHover }: PackItemProps) {
-  return (
-    <Card className={cn("flex items-center justify-between p-4 shadow-sm transition-all hover:shadow-md font-sans tracking-tight", className)}>
-      <div className="flex flex-col gap-0.5">
-        <span className="font-medium text-sm leading-none">{name}</span>
-        <span className="text-xs text-muted-foreground flex items-center gap-1">
-          <span 
-            className={cn(onCreditsHover && "cursor-help hover:text-foreground transition-colors")}
-            onMouseEnter={() => onCreditsHover?.(true)}
-            onMouseLeave={() => onCreditsHover?.(false)}
-          >
-            {credits} Credits
-          </span>
-          <span>•</span>
-          <span
-            className={cn(onPriceHover && "cursor-help hover:text-foreground transition-colors")}
-            onMouseEnter={() => onPriceHover?.(true)}
-            onMouseLeave={() => onPriceHover?.(false)}
-          >
-            ${(price / 100).toFixed(2)}
-          </span>
-        </span>
-      </div>
-      {action}
-    </Card>
-  )
+interface PackItemProps {
+	product: PackItemProduct;
+	action?: React.ReactNode;
+	className?: string;
+	onCreditsHover?: (hovering: boolean) => void;
+	onPriceHover?: (hovering: boolean) => void;
+}
+
+export function PackItem({
+	product,
+	action,
+	className,
+	onCreditsHover,
+	onPriceHover,
+}: PackItemProps) {
+	const { name, credits, price, description, badge } = product;
+
+	return (
+		<Card
+			className={cn(
+				"relative flex flex-col justify-between p-3 shadow-xl border-0 font-sans h-full min-h-[200px]",
+				className,
+			)}
+		>
+			<div className="flex flex-col items-start gap-4">
+				<div className="flex items-center justify-between w-full">
+					<div className="rounded-full text-primary">
+						<Coins className="h-5 w-5" />
+					</div>
+					{badge && (
+						<Badge
+							variant="outline"
+							className="text-muted-foreground font-normal"
+						>
+							{badge}
+						</Badge>
+					)}
+				</div>
+
+				<div className="flex flex-col items-start gap-2 w-full">
+					<h3 className="text-lg font-bold">{name}</h3>
+					<p className="text-sm text-left text-muted-foreground leading-relaxed">
+						{description || "Get started with a simple credit pack."}
+					</p>
+				</div>
+			</div>
+
+			<div className="flex items-center justify-between mt-6">
+				<span
+					className={cn(
+						"text-sm font-medium text-muted-foreground",
+						onCreditsHover &&
+							"cursor-help hover:text-foreground transition-colors",
+					)}
+					onMouseEnter={() => onCreditsHover?.(true)}
+					onMouseLeave={() => onCreditsHover?.(false)}
+				>
+					{credits} credits left
+				</span>
+				<div
+					onMouseEnter={() => onPriceHover?.(true)}
+					onMouseLeave={() => onPriceHover?.(false)}
+				>
+					{action}
+				</div>
+			</div>
+		</Card>
+	);
 }

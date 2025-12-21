@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    serverActions: {
+      allowedOrigins: ['*.app.github.dev', 'http://localhost:3000', 'litesubs.com'],
+    },
+  },
 };
 
 export default nextConfig;
