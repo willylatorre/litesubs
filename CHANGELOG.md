@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - 2025-12-21
+
+### Added
+- Integrated **TanStack React Query** for robust client-side state management and caching.
+- Created custom hooks for data fetching and mutations:
+    - `hooks/use-products.ts`: `useProducts`, `useCreateProduct`, `useUpdateProductStatus`.
+    - `hooks/use-invites.ts`: `useInvites`, `useCreateInvite`.
+- Created API routes for developer integration:
+    - `app/api/invites/route.ts`: Endpoints for listing and creating invites.
+    - `app/api/products/route.ts`: Endpoints for listing and creating products.
+    - `app/api/products/[id]/route.ts`: Endpoint for updating product status.
+- Added "Developers" section to the Creator Dashboard:
+    - New page at `app/dashboard/developers/page.tsx` with API documentation.
+    - Added "Developers" link to the sidebar navigation.
+- Installed `@tanstack/react-table` and `@tanstack/react-query` dependencies.
+
+### Changed
+- Refactored dashboard components to **Client Components** for improved interactivity:
+    - `app/dashboard/packs/page.tsx`: Now uses `useProducts` hook for real-time updates and includes loading skeletons.
+    - `app/dashboard/creator/page.tsx`: Refactored to use new client-side `RecentInvites` and `LivePacks` components.
+- Migrated `CreatePackDialog` and `InviteUserDialog` to use custom mutation hooks instead of manual fetch/server actions.
+
 ## [Unreleased] - 2025-12-20
 
 ### Added

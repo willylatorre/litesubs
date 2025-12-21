@@ -1,5 +1,6 @@
 'use client'
 
+import { useCreateInvite } from "@/hooks/use-invites"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -13,46 +14,21 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { IconMailPlus } from "@tabler/icons-react"
-import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { toast } from "sonner"
 
 export function InviteUserDialog() {
   const [open, setOpen] = useState(false)
-  const [isPending, setIsPending] = useState(false)
-  const router = useRouter()
+  const { mutate, isPending } = useCreateInvite()
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    setIsPending(true)
-
     const formData = new FormData(e.currentTarget)
-    const email = formData.get('email')
-
-    try {
-        const res = await fetch('/api/invites', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ email })
-        })
-
-        const result = await res.json()
-
-        if (!res.ok) {
-            toast.error(result.error || 'Failed to send invite')
-            return
-        }
-
-        toast.success('Invite sent!')
-        setOpen(false)
-        router.refresh()
-    } catch (error) {
-        toast.error('Something went wrong')
-    } finally {
-        setIsPending(false)
-    }
+    
+    mutate({
+        email: formData.get('email') as string
+    }, {
+        onSuccess: () => setOpen(false)
+    })
   }
 
   return (

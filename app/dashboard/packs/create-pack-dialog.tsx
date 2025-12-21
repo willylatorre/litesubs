@@ -1,5 +1,6 @@
 'use client'
 
+import { useCreateProduct } from '@/hooks/use-products'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -14,64 +15,24 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Loader2, Plus } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { toast } from 'sonner'
-
-type FieldErrors = {
-  name?: string[]
-  description?: string[]
-  price?: string[]
-  credits?: string[]
-}
 
 export function CreatePackDialog() {
   const [open, setOpen] = useState(false)
-  const [isPending, setIsPending] = useState(false)
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
-  const router = useRouter()
+  const { mutate, isPending } = useCreateProduct()
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    setIsPending(true)
-    setFieldErrors({})
-
     const formData = new FormData(e.currentTarget)
-    const data = {
-      name: formData.get('name'),
-      description: formData.get('description'),
-      price: formData.get('price'),
-      credits: formData.get('credits'),
-    }
-
-    try {
-      const res = await fetch('/api/products', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      })
-
-      const result = await res.json()
-
-      if (!res.ok) {
-        if (result.fieldErrors) {
-          setFieldErrors(result.fieldErrors)
-        } else {
-          toast.error(result.error || 'Failed to create pack')
-        }
-        return
-      }
-
-      toast.success('Pack created successfully')
-      setOpen(false)
-      router.refresh()
-    } catch (error) {
-      toast.error('Something went wrong')
-    } finally {
-      setIsPending(false)
-    }
+    
+    mutate({
+      name: formData.get('name') as string,
+      description: formData.get('description') as string,
+      price: Number(formData.get('price')),
+      credits: Number(formData.get('credits')),
+    }, {
+      onSuccess: () => setOpen(false)
+    })
   }
 
   return (
@@ -99,9 +60,6 @@ export function CreatePackDialog() {
                 placeholder="e.g. Starter Pack"
                 required
               />
-              {fieldErrors.name && (
-                <p className="text-sm text-red-500">{fieldErrors.name[0]}</p>
-              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="description">Description</Label>
@@ -123,9 +81,6 @@ export function CreatePackDialog() {
                   placeholder="10.00"
                   required
                 />
-                {fieldErrors.price && (
-                  <p className="text-sm text-red-500">{fieldErrors.price[0]}</p>
-                )}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="credits">Credits</Label>
@@ -138,9 +93,6 @@ export function CreatePackDialog() {
                   placeholder="100"
                   required
                 />
-                {fieldErrors.credits && (
-                  <p className="text-sm text-red-500">{fieldErrors.credits[0]}</p>
-                )}
               </div>
             </div>
           </div>
