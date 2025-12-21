@@ -1,6 +1,5 @@
 'use client'
 
-import { createInvite } from "@/app/actions/invites"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -14,27 +13,47 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { IconMailPlus } from "@tabler/icons-react"
-import { useActionState, useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { toast } from "sonner"
-
-const initialState = {
-  error: '',
-  success: false,
-  message: ''
-}
 
 export function InviteUserDialog() {
   const [open, setOpen] = useState(false)
-  const [state, formAction, isPending] = useActionState(createInvite, initialState)
+  const [isPending, setIsPending] = useState(false)
+  const router = useRouter()
 
-  useEffect(() => {
-    if (state?.success) {
-      toast.success(state.message)
-      setOpen(false)
-    } else if (state?.error) {
-        toast.error(state.error)
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setIsPending(true)
+
+    const formData = new FormData(e.currentTarget)
+    const email = formData.get('email')
+
+    try {
+        const res = await fetch('/api/invites', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email })
+        })
+
+        const result = await res.json()
+
+        if (!res.ok) {
+            toast.error(result.error || 'Failed to send invite')
+            return
+        }
+
+        toast.success('Invite sent!')
+        setOpen(false)
+        router.refresh()
+    } catch (error) {
+        toast.error('Something went wrong')
+    } finally {
+        setIsPending(false)
     }
-  }, [state])
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -51,7 +70,7 @@ export function InviteUserDialog() {
             Invite a user via email to connect with your creator profile.
           </DialogDescription>
         </DialogHeader>
-        <form action={formAction} className="grid gap-4 py-4">
+        <form onSubmit={onSubmit} className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="email" className="text-right">
               Email

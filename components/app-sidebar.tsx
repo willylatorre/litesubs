@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   IconChecklist,
+  IconCode,
   IconDashboard,
   IconHelp,
   IconInnerShadowTop,
@@ -58,6 +59,11 @@ const data = {
       title: "Customers",
       url: "/dashboard/customers",
       icon: IconUsers,
+    },
+    {
+      title: "Developers",
+      url: "/dashboard/developers",
+      icon: IconCode,
     },
   ],
   navSecondary: [

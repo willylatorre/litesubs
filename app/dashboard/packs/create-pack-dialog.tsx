@@ -1,6 +1,5 @@
 'use client'
 
-import { createProduct, type ProductActionState } from '@/app/actions/products'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -15,27 +14,65 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Loader2, Plus } from 'lucide-react'
-import { useActionState, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { toast } from 'sonner'
 
-const initialState: ProductActionState = {
-  error: '',
-  fieldErrors: {},
-  success: false,
+type FieldErrors = {
+  name?: string[]
+  description?: string[]
+  price?: string[]
+  credits?: string[]
 }
 
 export function CreatePackDialog() {
   const [open, setOpen] = useState(false)
-  const [state, action, isPending] = useActionState(createProduct, initialState)
+  const [isPending, setIsPending] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const router = useRouter()
 
-  useEffect(() => {
-    if (state?.success) {
-      setOpen(false)
-      toast.success('Pack created successfully')
-    } else if (state?.error) {
-      toast.error(state.error as string)
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setIsPending(true)
+    setFieldErrors({})
+
+    const formData = new FormData(e.currentTarget)
+    const data = {
+      name: formData.get('name'),
+      description: formData.get('description'),
+      price: formData.get('price'),
+      credits: formData.get('credits'),
     }
-  }, [state])
+
+    try {
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok) {
+        if (result.fieldErrors) {
+          setFieldErrors(result.fieldErrors)
+        } else {
+          toast.error(result.error || 'Failed to create pack')
+        }
+        return
+      }
+
+      toast.success('Pack created successfully')
+      setOpen(false)
+      router.refresh()
+    } catch (error) {
+      toast.error('Something went wrong')
+    } finally {
+      setIsPending(false)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -46,7 +83,7 @@ export function CreatePackDialog() {
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
-        <form action={action}>
+        <form onSubmit={onSubmit}>
           <DialogHeader>
             <DialogTitle>Create Pack</DialogTitle>
             <DialogDescription>
@@ -62,10 +99,8 @@ export function CreatePackDialog() {
                 placeholder="e.g. Starter Pack"
                 required
               />
-              {state?.fieldErrors?.name && (
-                <p className="text-sm text-red-500">
-                  {state.fieldErrors.name[0]}
-                </p>
+              {fieldErrors.name && (
+                <p className="text-sm text-red-500">{fieldErrors.name[0]}</p>
               )}
             </div>
             <div className="grid gap-2">
@@ -88,10 +123,8 @@ export function CreatePackDialog() {
                   placeholder="10.00"
                   required
                 />
-                {state?.fieldErrors?.price && (
-                  <p className="text-sm text-red-500">
-                    {state.fieldErrors.price[0]}
-                  </p>
+                {fieldErrors.price && (
+                  <p className="text-sm text-red-500">{fieldErrors.price[0]}</p>
                 )}
               </div>
               <div className="grid gap-2">
@@ -105,10 +138,8 @@ export function CreatePackDialog() {
                   placeholder="100"
                   required
                 />
-                {state?.fieldErrors?.credits && (
-                  <p className="text-sm text-red-500">
-                    {state.fieldErrors.credits[0]}
-                  </p>
+                {fieldErrors.credits && (
+                  <p className="text-sm text-red-500">{fieldErrors.credits[0]}</p>
                 )}
               </div>
             </div>

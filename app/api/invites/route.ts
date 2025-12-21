@@ -1,0 +1,63 @@
+import { db } from '@/app/db'
+import { invites } from '@/app/db/schema'
+import { auth } from '@/lib/auth'
+import { eq, and } from 'drizzle-orm'
+import { headers } from 'next/headers'
+import { NextResponse } from 'next/server'
+import { z } from 'zod'
+
+const createInviteSchema = z.object({
+  email: z.string().email(),
+})
+
+export async function GET() {
+    const session = await auth.api.getSession({ headers: await headers() })
+    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const data = await db.query.invites.findMany({
+        where: eq(invites.creatorId, session.user.id),
+        orderBy: (invites, { desc }) => [desc(invites.createdAt)],
+    })
+
+    return NextResponse.json(data)
+}
+
+export async function POST(req: Request) {
+    const session = await auth.api.getSession({ headers: await headers() })
+    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    try {
+        const body = await req.json()
+        const validated = createInviteSchema.safeParse(body)
+
+        if (!validated.success) {
+            return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
+        }
+
+        const existingInvite = await db.query.invites.findFirst({
+            where: and(
+                eq(invites.creatorId, session.user.id),
+                eq(invites.email, validated.data.email),
+                eq(invites.status, 'pending')
+            )
+        })
+
+        if (existingInvite) {
+            return NextResponse.json({ error: 'Pending invite already exists for this email.' }, { status: 409 })
+        }
+
+        const token = crypto.randomUUID()
+        
+        const [newInvite] = await db.insert(invites).values({
+            creatorId: session.user.id,
+            email: validated.data.email,
+            token,
+            status: 'pending',
+        }).returning()
+
+        return NextResponse.json(newInvite, { status: 201 })
+    } catch (error) {
+        console.error("Failed to create invite:", error)
+        return NextResponse.json({ error: 'Failed to create invite' }, { status: 500 })
+    }
+}
