@@ -3,7 +3,7 @@
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/app/db";
-import { invites, userBalances } from "@/app/db/schema";
+import { invites, liteSubscriptions } from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
 import { createInviteSchema } from "@/lib/schemas";
 
@@ -99,15 +99,18 @@ export async function claimInvite(token: string) {
 				})
 				.where(eq(invites.id, invite.id));
 
-			// Create user balance if not exists
-			await tx
-				.insert(userBalances)
-				.values({
-					userId: session.user.id,
-					creatorId: invite.creatorId,
-					credits: 0,
-				})
-				.onConflictDoNothing();
+			if (invite.productId) {
+				// Create a subscription
+				await tx
+					.insert(liteSubscriptions)
+					.values({
+						userId: session.user.id,
+						creatorId: invite.creatorId,
+						productId: invite.productId,
+						credits: 0,
+					})
+					.onConflictDoNothing();
+			}
 		});
 
 		revalidatePath("/dashboard/subscriptions");
@@ -138,13 +141,14 @@ export async function respondToInvite(inviteId: string, accept: boolean) {
 				.set({ status: accept ? "accepted" : "rejected" })
 				.where(eq(invites.id, inviteId));
 
-			if (accept) {
+			if (accept && invite.productId) {
 				// Create user balance if not exists
 				await tx
-					.insert(userBalances)
+					.insert(liteSubscriptions)
 					.values({
 						userId: session.user.id,
 						creatorId: invite.creatorId,
+						productId: invite.productId,
 						credits: 0,
 					})
 					.onConflictDoNothing();

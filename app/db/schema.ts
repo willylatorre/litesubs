@@ -175,12 +175,135 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
 }));
 
 export const invitesRelations = relations(invites, ({ one }) => ({
+
 	creator: one(user, {
+
 		fields: [invites.creatorId],
+
 		references: [user.id],
+
 	}),
+
 	product: one(products, {
+
 		fields: [invites.productId],
+
 		references: [products.id],
+
 	}),
+
 }));
+
+
+
+export const liteSubscriptions = pgTable(
+
+	"lite_subscriptions",
+
+	{
+
+		id: text("id")
+
+			.primaryKey()
+
+			.$defaultFn(() => crypto.randomUUID()),
+
+		userId: text("user_id")
+
+			.notNull()
+
+			.references(() => user.id, { onDelete: "cascade" }),
+
+		productId: text("product_id")
+
+			.notNull()
+
+			.references(() => products.id, { onDelete: "cascade" }),
+
+		creatorId: text("creator_id")
+
+			.notNull()
+
+			.references(() => user.id, { onDelete: "cascade" }),
+
+		credits: integer("credits").notNull().default(0),
+
+		createdAt: timestamp("created_at", { withTimezone: true })
+
+			.notNull()
+
+			.defaultNow(),
+
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+
+			.notNull()
+
+			.defaultNow()
+
+			.$onUpdate(() => new Date()),
+
+	},
+
+	(table) => {
+
+		return {
+
+			userIdx: index("lite_subscriptions_user_idx").on(table.userId),
+
+			productIdx: index("lite_subscriptions_product_idx").on(table.productId),
+
+			creatorIdx: index("lite_subscriptions_creator_idx").on(table.creatorId),
+
+			userProductUnique: unique("user_product_unique").on(
+
+				table.userId,
+
+				table.productId,
+
+			),
+
+		};
+
+	},
+
+);
+
+
+
+export const liteSubscriptionsRelations = relations(
+
+	liteSubscriptions,
+
+	({ one }) => ({
+
+		user: one(user, {
+
+			fields: [liteSubscriptions.userId],
+
+			references: [user.id],
+
+		}),
+
+		product: one(products, {
+
+			fields: [liteSubscriptions.productId],
+
+			references: [products.id],
+
+		}),
+
+		creator: one(user, {
+
+			fields: [liteSubscriptions.creatorId],
+
+			references: [user.id],
+
+		}),
+
+	}),
+
+);
+
+
+
+

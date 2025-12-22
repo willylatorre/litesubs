@@ -1,8 +1,13 @@
 "use server";
 
-import { and, count, eq, inArray, sum } from "drizzle-orm";
+import { and, count, countDistinct, eq, inArray, sum } from "drizzle-orm";
 import { db } from "@/app/db";
-import { products, transactions, userBalances } from "@/app/db/schema";
+import {
+	liteSubscriptions,
+	products,
+	transactions,
+	userBalances,
+} from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
 
 export async function getCreatorStats() {
@@ -26,9 +31,9 @@ export async function getCreatorStats() {
 			);
 
 		const [customersResult] = await db
-			.select({ count: count() })
-			.from(userBalances)
-			.where(eq(userBalances.creatorId, session.user.id));
+			.select({ count: countDistinct(liteSubscriptions.userId) })
+			.from(liteSubscriptions)
+			.where(eq(liteSubscriptions.creatorId, session.user.id));
 
 		return {
 			success: true,
@@ -63,8 +68,8 @@ export async function getConsumerStats() {
 
 		const [subsResult] = await db
 			.select({ count: count() })
-			.from(userBalances)
-			.where(eq(userBalances.userId, session.user.id));
+			.from(liteSubscriptions)
+			.where(eq(liteSubscriptions.userId, session.user.id));
 
 		return {
 			success: true,
@@ -84,30 +89,42 @@ export async function getConsumerStats() {
 
 export async function getUserSubscriptions() {
 	return authenticatedAction(async (session) => {
-		const balances = await db.query.userBalances.findMany({
-			where: eq(userBalances.userId, session.user.id),
+		const subs = await db.query.liteSubscriptions.findMany({
+			where: eq(liteSubscriptions.userId, session.user.id),
 			with: {
 				creator: true,
+				product: true,
 			},
 		});
 
-		if (balances.length === 0) {
+		if (subs.length === 0) {
 			return { success: true, data: [] };
 		}
 
-		const creatorIds = balances.map((b) => b.creatorId);
+		// Group subscriptions by creator
+		const subsByCreator = subs.reduce(
+			(acc, sub) => {
+				if (!acc[sub.creatorId]) {
+					acc[sub.creatorId] = {
+						creator: sub.creator,
+						subscriptions: [],
+						packs: [], // Initialize packs here
+					};
+				}
+				acc[sub.creatorId].subscriptions.push(sub);
+				// Add the specific product from the subscription to packs
+				if (sub.product) {
+					acc[sub.creatorId].packs.push(sub.product);
+				}
+				return acc;
+			},
+			{} as Record<
+				string,
+				{ creator: any; subscriptions: (typeof subs)[0][]; packs: (typeof products.$inferSelect)[] }
+			>,
+		);
 
-		const creatorProducts = await db.query.products.findMany({
-			where: and(
-				inArray(products.creatorId, creatorIds),
-				eq(products.active, true),
-			),
-		});
-
-		const data = balances.map((balance) => ({
-			...balance,
-			packs: creatorProducts.filter((p) => p.creatorId === balance.creatorId),
-		}));
+		const data = Object.values(subsByCreator);
 
 		return { success: true, data };
 	}).then((res) => res.data || []);

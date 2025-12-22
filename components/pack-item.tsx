@@ -30,6 +30,7 @@ interface PackItemProps {
 	action?: React.ReactNode;
 	creatorName?: string;
 	withEvents?: boolean;
+	withActions?: boolean;
 	readOnly?: boolean;
 }
 
@@ -45,6 +46,7 @@ export function PackItem({
 	loginUrl,
 	action,
 	creatorName,
+	withActions = true,
 	withEvents = false,
 	readOnly = false,
 }: PackItemProps) {
@@ -95,7 +97,7 @@ export function PackItem({
 	return (
 		<Card
 			className={cn(
-				"relative flex flex-col justify-between p-3 shadow-xl border-0 font-sans h-full min-h-[200px]",
+				`relative flex flex-col justify-between p-3 shadow-xl border-0 font-sans h-full min-h-[${withActions ? 200 : 80}px]`,
 				className,
 			)}
 		>
@@ -127,7 +129,7 @@ export function PackItem({
 				</div>
 			</div>
 
-			<div className="flex items-center justify-between gap-4 mt-4 w-full">
+			{withActions && (<div className="flex items-center justify-between gap-4 mt-4 w-full">
 				<div
 					className={cn(
 						"text-sm font-bold",
@@ -146,7 +148,7 @@ export function PackItem({
 				<div onMouseEnter={handlePriceEnter} onMouseLeave={handlePriceLeave}>
 					{renderAction()}
 				</div>
-			</div>
+			</div>)}
 		</Card>
 	);
 }

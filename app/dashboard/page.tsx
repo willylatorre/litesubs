@@ -12,13 +12,17 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
 export default async function Page() {
-	const [stats, subscriptions, pendingInvites] = await Promise.all([
+	const [stats, subscriptionsByCreator, pendingInvites] = await Promise.all([
 		getConsumerStats(),
 		getUserSubscriptions(),
 		getUserPendingInvites(),
 	]);
 
-	const hasLowCredits = subscriptions.some((sub) => sub.credits < 2);
+	const allSubscriptions = subscriptionsByCreator.flatMap(
+		(group) => group.subscriptions,
+	);
+
+	const hasLowCredits = allSubscriptions.some((s) => s.credits < 2);
 
 	return (
 		<div className="@container/main flex flex-1 flex-col gap-2">
@@ -33,9 +37,7 @@ export default async function Page() {
 				/>
 
 				<div className="flex flex-col gap-4 px-4 lg:px-6">
-					<h2 className="text-lg font-semibold my-4">Active Subscriptions</h2>
-
-					{pendingInvites.length > 0 && (
+				{pendingInvites.length > 0 && (
 						<div className="space-y-4">
 							<h2 className="text-lg font-semibold">Pending Invites</h2>
 							<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -46,8 +48,10 @@ export default async function Page() {
 						</div>
 					)}
 
+					<h2 className="text-lg font-semibold mt-4 mb-2">Active Subscriptions</h2>
+
 					{hasLowCredits && (
-						<Alert variant="default" className="bg-primary/5 border-primary/20">
+						<Alert variant="default" className="bg-primary/5 border-primary/20 mb-4">
 							<IconAlertCircle className="size-4" />
 							<AlertTitle>Low Credits</AlertTitle>
 							<AlertDescription>
@@ -57,38 +61,28 @@ export default async function Page() {
 						</Alert>
 					)}
 					<div className="flex flex-col gap-8">
-						{subscriptions.length === 0 ? (
+						{allSubscriptions.length === 0 ? (
 							<div className="col-span-full flex flex-col items-center justify-center p-8 text-center border rounded-lg bg-card text-muted-foreground">
 								<p>You don't have any active subscriptions or credits yet.</p>
 							</div>
 						) : (
-							subscriptions.map((sub) => (
-								<div key={sub.id} className="space-y-4">
-									<div className="flex items-center gap-2">
-										<h3 className="text-xl font-bold">
-											{sub.creator?.name || "Unknown Creator"}
-										</h3>
-									</div>
-									<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-										{/* Available Packs to buy */}
-										{sub.packs.map((pack) => (
-											<PackItem
-												key={pack.id}
-												product={{
-													name: pack.name,
-													credits: pack.credits,
-													price: pack.price,
-													description: pack.description,
-													currency: pack.currency,
-												}}
-												productId={pack.id}
-												creatorName={sub.creator?.name}
-												creditsSuffix=" credits"
-											/>
-										))}
-									</div>
-								</div>
-							))
+							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+								{allSubscriptions.map((sub) => (
+									<PackItem
+										key={sub.id}
+										productId={sub.product.id}
+										product={{
+											name: sub.product.name,
+											credits: sub.credits,
+											price: sub.product.price,
+											description: sub.product.description,
+											currency: sub.product.currency,
+										}}
+										creditsSuffix=" credits left"
+										creatorName={sub.creator?.name} // Display creator name
+									/>
+								))}
+							</div>
 						)}
 					</div>
 				</div>
