@@ -1,15 +1,10 @@
 import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { db } from "@/app/db";
 import { invites } from "@/app/db/schema";
 import { auth } from "@/lib/auth";
-
-const createInviteSchema = z.object({
-	email: z.string().email().optional().or(z.literal("")),
-	productId: z.string().optional(),
-});
+import { createInviteSchema } from "@/lib/schemas";
 
 export async function GET() {
 	const session = await auth.api.getSession({ headers: await headers() });

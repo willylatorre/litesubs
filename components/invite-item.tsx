@@ -64,13 +64,15 @@ export function InviteItem({ invite }: { invite: any }) {
         credits: invite.product.credits,
         price: invite.product.price,
         description: invite.product.description,
-        badge: "Invite"
+        badge: "Invite",
+        currency: invite.product.currency
     } : {
         name: "Connection Invite",
         credits: 0,
         price: 0,
         description: `Invite from ${invite.creator.name}`,
-        badge: "Invite"
+        badge: "Invite",
+        currency: "usd"
     }
 
     const formattedPrice = invite.product ? new Intl.NumberFormat("en-US", {

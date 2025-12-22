@@ -5,11 +5,12 @@ const nextConfig: NextConfig = {
 		serverActions: {
 			allowedOrigins: [
 				"*.app.github.dev",
-				"http://localhost:3000",
+				"localhost:3000",
 				"litesubs.com",
+				"legendary-palm-tree-4qx6j57x66hg56-3000.app.github.dev",
 			],
 		},
-	},
+	}
 };
 
 export default nextConfig;

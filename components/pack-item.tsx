@@ -1,9 +1,13 @@
+"use client";
+
 import { Coins } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { BuyButton } from "./buy-button";
+import { PurchaseCreditsDialog } from "./purchase-credits-dialog";
 
 export interface PackItemProduct {
 	name: string;
@@ -11,30 +15,101 @@ export interface PackItemProduct {
 	price: number;
 	description?: string | null;
 	badge?: string | null;
+	currency?: string;
 }
 
 interface PackItemProps {
 	product: PackItemProduct;
-	action?: React.ReactNode;
+	productId?: string;
+	price?: number;
 	className?: string;
 	onCreditsHover?: (hovering: boolean) => void;
 	onPriceHover?: (hovering: boolean) => void;
 	creditsSuffix?: string;
 	session?: any; // better-auth session
 	loginUrl?: string;
+	action?: React.ReactNode;
+	creatorName?: string;
+	withEvents?: boolean;
+	readOnly?: boolean;
+	packs?: any[];
 }
 
 export function PackItem({
 	product,
-	action,
+	productId,
+	price,
 	className,
 	onCreditsHover,
 	onPriceHover,
 	creditsSuffix = " credits left",
 	session,
 	loginUrl,
+	action,
+	creatorName,
+	withEvents = false,
+	readOnly = false,
+	packs,
 }: PackItemProps) {
-	const { name, credits, price, description, badge } = product;
+	const { name, credits, description, badge, currency = "usd" } = product;
+	// Use the explicit price prop if provided, otherwise fallback to product.price
+	const finalPrice = price !== undefined ? price : product.price;
+
+	const handleCreditsEnter = () => withEvents && onCreditsHover?.(true);
+	const handleCreditsLeave = () => withEvents && onCreditsHover?.(false);
+	const handlePriceEnter = () => withEvents && onPriceHover?.(true);
+	const handlePriceLeave = () => withEvents && onPriceHover?.(false);
+
+	const formattedPrice = new Intl.NumberFormat("en-US", {
+		style: "currency",
+		currency: currency.toUpperCase(),
+	}).format(finalPrice / 100);
+
+	const renderAction = () => {
+		if (action) return action;
+
+		if (readOnly) {
+			return (
+				<Button
+					variant="secondary"
+					size="lg"
+					className="w-full pointer-events-none opacity-80"
+				>
+					Buy {formattedPrice}
+				</Button>
+			);
+		}
+
+		if (!session && loginUrl) {
+			return (
+				<Button size="lg" className="w-full" asChild>
+					<Link href={loginUrl}>Log in to Buy</Link>
+				</Button>
+			);
+		}
+
+		if (packs && packs.length > 0) {
+			return (
+				<PurchaseCreditsDialog
+					creatorName={creatorName || "Creator"}
+					packs={packs}
+				/>
+			);
+		}
+
+		if (productId && finalPrice !== undefined) {
+			return (
+				<BuyButton
+					productId={productId}
+					price={finalPrice}
+					currency={currency}
+					label="Purchase credits"
+				/>
+			);
+		}
+
+		return null;
+	};
 
 	return (
 		<Card
@@ -58,38 +133,41 @@ export function PackItem({
 					)}
 				</div>
 
-				<div className="flex flex-col items-start gap-2 w-full">
+				<div className="flex flex-col items-start gap-1 w-full">
 					<h3 className="text-lg font-bold">{name}</h3>
-					<p className="text-sm text-left text-muted-foreground leading-relaxed">
-						{description || "Get started with a simple credit pack."}
-					</p>
+					{creatorName && (
+						<p className="text-xs text-muted-foreground font-medium">
+							Created by {creatorName}
+						</p>
+					)}
+					{description && (
+						<p className="text-sm text-muted-foreground mt-1">{description}</p>
+					)}
 				</div>
 			</div>
 
-			<div className="flex items-center justify-between mt-6">
-				<span
+			<div className="flex flex-col gap-4 mt-4">
+				<div
 					className={cn(
-						"text-sm font-medium text-muted-foreground",
-						onCreditsHover &&
-							"cursor-help hover:text-foreground transition-colors",
+						"text-2xl font-bold",
+						withEvents &&
+							onCreditsHover &&
+							"cursor-help hover:text-primary transition-colors",
 					)}
-					onMouseEnter={() => onCreditsHover?.(true)}
-					onMouseLeave={() => onCreditsHover?.(false)}
+					onMouseEnter={handleCreditsEnter}
+					onMouseLeave={handleCreditsLeave}
 				>
 					{credits}
-					{creditsSuffix}
-				</span>
+					<span className="text-sm font-normal text-muted-foreground ml-1">
+						{creditsSuffix}
+					</span>
+				</div>
 				<div
-					onMouseEnter={() => onPriceHover?.(true)}
-					onMouseLeave={() => onPriceHover?.(false)}
+					onMouseEnter={handlePriceEnter}
+					onMouseLeave={handlePriceLeave}
+					className="w-full"
 				>
-					{session === null && loginUrl ? (
-						<Button size="sm" asChild>
-							<Link href={loginUrl}>Log in to Buy</Link>
-						</Button>
-					) : (
-						action
-					)}
+					{renderAction()}
 				</div>
 			</div>
 		</Card>

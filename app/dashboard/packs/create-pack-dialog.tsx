@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateProduct } from "@/hooks/use-products";
+import { CURRENCIES } from "@/lib/constants";
 
 export function CreatePackDialog() {
 	const [open, setOpen] = useState(false);
@@ -38,7 +39,7 @@ export function CreatePackDialog() {
 				description: formData.get("description") as string,
 				price: Number(formData.get("price")),
 				credits: Number(formData.get("credits")),
-				currency: (formData.get("currency") as "usd" | "eur") || "usd",
+				currency: (formData.get("currency") as any) || "usd",
 			},
 			{
 				onSuccess: () => setOpen(false),
@@ -88,8 +89,11 @@ export function CreatePackDialog() {
 										<SelectValue placeholder="Select currency" />
 									</SelectTrigger>
 									<SelectContent>
-										<SelectItem value="usd">USD ($)</SelectItem>
-										<SelectItem value="eur">EUR (€)</SelectItem>
+										{CURRENCIES.map((currency) => (
+											<SelectItem key={currency} value={currency}>
+												{currency.toUpperCase()}
+											</SelectItem>
+										))}
 									</SelectContent>
 								</Select>
 							</div>

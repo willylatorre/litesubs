@@ -1,18 +1,10 @@
 import { desc, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { db } from "@/app/db";
 import { products } from "@/app/db/schema";
 import { auth } from "@/lib/auth";
-
-const createProductSchema = z.object({
-	name: z.string().min(1, "Name is required"),
-	description: z.string().optional(),
-	price: z.number().min(0, "Price must be positive"),
-	credits: z.number().int().min(1, "Credits must be at least 1"),
-	currency: z.enum(["usd", "eur"]).default("usd"),
-});
+import { createProductSchema } from "@/lib/schemas";
 
 export async function GET() {
 	const session = await auth.api.getSession({

@@ -2,93 +2,82 @@
 
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
-import { z } from "zod";
 import { db } from "@/app/db";
 import { invites, userBalances } from "@/app/db/schema";
-import { auth } from "@/lib/auth";
-
-const createInviteSchema = z.object({
-	email: z.string().email(),
-});
+import { authenticatedAction } from "@/lib/safe-action";
+import { createInviteSchema } from "@/lib/schemas";
 
 export async function createInvite(prevState: any, formData: FormData) {
-	const session = await auth.api.getSession({
-		headers: await headers(),
-	});
+	return authenticatedAction(async (session) => {
+		const email = formData.get("email");
+		const productId = formData.get("productId");
 
-	if (!session?.user) {
-		return { error: "Unauthorized" };
-	}
-
-	const email = formData.get("email");
-	const validated = createInviteSchema.safeParse({ email });
-
-	if (!validated.success) {
-		return { error: "Invalid email" };
-	}
-
-	try {
-		const existingInvite = await db.query.invites.findFirst({
-			where: and(
-				eq(invites.creatorId, session.user.id),
-				eq(invites.email, validated.data.email),
-				eq(invites.status, "pending"),
-			),
+		const validated = createInviteSchema.safeParse({
+			email,
+			productId: productId === "undefined" ? undefined : productId,
 		});
 
-		if (existingInvite) {
-			return { error: "Pending invite already exists for this email." };
+		if (!validated.success) {
+			return { error: "Invalid email" };
+		}
+
+		if (validated.data.email) {
+			const existingInvite = await db.query.invites.findFirst({
+				where: and(
+					eq(invites.creatorId, session.user.id),
+					eq(invites.email, validated.data.email),
+					eq(invites.status, "pending"),
+				),
+			});
+
+			if (existingInvite) {
+				return { error: "Pending invite already exists for this email." };
+			}
 		}
 
 		const token = crypto.randomUUID();
 
 		await db.insert(invites).values({
 			creatorId: session.user.id,
-			email: validated.data.email,
+			email: validated.data.email || null,
 			token,
 			status: "pending",
+			productId: validated.data.productId || null,
 		});
 
 		revalidatePath("/dashboard/creator");
-		return { success: true, message: "Invite sent!" };
-	} catch (error) {
-		console.error("Failed to create invite:", error);
-		return { error: "Failed to create invite" };
-	}
+		return { success: true, message: "Invite sent!", token }; // Return token for UI if needed
+	});
 }
 
 export async function getCreatorInvites() {
-	const session = await auth.api.getSession({ headers: await headers() });
-	if (!session?.user) return [];
-
-	return await db.query.invites.findMany({
-		where: eq(invites.creatorId, session.user.id),
-		orderBy: (invites, { desc }) => [desc(invites.createdAt)],
-	});
+	return authenticatedAction(async (session) => {
+		const data = await db.query.invites.findMany({
+			where: eq(invites.creatorId, session.user.id),
+			orderBy: (invites, { desc }) => [desc(invites.createdAt)],
+		});
+		return { success: true, data };
+	}).then((res) => res.data || []);
 }
 
 export async function getUserPendingInvites() {
-	const session = await auth.api.getSession({ headers: await headers() });
-	if (!session?.user) return [];
-
-	return await db.query.invites.findMany({
-		where: and(
-			eq(invites.email, session.user.email),
-			eq(invites.status, "pending"),
-		),
-		with: {
-			creator: true,
-			product: true,
-		},
-	});
+	return authenticatedAction(async (session) => {
+		const data = await db.query.invites.findMany({
+			where: and(
+				eq(invites.email, session.user.email),
+				eq(invites.status, "pending"),
+			),
+			with: {
+				creator: true,
+				product: true,
+			},
+		});
+		return { success: true, data };
+	}).then((res) => res.data || []);
 }
 
 export async function claimInvite(token: string) {
-	const session = await auth.api.getSession({ headers: await headers() });
-	if (!session?.user) return { error: "Unauthorized" };
-
-	try {
+	return authenticatedAction(async (session) => {
 		const invite = await db.query.invites.findFirst({
 			where: and(eq(invites.token, token), eq(invites.status, "pending")),
 		});
@@ -125,17 +114,11 @@ export async function claimInvite(token: string) {
 		revalidatePath("/dashboard");
 
 		return { success: true };
-	} catch (error) {
-		console.error("Failed to claim invite:", error);
-		return { error: "Failed to claim invite" };
-	}
+	});
 }
 
 export async function respondToInvite(inviteId: string, accept: boolean) {
-	const session = await auth.api.getSession({ headers: await headers() });
-	if (!session?.user) return { error: "Unauthorized" };
-
-	try {
+	return authenticatedAction(async (session) => {
 		const invite = await db.query.invites.findFirst({
 			where: and(
 				eq(invites.id, inviteId),
@@ -171,8 +154,5 @@ export async function respondToInvite(inviteId: string, accept: boolean) {
 		revalidatePath("/dashboard/subscriptions");
 		revalidatePath("/dashboard");
 		return { success: true };
-	} catch (error) {
-		console.error("Failed to respond to invite:", error);
-		return { error: "Failed to process request" };
-	}
+	});
 }

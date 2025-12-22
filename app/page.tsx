@@ -53,11 +53,13 @@ export default function Home() {
 								product={{
 									name: "250 Credit Pack",
 									credits: 250,
-									price: 8500,
+									price: 12000,
 									badge: "Active",
 									description: "Simple pack of credits that you can consume.",
 								}}
 								className="border-primary/20 bg-background/50 backdrop-blur-xl"
+								withEvents={true}
+								readOnly={true}
 								onCreditsHover={(hovering) =>
 									setExplanation(
 										hovering ? "You decide the amount of credits and their expiration" : defaultText,
@@ -69,15 +71,6 @@ export default function Home() {
 											? "You pick the price your customers will pay for this pack"
 											: defaultText,
 									)
-								}
-								action={
-									<Button
-										variant="secondary"
-										size="sm"
-										className="pointer-events-none opacity-80 px-6"
-									>
-										Buy $120
-									</Button>
 								}
 							/>
 						</div>

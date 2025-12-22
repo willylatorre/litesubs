@@ -9,7 +9,7 @@ export function SiteHeader() {
 	const pathname = usePathname();
 
 	const getPageTitle = (path: string) => {
-		if (path === "/dashboard") return "Dashboard";
+		if (path === "/dashboard") return "Active Subscriptions";
 		if (path.startsWith("/dashboard/creator")) return "Creator Dashboard";
 		if (path.startsWith("/dashboard/subscriptions")) return "Subscriptions";
 		if (path.startsWith("/dashboard/customers")) return "Customers";

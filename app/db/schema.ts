@@ -9,28 +9,22 @@ import {
 	timestamp,
 	unique,
 } from "drizzle-orm/pg-core";
+import {
+	CURRENCIES,
+	INVITE_STATUSES,
+	PRODUCT_TYPES,
+	TRANSACTION_TYPES,
+} from "@/lib/constants";
 import { user } from "./auth-schema";
 
 // Re-export auth schema
 export * from "./auth-schema";
 
 // Enums
-export const productTypeEnum = pgEnum("product_type", [
-	"one_time",
-	"recurring",
-]);
-export const transactionTypeEnum = pgEnum("transaction_type", [
-	"purchase",
-	"manual_adjustment",
-	"usage",
-	"refund",
-]);
-export const inviteStatusEnum = pgEnum("invite_status", [
-	"pending",
-	"accepted",
-	"rejected",
-]);
-export const currencyEnum = pgEnum("currency", ["usd", "eur"]);
+export const productTypeEnum = pgEnum("product_type", PRODUCT_TYPES);
+export const transactionTypeEnum = pgEnum("transaction_type", TRANSACTION_TYPES);
+export const inviteStatusEnum = pgEnum("invite_status", INVITE_STATUSES);
+export const currencyEnum = pgEnum("currency", CURRENCIES);
 
 // Tables
 

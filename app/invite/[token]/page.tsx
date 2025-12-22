@@ -75,17 +75,12 @@ export default async function InvitePage({
 							price: invite.product!.price,
 							description: invite.product!.description,
 							badge: `Offered by ${invite.creator.name}`,
+							currency: invite.product!.currency,
 						}}
+						productId={invite.product!.id}
 						creditsSuffix=" credits"
 						session={session}
 						loginUrl={`/auth/sign-up?callbackURL=/invite/${token}${invite.email ? `&email=${encodeURIComponent(invite.email)}` : ""}`}
-						action={
-							<BuyButton
-								productId={invite.product!.id}
-								price={invite.product!.price}
-								currency={invite.product!.currency}
-							/>
-						}
 					/>
 				) : (
 					<Card className="shadow-xl border-0">

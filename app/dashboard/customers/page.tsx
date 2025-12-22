@@ -1,6 +1,4 @@
 import { getCreatorCustomers } from "@/app/actions/customers";
-import { getUserPendingInvites } from "@/app/actions/invites";
-import { InviteItem } from "@/components/invite-item";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
 	Table,
@@ -13,10 +11,7 @@ import {
 import { ManageCreditsDialog } from "./manage-credits-dialog";
 
 export default async function CustomersPage() {
-	const [customers, pendingInvites] = await Promise.all([
-		getCreatorCustomers(),
-		getUserPendingInvites(),
-	]);
+	const customers = await getCreatorCustomers();
 
 	return (
 		<div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
@@ -28,17 +23,6 @@ export default async function CustomersPage() {
 					</p>
 				</div>
 			</div>
-
-			{pendingInvites.length > 0 && (
-				<div className="space-y-4">
-					<h2 className="text-lg font-semibold">Pending Invites</h2>
-					<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-						{pendingInvites.map((invite) => (
-							<InviteItem key={invite.id} invite={invite} />
-						))}
-					</div>
-				</div>
-			)}
 
 			<div className="rounded-md border bg-card">
 				<Table>

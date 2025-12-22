@@ -8,10 +8,12 @@ export function BuyButton({
 	productId,
 	price,
 	currency = "usd",
+	label,
 }: {
 	productId: string;
 	price: number;
 	currency?: string;
+	label?: string;
 }) {
 	const [isPending, startTransition] = useTransition();
 
@@ -19,6 +21,8 @@ export function BuyButton({
 		style: "currency",
 		currency: currency.toUpperCase(),
 	}).format(price / 100);
+
+	const buttonText = label ? `${label} (${formattedPrice})` : `Proceed to Payment (${formattedPrice})`;
 
 	return (
 		<Button
@@ -31,7 +35,7 @@ export function BuyButton({
 			}
 			disabled={isPending}
 		>
-			{isPending ? "Processing..." : `Proceed to Payment (${formattedPrice})`}
+			{isPending ? "Processing..." : buttonText}
 		</Button>
 	);
 }

@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 	title: "liteSubs",
 	description: "Simple credit packs instead of heavy subscriptions",
 	icons: {
-		icon: "/favicon.ico",
+		icon: "/favicon.svg",
 	},
 };
 

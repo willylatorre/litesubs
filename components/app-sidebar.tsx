@@ -34,13 +34,8 @@ import { authClient } from "@/lib/auth-client";
 const data = {
 	navSubscriptions: [
 		{
-			title: "Dashboard",
-			url: "/dashboard",
-			icon: IconDashboard,
-		},
-		{
 			title: "Active Subscriptions",
-			url: "/dashboard/subscriptions",
+			url: "/dashboard",
 			icon: IconChecklist,
 		},
 	],

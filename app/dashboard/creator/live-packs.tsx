@@ -62,6 +62,7 @@ export function LivePacks() {
 									price: pack.price,
 									description: pack.description,
 									badge: "Active",
+									currency: pack.currency,
 								}}
 								action={
 									<Button asChild variant="outline" size="sm">
