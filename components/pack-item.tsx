@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { BuyButton } from "./buy-button";
-import { PurchaseCreditsDialog } from "./purchase-credits-dialog";
 
 export interface PackItemProduct {
 	name: string;
@@ -88,27 +87,16 @@ export function PackItem({
 			);
 		}
 
-		if (packs && packs.length > 0) {
-			return (
-				<PurchaseCreditsDialog
-					creatorName={creatorName || "Creator"}
-					packs={packs}
-				/>
-			);
-		}
-
-		if (productId && finalPrice !== undefined) {
-			return (
-				<BuyButton
-					productId={productId}
-					price={finalPrice}
-					currency={currency}
-					label="Purchase credits"
-				/>
-			);
-		}
-
-		return null;
+		return (
+			<BuyButton
+				productId={productId}
+				price={finalPrice}
+				currency={currency}
+				label="Purchase credits"
+				packs={packs}
+				creatorName={creatorName}
+			/>
+		);
 	};
 
 	return (
