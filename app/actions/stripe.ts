@@ -44,7 +44,7 @@ export async function createCheckoutSession(productId: string) {
 			},
 		],
 		mode: "payment",
-		success_url: `${appUrl}/dashboard?success=true`,
+		success_url: `${appUrl}/dashboard?success=true&productId=${product.id}`,
 		cancel_url: `${appUrl}/dashboard?canceled=true`,
 		metadata: {
 			userId: session.user.id,

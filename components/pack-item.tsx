@@ -1,10 +1,9 @@
-"use client";
-
 import { Coins } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { BuyButton } from "./buy-button";
 
@@ -30,8 +29,8 @@ interface PackItemProps {
 	action?: React.ReactNode;
 	creatorName?: string;
 	withEvents?: boolean;
-	withActions?: boolean;
 	readOnly?: boolean;
+	isLoading?: boolean;
 }
 
 export function PackItem({
@@ -46,9 +45,9 @@ export function PackItem({
 	loginUrl,
 	action,
 	creatorName,
-	withActions = true,
 	withEvents = false,
 	readOnly = false,
+	isLoading = false,
 }: PackItemProps) {
 	const { name, credits, description, badge, currency = "usd" } = product;
 	const finalPrice = price !== undefined ? price : product.price;
@@ -97,10 +96,15 @@ export function PackItem({
 	return (
 		<Card
 			className={cn(
-				`relative flex flex-col justify-between p-3 shadow-xl border-0 font-sans h-full min-h-[${withActions ? 200 : 80}px]`,
+				"relative flex flex-col justify-between p-3 shadow-xl border-0 font-sans h-full min-h-[200px]",
 				className,
 			)}
 		>
+			{isLoading && (
+				<div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10 rounded-lg">
+					<Spinner />
+				</div>
+			)}
 			<div className="flex flex-col items-start gap-4">
 				<div className="flex items-center justify-between w-full">
 					<div className="rounded-full text-primary">
@@ -129,7 +133,7 @@ export function PackItem({
 				</div>
 			</div>
 
-			{withActions && (<div className="flex items-center justify-between gap-4 mt-4 w-full">
+			<div className="flex items-center justify-between gap-4 mt-4 w-full">
 				<div
 					className={cn(
 						"text-sm font-bold",
@@ -148,7 +152,7 @@ export function PackItem({
 				<div onMouseEnter={handlePriceEnter} onMouseLeave={handlePriceLeave}>
 					{renderAction()}
 				</div>
-			</div>)}
+			</div>
 		</Card>
 	);
 }

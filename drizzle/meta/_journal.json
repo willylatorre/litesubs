@@ -57,6 +57,13 @@
       "when": 1766409147723,
       "tag": "0007_flat_arachne",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1766411336640,
+      "tag": "0008_silly_tiger_shark",
+      "breakpoints": true
     }
   ]
 }

@@ -99,6 +99,7 @@ export const transactions = pgTable(
 		amount: integer("amount").notNull(), // Positive for add, negative for remove/usage
 		type: transactionTypeEnum("type").notNull(),
 		description: text("description"),
+		stripeCheckoutId: text("stripe_checkout_id").unique(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [

@@ -1,75 +1,93 @@
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { headers } from "next/headers";
-import { type NextRequest, NextResponse } from "next/server";
-import type Stripe from "stripe";
 import { db } from "@/app/db";
-import { transactions, userBalances } from "@/app/db/schema";
+import { liteSubscriptions, transactions } from "@/app/db/schema";
 import { stripe } from "@/lib/stripe";
+import type { Stripe } from "stripe";
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
 	const body = await req.text();
-	const signature = (await headers()).get("stripe-signature") as string;
+	const signature = headers().get("Stripe-Signature")!;
 
 	let event: Stripe.Event;
-
 	try {
 		event = stripe.webhooks.constructEvent(
 			body,
 			signature,
 			process.env.STRIPE_WEBHOOK_SECRET!,
 		);
-	} catch (err: any) {
-		console.error(`Webhook signature verification failed: ${err.message}`);
-		return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
+	} catch (error: any) {
+		console.error("Webhook signature verification failed.", error.message);
+		return new Response(`Webhook Error: ${error.message}`, { status: 400 });
 	}
 
+	const session = event.data.object as Stripe.Checkout.Session;
+
 	if (event.type === "checkout.session.completed") {
-		const session = event.data.object as Stripe.Checkout.Session;
+		const metadata = session.metadata;
 
-		const userId = session.metadata?.userId;
-		const productId = session.metadata?.productId;
-		const credits = parseInt(session.metadata?.credits || "0");
-		const creatorId = session.metadata?.creatorId;
-		const type = session.metadata?.type;
+		if (!metadata?.userId || !metadata?.productId) {
+			console.error("Webhook received with missing metadata");
+			return new Response("Missing metadata", { status: 400 });
+		}
 
-		if (userId && creatorId && credits > 0 && type === "credit_purchase") {
-			try {
-				await db.transaction(async (tx) => {
-					// 1. Update User Balance (Upsert)
-					await tx
-						.insert(userBalances)
-						.values({
-							userId,
-							creatorId,
-							credits,
-						})
-						.onConflictDoUpdate({
-							target: [userBalances.userId, userBalances.creatorId],
-							set: {
-								credits: sql`${userBalances.credits} + ${credits}`,
-								updatedAt: new Date(),
-							},
-						});
-
-					// 2. Create Transaction Record
-					await tx.insert(transactions).values({
-						userId,
-						creatorId,
-						productId: productId || null,
-						amount: credits,
-						type: "purchase",
-						description: `Purchased via Stripe Session ${session.id}`,
-					});
-				});
-				console.log(
-					`Processed purchase for user ${userId} / creator ${creatorId}: +${credits} credits`,
-				);
-			} catch (error) {
-				console.error("Error processing webhook transaction:", error);
-				return new NextResponse("Database Error", { status: 500 });
+		try {
+			// Idempotency check
+			const existingTransaction = await db.query.transactions.findFirst({
+				where: eq(transactions.stripeCheckoutId, session.id),
+			});
+			if (existingTransaction) {
+				return new Response("Webhook already processed.", { status: 200 });
 			}
+
+			const creditsToAdd = Number(metadata.credits);
+
+			await db.transaction(async (tx) => {
+				const subscription = await tx.query.liteSubscriptions.findFirst({
+					where: and(
+						eq(liteSubscriptions.userId, metadata.userId),
+						eq(liteSubscriptions.productId, metadata.productId),
+					),
+				});
+
+				if (!subscription) {
+					// This case should ideally not happen if a subscription is created upon invite acceptance
+					// But as a fallback, we could create one. For now, we'll log an error.
+					console.error(
+						`Subscription not found for user ${metadata.userId} and product ${metadata.productId}`,
+					);
+					// Or insert a new subscription if that's the desired behavior:
+					await tx.insert(liteSubscriptions).values({
+						userId: metadata.userId,
+						productId: metadata.productId,
+						creatorId: metadata.creatorId,
+						credits: creditsToAdd,
+					});
+				} else {
+					await tx
+						.update(liteSubscriptions)
+						.set({
+							credits: sql`${liteSubscriptions.credits} + ${creditsToAdd}`,
+						})
+						.where(eq(liteSubscriptions.id, subscription.id));
+				}
+
+				// Log the transaction
+				await tx.insert(transactions).values({
+					userId: metadata.userId,
+					creatorId: metadata.creatorId,
+					productId: metadata.productId,
+					amount: creditsToAdd,
+					type: "purchase",
+					description: `Purchase of ${creditsToAdd} credits`,
+					stripeCheckoutId: session.id,
+				});
+			});
+		} catch (error: any) {
+			console.error("Failed to process webhook:", error);
+			return new Response(`Webhook Error: ${error.message}`, { status: 500 });
 		}
 	}
 
-	return new NextResponse(null, { status: 200 });
+	return new Response(null, { status: 200 });
 }
