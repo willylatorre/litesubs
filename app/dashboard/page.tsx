@@ -10,56 +10,55 @@ import { ConsumerStatsCards } from "@/components/consumer-stats-cards";
 import { InviteItem } from "@/components/invite-item";
 import { PackItem } from "@/components/pack-item";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { useTransactionCheck } from "@/hooks/use-transaction-check";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 
 // Re-exporting actions to be used in the effect
 export { getConsumerStats, getUserSubscriptions, getUserPendingInvites };
 
 export default function Page() {
 	const searchParams = useSearchParams();
-	const router = useRouter();
 
 	const [stats, setStats] = useState<any>({
 		totalSpent: 0,
 		activeSubscriptionsCount: 0,
 	});
-	const [subscriptionsByCreator, setSubscriptionsByCreator] = useState<any[]>([]);
+	const [subscriptions, setSubscriptions] = useState<any[]>([]);
 	const [pendingInvites, setPendingInvites] = useState<any[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 
 	const success = searchParams.get("success");
 	const purchasedProductId = searchParams.get("productId");
 
+	const fetchData = useCallback(async () => {
+		const [statsData, subsData, invitesData] = await Promise.all([
+			getConsumerStats(),
+			getUserSubscriptions(),
+			getUserPendingInvites(),
+		]);
+		setStats(statsData);
+		setSubscriptions(subsData);
+		setPendingInvites(invitesData);
+		return { statsData, subsData, invitesData };
+	}, []);
+
+	// Effect for initial data fetching
 	useEffect(() => {
-		const fetchData = async () => {
+		const init = async () => {
 			setIsLoading(true);
-			const [statsData, subsData, invitesData] = await Promise.all([
-				getConsumerStats(),
-				getUserSubscriptions(),
-				getUserPendingInvites(),
-			]);
-			setStats(statsData);
-			setSubscriptionsByCreator(subsData);
-			setPendingInvites(invitesData);
+			await fetchData();
 			setIsLoading(false);
 		};
+		init();
+	}, [fetchData]);
 
-		fetchData();
+	// Use the custom hook for transaction checking
+	useTransactionCheck({
+		onSuccess: fetchData,
+	});
 
-		if (success) {
-			toast.info(
-				"Purchase successful! Your credits are being updated. This page will refresh shortly.",
-			);
-			setTimeout(() => {
-				router.refresh();
-			}, 3000); // 3-second delay
-		}
-	}, []); // Run once on mount
-
-	const allSubscriptions =
-		subscriptionsByCreator.flatMap((group) => group.subscriptions) || [];
+	const allSubscriptions = subscriptions || [];
 
 	const hasLowCredits = allSubscriptions.some((s: any) => s.credits < 2);
 

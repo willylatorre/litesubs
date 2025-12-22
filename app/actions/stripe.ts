@@ -4,9 +4,10 @@ import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/app/db";
-import { products } from "@/app/db/schema";
+import { products, transactions } from "@/app/db/schema";
 import { auth } from "@/lib/auth";
 import { stripe } from "@/lib/stripe";
+import {TRANSACTION_STATUSES} from '@/lib/constants'
 
 export async function createCheckoutSession(productId: string) {
 	const session = await auth.api.getSession({ headers: await headers() });
@@ -62,6 +63,19 @@ export async function createCheckoutSession(productId: string) {
 	}
 
 	const checkoutSession = await stripe.checkout.sessions.create(sessionParams);
+
+	if (checkoutSession.id) {
+		await db.insert(transactions).values({
+			userId: session.user.id,
+			creatorId: product.creatorId,
+			productId: product.id,
+			amount: product.credits,
+			type: "purchase",
+			description: `Purchase of ${product.credits} credits`,
+			stripeCheckoutId: checkoutSession.id,
+			status: TRANSACTION_STATUSES[0],
+		});
+	}
 
 	if (checkoutSession.url) {
 		redirect(checkoutSession.url);

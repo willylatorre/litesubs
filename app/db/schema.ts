@@ -14,6 +14,7 @@ import {
 	INVITE_STATUSES,
 	PRODUCT_TYPES,
 	TRANSACTION_TYPES,
+	TRANSACTION_STATUSES,
 } from "@/lib/constants";
 import { user } from "./auth-schema";
 
@@ -23,6 +24,7 @@ export * from "./auth-schema";
 // Enums
 export const productTypeEnum = pgEnum("product_type", PRODUCT_TYPES);
 export const transactionTypeEnum = pgEnum("transaction_type", TRANSACTION_TYPES);
+export const transactionStatusEnum = pgEnum("transaction_status", TRANSACTION_STATUSES);
 export const inviteStatusEnum = pgEnum("invite_status", INVITE_STATUSES);
 export const currencyEnum = pgEnum("currency", CURRENCIES);
 
@@ -98,6 +100,7 @@ export const transactions = pgTable(
 		}),
 		amount: integer("amount").notNull(), // Positive for add, negative for remove/usage
 		type: transactionTypeEnum("type").notNull(),
+		status: transactionStatusEnum("status").default("ongoing").notNull(),
 		description: text("description"),
 		stripeCheckoutId: text("stripe_checkout_id").unique(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),

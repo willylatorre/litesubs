@@ -7,3 +7,5 @@ export const TRANSACTION_TYPES = [
 	"usage",
 	"refund",
 ] as const;
+
+export const TRANSACTION_STATUSES = ["ongoing", "completed", "declined"] as const;

@@ -7,14 +7,15 @@ import type { Stripe } from "stripe";
 
 export async function POST(req: Request) {
 	const body = await req.text();
-	const signature = headers().get("Stripe-Signature")!;
+	const headersList = await headers();
+	const signature = headersList.get("Stripe-Signature")!;
 
 	let event: Stripe.Event;
 	try {
 		event = stripe.webhooks.constructEvent(
 			body,
 			signature,
-			process.env.STRIPE_WEBHOOK_SECRET!,
+			process.env.STRIPE_WEBHOOK_PURCHASES!,
 		);
 	} catch (error: any) {
 		console.error("Webhook signature verification failed.", error.message);
@@ -36,7 +37,8 @@ export async function POST(req: Request) {
 			const existingTransaction = await db.query.transactions.findFirst({
 				where: eq(transactions.stripeCheckoutId, session.id),
 			});
-			if (existingTransaction) {
+			
+			if (existingTransaction && existingTransaction.status === "completed") {
 				return new Response("Webhook already processed.", { status: 200 });
 			}
 
@@ -52,11 +54,7 @@ export async function POST(req: Request) {
 
 				if (!subscription) {
 					// This case should ideally not happen if a subscription is created upon invite acceptance
-					// But as a fallback, we could create one. For now, we'll log an error.
-					console.error(
-						`Subscription not found for user ${metadata.userId} and product ${metadata.productId}`,
-					);
-					// Or insert a new subscription if that's the desired behavior:
+					// But as a fallback, we could create one.
 					await tx.insert(liteSubscriptions).values({
 						userId: metadata.userId,
 						productId: metadata.productId,
@@ -72,20 +70,49 @@ export async function POST(req: Request) {
 						.where(eq(liteSubscriptions.id, subscription.id));
 				}
 
-				// Log the transaction
-				await tx.insert(transactions).values({
-					userId: metadata.userId,
-					creatorId: metadata.creatorId,
-					productId: metadata.productId,
-					amount: creditsToAdd,
-					type: "purchase",
-					description: `Purchase of ${creditsToAdd} credits`,
-					stripeCheckoutId: session.id,
-				});
+				// Update or Insert transaction
+				if (existingTransaction) {
+					await tx
+						.update(transactions)
+						.set({
+							status: "completed",
+						})
+						.where(eq(transactions.id, existingTransaction.id));
+				} else {
+					// Fallback: create if it doesn't exist
+					await tx.insert(transactions).values({
+						userId: metadata.userId,
+						creatorId: metadata.creatorId,
+						productId: metadata.productId,
+						amount: creditsToAdd,
+						type: "purchase",
+						description: `Purchase of ${creditsToAdd} credits`,
+						stripeCheckoutId: session.id,
+						status: "completed",
+					});
+				}
 			});
 		} catch (error: any) {
 			console.error("Failed to process webhook:", error);
 			return new Response(`Webhook Error: ${error.message}`, { status: 500 });
+		}
+	} else if (event.type === "checkout.session.expired") {
+		// Handle expired session (user didn't complete payment)
+		try {
+			const existingTransaction = await db.query.transactions.findFirst({
+				where: eq(transactions.stripeCheckoutId, session.id),
+			});
+
+			if (existingTransaction && existingTransaction.status === "ongoing") {
+				await db
+					.update(transactions)
+					.set({
+						status: "declined", // or "expired", but user requested "declined" for rejection
+					})
+					.where(eq(transactions.id, existingTransaction.id));
+			}
+		} catch (error: any) {
+			console.error("Failed to process expired session:", error);
 		}
 	}
 
