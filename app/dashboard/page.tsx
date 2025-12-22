@@ -56,25 +56,52 @@ export default async function Page() {
 							</AlertDescription>
 						</Alert>
 					)}
-					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+					<div className="flex flex-col gap-8">
 						{subscriptions.length === 0 ? (
 							<div className="col-span-full flex flex-col items-center justify-center p-8 text-center border rounded-lg bg-card text-muted-foreground">
 								<p>You don't have any active subscriptions or credits yet.</p>
 							</div>
 						) : (
 							subscriptions.map((sub) => (
-								<PackItem
-									key={sub.id}
-									product={{
-										name: sub.creator?.name || "Unknown Creator",
-										credits: sub.credits,
-										price: 0,
-										description: "Current Balance",
-									}}
-									creatorName={sub.creator?.name}
-									creditsSuffix=" available"
-									packs={sub.packs}
-								/>
+								<div key={sub.id} className="space-y-4">
+									<div className="flex items-center gap-2">
+										<h3 className="text-xl font-bold">
+											{sub.creator?.name || "Unknown Creator"}
+										</h3>
+									</div>
+									<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+										{/* Current Balance Card */}
+										<PackItem
+											product={{
+												name: "Current Balance",
+												credits: sub.credits,
+												price: 0,
+												description: "Your available credits from this creator.",
+											}}
+											creatorName={sub.creator?.name}
+											creditsSuffix=" credits"
+											readOnly={true}
+											className="bg-primary/5 border-primary/10"
+										/>
+
+										{/* Available Packs to buy */}
+										{sub.packs.map((pack) => (
+											<PackItem
+												key={pack.id}
+												product={{
+													name: pack.name,
+													credits: pack.credits,
+													price: pack.price,
+													description: pack.description,
+													currency: pack.currency,
+												}}
+												productId={pack.id}
+												creatorName={sub.creator?.name}
+												creditsSuffix=" credits"
+											/>
+										))}
+									</div>
+								</div>
 							))
 						)}
 					</div>

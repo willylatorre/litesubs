@@ -31,7 +31,6 @@ interface PackItemProps {
 	creatorName?: string;
 	withEvents?: boolean;
 	readOnly?: boolean;
-	packs?: any[];
 }
 
 export function PackItem({
@@ -48,10 +47,8 @@ export function PackItem({
 	creatorName,
 	withEvents = false,
 	readOnly = false,
-	packs,
 }: PackItemProps) {
 	const { name, credits, description, badge, currency = "usd" } = product;
-	// Use the explicit price prop if provided, otherwise fallback to product.price
 	const finalPrice = price !== undefined ? price : product.price;
 
 	const handleCreditsEnter = () => withEvents && onCreditsHover?.(true);
@@ -89,12 +86,12 @@ export function PackItem({
 
 		return (
 			<BuyButton
+				disabled={!productId}
 				productId={productId}
 				price={finalPrice}
 				currency={currency}
+				productName={name}
 				label="Purchase credits"
-				packs={packs}
-				creatorName={creatorName}
 			/>
 		);
 	};
