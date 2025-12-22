@@ -44,13 +44,8 @@ export function NavUser({
   const router = useRouter()
 
   const handleLogout = async () => {
-    await authClient.signOut({
-        fetchOptions: {
-            onSuccess: () => {
-                router.push("/auth/sign-in")
-            },
-        },
-    })
+    await authClient.signOut()
+    router.replace("/auth/sign-in")
   }
 
   const initials = user.name

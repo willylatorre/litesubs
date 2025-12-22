@@ -7,7 +7,8 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
 const createInviteSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().optional().or(z.literal('')),
+  productId: z.string().optional(),
 })
 
 export async function GET() {
@@ -16,6 +17,9 @@ export async function GET() {
 
     const data = await db.query.invites.findMany({
         where: eq(invites.creatorId, session.user.id),
+        with: {
+            product: true
+        },
         orderBy: (invites, { desc }) => [desc(invites.createdAt)],
     })
 
@@ -34,25 +38,30 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
         }
 
-        const existingInvite = await db.query.invites.findFirst({
-            where: and(
-                eq(invites.creatorId, session.user.id),
-                eq(invites.email, validated.data.email),
-                eq(invites.status, 'pending')
-            )
-        })
+        const email = validated.data.email || null;
 
-        if (existingInvite) {
-            return NextResponse.json({ error: 'Pending invite already exists for this email.' }, { status: 409 })
+        if (email) {
+            const existingInvite = await db.query.invites.findFirst({
+                where: and(
+                    eq(invites.creatorId, session.user.id),
+                    eq(invites.email, email),
+                    eq(invites.status, 'pending')
+                )
+            })
+
+            if (existingInvite) {
+                return NextResponse.json({ error: 'Pending invite already exists for this email.' }, { status: 409 })
+            }
         }
 
         const token = crypto.randomUUID()
         
         const [newInvite] = await db.insert(invites).values({
             creatorId: session.user.id,
-            email: validated.data.email,
+            email,
             token,
             status: 'pending',
+            productId: validated.data.productId,
         }).returning()
 
         return NextResponse.json(newInvite, { status: 201 })

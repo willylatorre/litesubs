@@ -27,6 +27,7 @@ export async function GET() {
     orderBy: [desc(products.createdAt)],
   })
 
+  console.log(data)
   return NextResponse.json(data)
 }
 
@@ -40,29 +41,29 @@ export async function POST(req: Request) {
   }
 
   try {
-      const body = await req.json()
-      const validated = createProductSchema.safeParse(body)
+    const body = await req.json()
+    const validated = createProductSchema.safeParse(body)
 
-      if (!validated.success) {
-        return NextResponse.json({ 
-          error: 'Validation failed', 
-          fieldErrors: validated.error.flatten().fieldErrors 
-        }, { status: 400 })
-      }
+    if (!validated.success) {
+      return NextResponse.json({
+        error: 'Validation failed',
+        fieldErrors: validated.error.flatten().fieldErrors
+      }, { status: 400 })
+    }
 
-      const { name, description, price, credits } = validated.data
+    const { name, description, price, credits } = validated.data
 
-      const [newProduct] = await db.insert(products).values({
-        creatorId: session.user.id,
-        name,
-        description: description || '',
-        price: Math.round(price * 100), // Convert to cents
-        credits,
-        type: 'one_time',
-        active: true,
-      }).returning()
+    const [newProduct] = await db.insert(products).values({
+      creatorId: session.user.id,
+      name,
+      description: description || '',
+      price: Math.round(price * 100), // Convert to cents
+      credits,
+      type: 'one_time',
+      active: true,
+    }).returning()
 
-      return NextResponse.json(newProduct, { status: 201 })
+    return NextResponse.json(newProduct, { status: 201 })
   } catch (error) {
     console.error('Failed to create product:', error)
     return NextResponse.json({ error: 'Failed to create product' }, { status: 500 })

@@ -29,6 +29,20 @@
       "when": 1766241758274,
       "tag": "0003_careful_big_bertha",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1766394929464,
+      "tag": "0004_light_infant_terrible",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1766395563637,
+      "tag": "0005_wonderful_joshua_kane",
+      "breakpoints": true
     }
   ]
 }

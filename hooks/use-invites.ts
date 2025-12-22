@@ -4,9 +4,10 @@ import { toast } from "sonner"
 
 export type Invite = {
     id: string
-    email: string
+    email?: string | null
     status: 'pending' | 'accepted' | 'rejected'
     createdAt: Date
+    productId?: string
 }
 
 async function fetchInvites() {
@@ -15,7 +16,7 @@ async function fetchInvites() {
     return res.json() as Promise<Invite[]>
 }
 
-async function createInvite(data: { email: string }) {
+async function createInvite(data: { email?: string; productId?: string }) {
     const res = await fetch("/api/invites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

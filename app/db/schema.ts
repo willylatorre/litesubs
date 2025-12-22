@@ -109,9 +109,12 @@ export const invites = pgTable('invites', {
   creatorId: text('creator_id')
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
-  email: text('email').notNull(),
+  email: text('email'),
   status: inviteStatusEnum('status').default('pending').notNull(),
   token: text('token').notNull().unique(), // unique string for the link
+  productId: text('product_id').references(() => products.id, {
+    onDelete: 'set null',
+  }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at')
     .defaultNow()
@@ -164,5 +167,9 @@ export const invitesRelations = relations(invites, ({ one }) => ({
   creator: one(user, {
     fields: [invites.creatorId],
     references: [user.id],
+  }),
+  product: one(products, {
+    fields: [invites.productId],
+    references: [products.id],
   }),
 }))

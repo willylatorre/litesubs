@@ -16,11 +16,18 @@ export const auth = betterAuth({
     baseURL: process.env.BETTER_AUTH_URL,
     socialProviders: {
         google: {
+            enabled: true,
             prompt: "select_account",
             clientId: process.env.GOOGLE_CLIENT_ID as string,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
         },
     },
+    trustedOrigins: [
+        "https://litesubs.com",
+        "https://legendary-palm-tree-4qx6j57x66hg56-3000.app.github.dev",
+        "http://localhost:3000"
+    ],
+
     plugins: [
         baStripe({
             stripeClient: stripe,
