@@ -63,7 +63,12 @@ export default function PacksPage() {
                                             )}
                                         </div>
                                     </TableCell>
-                                    <TableCell>${(pack.price / 100).toFixed(2)}</TableCell>
+                                    <TableCell>
+                                        {new Intl.NumberFormat('en-US', {
+                                            style: 'currency',
+                                            currency: pack.currency ? pack.currency.toUpperCase() : 'USD'
+                                        }).format(pack.price / 100)}
+                                    </TableCell>
                                     <TableCell>{pack.credits}</TableCell>
                                     <TableCell>
                                         <Badge variant={pack.active ? "default" : "secondary"}>

@@ -23,6 +23,7 @@ export const transactionTypeEnum = pgEnum('transaction_type', [
   'refund',
 ])
 export const inviteStatusEnum = pgEnum('invite_status', ['pending', 'accepted', 'rejected'])
+export const currencyEnum = pgEnum('currency', ['usd', 'eur'])
 
 // Tables
 
@@ -36,6 +37,7 @@ export const products = pgTable('products', {
   name: text('name').notNull(),
   description: text('description'),
   price: integer('price').notNull(), // stored in cents
+  currency: currencyEnum('currency').default('usd').notNull(),
   credits: integer('credits').notNull(), // amount of credits granted
   type: productTypeEnum('type').default('one_time').notNull(),
   active: boolean('active').default(true).notNull(),

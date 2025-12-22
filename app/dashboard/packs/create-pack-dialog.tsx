@@ -14,6 +14,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Loader2, Plus } from 'lucide-react'
 import { useState } from 'react'
 
@@ -30,6 +37,7 @@ export function CreatePackDialog() {
       description: formData.get('description') as string,
       price: Number(formData.get('price')),
       credits: Number(formData.get('credits')),
+      currency: (formData.get('currency') as 'usd' | 'eur') || 'usd',
     }, {
       onSuccess: () => setOpen(false)
     })
@@ -71,7 +79,19 @@ export function CreatePackDialog() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="price">Price ($)</Label>
+                <Label htmlFor="currency">Currency</Label>
+                <Select name="currency" defaultValue="usd">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select currency" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="usd">USD ($)</SelectItem>
+                    <SelectItem value="eur">EUR (€)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="price">Price</Label>
                 <Input
                   id="price"
                   name="price"
@@ -82,18 +102,18 @@ export function CreatePackDialog() {
                   required
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="credits">Credits</Label>
-                <Input
-                  id="credits"
-                  name="credits"
-                  type="number"
-                  min="1"
-                  step="1"
-                  placeholder="100"
-                  required
-                />
-              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="credits">Credits</Label>
+              <Input
+                id="credits"
+                name="credits"
+                type="number"
+                min="1"
+                step="1"
+                placeholder="100"
+                required
+              />
             </div>
           </div>
           <DialogFooter>

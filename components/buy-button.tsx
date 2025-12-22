@@ -4,8 +4,13 @@ import { createCheckoutSession } from '@/app/actions/stripe'
 import { Button } from '@/components/ui/button'
 import { useTransition } from 'react'
 
-export function BuyButton({ productId, price }: { productId: string, price: number }) {
+export function BuyButton({ productId, price, currency = 'usd' }: { productId: string, price: number, currency?: string }) {
     const [isPending, startTransition] = useTransition()
+
+    const formattedPrice = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency.toUpperCase(),
+    }).format(price / 100)
 
     return (
         <Button 
@@ -16,7 +21,7 @@ export function BuyButton({ productId, price }: { productId: string, price: numb
             })}
             disabled={isPending}
         >
-            {isPending ? 'Processing...' : `Proceed to Payment ($${(price / 100).toFixed(2)})`}
+            {isPending ? 'Processing...' : `Proceed to Payment (${formattedPrice})`}
         </Button>
     )
 }

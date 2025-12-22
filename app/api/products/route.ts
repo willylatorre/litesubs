@@ -7,10 +7,11 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
 const createProductSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
+  name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
-  price: z.coerce.number().min(0, 'Price must be positive'),
-  credits: z.coerce.number().int().min(1, 'Credits must be at least 1'),
+  price: z.number().min(0, "Price must be positive"),
+  credits: z.number().int().min(1, "Credits must be at least 1"),
+  currency: z.enum(['usd', 'eur']).default('usd'),
 })
 
 export async function GET() {
@@ -19,16 +20,15 @@ export async function GET() {
   })
 
   if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const data = await db.query.products.findMany({
+  const userProducts = await db.query.products.findMany({
     where: eq(products.creatorId, session.user.id),
-    orderBy: [desc(products.createdAt)],
+    orderBy: (products, { desc }) => [desc(products.createdAt)],
   })
 
-  console.log(data)
-  return NextResponse.json(data)
+  return NextResponse.json(userProducts)
 }
 
 export async function POST(req: Request) {
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   })
 
   if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   try {
@@ -45,27 +45,32 @@ export async function POST(req: Request) {
     const validated = createProductSchema.safeParse(body)
 
     if (!validated.success) {
-      return NextResponse.json({
-        error: 'Validation failed',
-        fieldErrors: validated.error.flatten().fieldErrors
-      }, { status: 400 })
+      return NextResponse.json(
+        { error: "Invalid input", fieldErrors: validated.error.flatten().fieldErrors },
+        { status: 400 }
+      )
     }
 
-    const { name, description, price, credits } = validated.data
+    const { name, description, price, credits, currency } = validated.data
 
-    const [newProduct] = await db.insert(products).values({
-      creatorId: session.user.id,
-      name,
-      description: description || '',
-      price: Math.round(price * 100), // Convert to cents
-      credits,
-      type: 'one_time',
-      active: true,
-    }).returning()
+    const [product] = await db
+      .insert(products)
+      .values({
+        creatorId: session.user.id,
+        name,
+        description,
+        price: Math.round(price * 100), // Convert to cents
+        credits,
+        currency,
+      })
+      .returning()
 
-    return NextResponse.json(newProduct, { status: 201 })
+    return NextResponse.json(product, { status: 201 })
   } catch (error) {
-    console.error('Failed to create product:', error)
-    return NextResponse.json({ error: 'Failed to create product' }, { status: 500 })
+    console.error("Failed to create product:", error)
+    return NextResponse.json(
+      { error: "Failed to create product" },
+      { status: 500 }
+    )
   }
 }

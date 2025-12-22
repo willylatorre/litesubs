@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2025-12-22
 
 ### Added
+- **Currency Selection**:
+  - Added support for multiple currencies (USD, EUR) when creating packs.
+  - Updated database schema, API, and UI to store and display currency-specific prices.
+  - Integrated currency support into the Stripe Checkout flow.
 - **Invite System Overhaul**:
   - Implemented generic invite links (email optional) for broader sharing.
   - Added `app/invite/[token]/page.tsx` to handle invite acceptance and display linked products.

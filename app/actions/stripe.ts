@@ -33,7 +33,7 @@ export async function createCheckoutSession(productId: string) {
         line_items: [
             {
                 price_data: {
-                    currency: 'usd',
+                    currency: product.currency,
                     product_data: {
                         name: product.name,
                         description: product.description || undefined,
@@ -44,8 +44,8 @@ export async function createCheckoutSession(productId: string) {
             },
         ],
         mode: 'payment',
-        success_url: `${appUrl}/dashboard?success=true`,
-        cancel_url: `${appUrl}/buy/${productId}?canceled=true`,
+        success_url: `${appUrl}/dashboard/subscriptions?success=true`,
+        cancel_url: `${appUrl}/dashboard/subscriptions?canceled=true`,
         metadata: {
             userId: session.user.id,
             productId: product.id,

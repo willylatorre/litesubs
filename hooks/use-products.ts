@@ -11,6 +11,7 @@ export type Product = {
     active: boolean
     createdAt: Date
     updatedAt: Date
+    currency: string
 }
 
 async function fetchProducts() {
@@ -19,7 +20,7 @@ async function fetchProducts() {
     return res.json() as Promise<Product[]>
 }
 
-async function createProduct(data: { name: string; description?: string; price: number; credits: number }) {
+async function createProduct(data: { name: string; description?: string; price: number; credits: number; currency: 'usd' | 'eur' }) {
     const res = await fetch("/api/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

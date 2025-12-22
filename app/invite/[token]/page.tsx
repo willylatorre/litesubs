@@ -63,7 +63,11 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
                         session={session}
                         loginUrl={`/auth/sign-up?callbackURL=/invite/${token}${invite.email ? `&email=${encodeURIComponent(invite.email)}` : ''}`}
                         action={
-                            <BuyButton productId={invite.product!.id} price={invite.product!.price} />
+                            <BuyButton 
+                                productId={invite.product!.id} 
+                                price={invite.product!.price} 
+                                currency={invite.product!.currency}
+                            />
                         }
                     />
                 ) : (
