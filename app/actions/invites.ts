@@ -78,9 +78,58 @@ export async function getUserPendingInvites() {
             eq(invites.status, 'pending')
         ),
         with: {
-            creator: true
+            creator: true,
+            product: true
         }
     })
+}
+
+export async function claimInvite(token: string) {
+    const session = await auth.api.getSession({ headers: await headers() })
+    if (!session?.user) return { error: 'Unauthorized' }
+
+    try {
+        const invite = await db.query.invites.findFirst({
+            where: and(
+                eq(invites.token, token),
+                eq(invites.status, 'pending')
+            )
+        })
+
+        if (!invite) return { error: 'Invite not found' }
+
+        // If invite has email, check if it matches
+        if (invite.email && invite.email !== session.user.email) {
+            return { error: 'This invite is for another user' }
+        }
+
+        await db.transaction(async (tx) => {
+            // Update invite status and ensure email is set
+            await tx.update(invites)
+                .set({ 
+                    email: session.user.email,
+                    status: 'accepted' 
+                })
+                .where(eq(invites.id, invite.id))
+
+            // Create user balance if not exists
+            await tx.insert(userBalances)
+                .values({
+                    userId: session.user.id,
+                    creatorId: invite.creatorId,
+                    credits: 0
+                })
+                .onConflictDoNothing()
+        })
+
+        revalidatePath('/dashboard/subscriptions')
+        revalidatePath('/dashboard')
+        
+        return { success: true }
+    } catch (error) {
+        console.error("Failed to claim invite:", error)
+        return { error: 'Failed to claim invite' }
+    }
 }
 
 export async function respondToInvite(inviteId: string, accept: boolean) {

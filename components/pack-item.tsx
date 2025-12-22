@@ -1,7 +1,9 @@
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Coins } from "lucide-react";
+import Link from "next/link";
 
 export interface PackItemProduct {
 	name: string;
@@ -17,6 +19,9 @@ interface PackItemProps {
 	className?: string;
 	onCreditsHover?: (hovering: boolean) => void;
 	onPriceHover?: (hovering: boolean) => void;
+	creditsSuffix?: string;
+	session?: any; // better-auth session
+	loginUrl?: string;
 }
 
 export function PackItem({
@@ -25,6 +30,9 @@ export function PackItem({
 	className,
 	onCreditsHover,
 	onPriceHover,
+	creditsSuffix = " credits left",
+	session,
+	loginUrl,
 }: PackItemProps) {
 	const { name, credits, price, description, badge } = product;
 
@@ -68,13 +76,19 @@ export function PackItem({
 					onMouseEnter={() => onCreditsHover?.(true)}
 					onMouseLeave={() => onCreditsHover?.(false)}
 				>
-					{credits} credits left
+					{credits}{creditsSuffix}
 				</span>
 				<div
 					onMouseEnter={() => onPriceHover?.(true)}
 					onMouseLeave={() => onPriceHover?.(false)}
 				>
-					{action}
+					{session === null && loginUrl ? (
+						<Button size="sm" asChild>
+							<Link href={loginUrl}>Log in to Buy</Link>
+						</Button>
+					) : (
+						action
+					)}
 				</div>
 			</div>
 		</Card>

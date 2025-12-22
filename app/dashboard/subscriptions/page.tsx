@@ -1,11 +1,13 @@
 import { getUserSubscriptions } from "@/app/actions/dashboard"
 import { getUserPendingInvites } from "@/app/actions/invites"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { IconShoppingCart } from "@tabler/icons-react"
+import { IconShoppingCart, IconAlertCircle } from "@tabler/icons-react"
 import { PendingInviteActions } from "@/components/pending-invite-actions"
 import { PackItem } from "@/components/pack-item"
+import { BuyButton } from "@/components/buy-button"
 
 export default async function SubscriptionsPage() {
     const [subscriptions, pendingInvites] = await Promise.all([
@@ -34,7 +36,12 @@ export default async function SubscriptionsPage() {
                             <div key={invite.id} className="flex items-center justify-between rounded-md border bg-card p-4">
                                 <div className="flex flex-col">
                                     <span className="font-medium text-base">{invite.creator.name}</span>
-                                    <span className="text-sm text-muted-foreground">Invited you on {new Date(invite.createdAt).toLocaleDateString()}</span>
+                                    {invite.product ? (
+                                        <span className="text-sm text-foreground">Invited you to purchase <span className="font-semibold">{invite.product.name}</span></span>
+                                    ) : (
+                                        <span className="text-sm text-muted-foreground">Invited you to connect</span>
+                                    )}
+                                    <span className="text-xs text-muted-foreground">Sent on {new Date(invite.createdAt).toLocaleDateString()}</span>
                                 </div>
                                 <PendingInviteActions inviteId={invite.id} />
                             </div>
@@ -57,9 +64,19 @@ export default async function SubscriptionsPage() {
                                     Current Balance: <span className="font-semibold text-foreground">{sub.credits} Credits</span>
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent className="flex-1">
-                                <h4 className="mb-2 text-sm font-medium leading-none">Available Packs</h4>
-                                {sub.packs.length === 0 ? (
+                            <CardContent className="flex-1 space-y-4">
+                                {sub.credits < 2 && (
+                                    <Alert variant="default" className="bg-primary/5 border-primary/20">
+                                        <IconAlertCircle className="size-4" />
+                                        <AlertTitle>Low Credits</AlertTitle>
+                                        <AlertDescription>
+                                            You have less than 2 credits left. Please buy a pack below to add more credits.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                                <div>
+                                    <h4 className="mb-2 text-sm font-medium leading-none">Available Packs</h4>
+                                    {sub.packs.length === 0 ? (
                                     <p className="text-sm text-muted-foreground">No packs available from this creator at the moment.</p>
                                 ) : (
                                     <div className="space-y-2">
@@ -73,11 +90,7 @@ export default async function SubscriptionsPage() {
                                                     description: pack.description
                                                 }}
                                                 action={
-                                                    <Button asChild size="sm" variant="secondary">
-                                                        <Link href={`/buy/${pack.id}`}>
-                                                            Buy
-                                                        </Link>
-                                                    </Button>
+                                                    <BuyButton productId={pack.id} price={pack.price} />
                                                 }
                                             />
                                         ))}
