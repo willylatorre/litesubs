@@ -14,12 +14,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTransactionCheck } from "@/hooks/use-transaction-check";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 
 // Re-exporting actions to be used in the effect
 export { getConsumerStats, getUserSubscriptions, getUserPendingInvites };
 
-export default function Page() {
+function DashboardContent() {
 	const searchParams = useSearchParams();
 
 	const [data, setData] = useState<{
@@ -164,5 +164,13 @@ export default function Page() {
 				</div>
 			</div>
 		</div>
+	);
+}
+
+export default function Page() {
+	return (
+		<Suspense fallback={<div>Loading...</div>}>
+			<DashboardContent />
+		</Suspense>
 	);
 }
