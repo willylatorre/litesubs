@@ -1,8 +1,8 @@
 "use client";
 
+import { IconInnerShadowTop } from "@tabler/icons-react";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
-import { IconInnerShadowTop } from "@tabler/icons-react";
 import { useState } from "react";
 import { PackItem } from "@/components/pack-item";
 import { Button } from "@/components/ui/button";
@@ -62,7 +62,9 @@ export default function Home() {
 								readOnly={true}
 								onCreditsHover={(hovering) =>
 									setExplanation(
-										hovering ? "You decide the amount of credits and their expiration" : defaultText,
+										hovering
+											? "You decide the amount of credits and their expiration"
+											: defaultText,
 									)
 								}
 								onPriceHover={(hovering) =>
@@ -93,7 +95,7 @@ export default function Home() {
 					className="flex flex-col items-center gap-3 mt-4"
 				>
 					<div className="flex gap-4">
-						<Button size="lg" className="px-8" asChild>
+						<Button size="lg" className="px-8" asChild variant="secondary">
 							<a href="/dashboard">Go to dashboard</a>
 						</Button>
 					</div>

@@ -70,20 +70,6 @@ export default async function Page() {
 										</h3>
 									</div>
 									<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-										{/* Current Balance Card */}
-										<PackItem
-											product={{
-												name: "Current Balance",
-												credits: sub.credits,
-												price: 0,
-												description: "Your available credits from this creator.",
-											}}
-											creatorName={sub.creator?.name}
-											creditsSuffix=" credits"
-											readOnly={true}
-											className="bg-primary/5 border-primary/10"
-										/>
-
 										{/* Available Packs to buy */}
 										{sub.packs.map((pack) => (
 											<PackItem

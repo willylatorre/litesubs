@@ -66,11 +66,7 @@ export function PackItem({
 
 		if (readOnly) {
 			return (
-				<Button
-					variant="secondary"
-					size="lg"
-					className="w-full pointer-events-none opacity-80"
-				>
+				<Button size="lg" className="w-full pointer-events-none opacity-80">
 					Buy {formattedPrice}
 				</Button>
 			);
@@ -131,10 +127,10 @@ export function PackItem({
 				</div>
 			</div>
 
-			<div className="flex flex-col gap-4 mt-4">
+			<div className="flex items-center justify-between gap-4 mt-4 w-full">
 				<div
 					className={cn(
-						"text-2xl font-bold",
+						"text-sm font-bold",
 						withEvents &&
 							onCreditsHover &&
 							"cursor-help hover:text-primary transition-colors",
@@ -147,11 +143,7 @@ export function PackItem({
 						{creditsSuffix}
 					</span>
 				</div>
-				<div
-					onMouseEnter={handlePriceEnter}
-					onMouseLeave={handlePriceLeave}
-					className="w-full"
-				>
+				<div onMouseEnter={handlePriceEnter} onMouseLeave={handlePriceLeave}>
 					{renderAction()}
 				</div>
 			</div>
