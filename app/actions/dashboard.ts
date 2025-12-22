@@ -3,12 +3,80 @@
 import { and, count, countDistinct, eq, inArray, sum } from "drizzle-orm";
 import { db } from "@/app/db";
 import {
+	invites,
 	liteSubscriptions,
 	products,
 	transactions,
 	userBalances,
 } from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
+
+export async function getDashboardData() {
+	return authenticatedAction(async (session) => {
+		const [statsResult, subsResult, invitesResult] = await Promise.all([
+			// Consumer Stats
+			(async () => {
+				const [spentResult] = await db
+					.select({ value: sum(transactions.amountMoney) })
+					.from(transactions)
+					.where(
+						and(
+							eq(transactions.userId, session.user.id),
+							eq(transactions.type, "purchase"),
+							eq(transactions.status, "completed"),
+						),
+					);
+
+				const [subsCountResult] = await db
+					.select({ count: count() })
+					.from(liteSubscriptions)
+					.where(eq(liteSubscriptions.userId, session.user.id));
+
+				return {
+					totalSpent: Number(spentResult?.value || 0),
+					activeSubscriptionsCount: Number(subsCountResult?.count || 0),
+				};
+			})(),
+
+			// User Subscriptions
+			db.query.liteSubscriptions.findMany({
+				where: eq(liteSubscriptions.userId, session.user.id),
+				with: {
+					creator: true,
+					product: true,
+				},
+			}),
+
+			// Pending Invites
+			db.query.invites.findMany({
+				where: and(
+					eq(invites.email, session.user.email),
+					eq(invites.status, "pending"),
+				),
+				with: {
+					creator: true,
+					product: true,
+				},
+			}),
+		]);
+
+		return {
+			success: true,
+			data: {
+				stats: statsResult,
+				subscriptions: subsResult,
+				pendingInvites: invitesResult,
+			},
+		};
+	}).then(
+		(res) =>
+			res.data || {
+				stats: { totalSpent: 0, activeSubscriptionsCount: 0 },
+				subscriptions: [],
+				pendingInvites: [],
+			},
+	);
+}
 
 export async function getCreatorStats() {
 	return authenticatedAction(async (session) => {
@@ -97,35 +165,6 @@ export async function getUserSubscriptions() {
 			},
 		});
 
-		if (subs.length === 0) {
-			return { success: true, data: [] };
-		}
-
-		// Group subscriptions by creator
-		const subsByCreator = subs.reduce(
-			(acc, sub) => {
-				if (!acc[sub.creatorId]) {
-					acc[sub.creatorId] = {
-						creator: sub.creator,
-						subscriptions: [],
-						packs: [], // Initialize packs here
-					};
-				}
-				acc[sub.creatorId].subscriptions.push(sub);
-				// Add the specific product from the subscription to packs
-				if (sub.product) {
-					acc[sub.creatorId].packs.push(sub.product);
-				}
-				return acc;
-			},
-			{} as Record<
-				string,
-				{ creator: any; subscriptions: (typeof subs)[0][]; packs: (typeof products.$inferSelect)[] }
-			>,
-		);
-
-		const data = Object.values(subsByCreator);
-
-		return { success: true, data };
+		return { success: true, data: subs };
 	}).then((res) => res.data || []);
 }

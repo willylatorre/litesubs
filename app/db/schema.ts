@@ -55,6 +55,7 @@ export const products = pgTable(
 	(table) => [
 		index("product_creator_idx").on(table.creatorId),
 		index("product_created_at_idx").on(table.createdAt),
+		index("product_creator_active_idx").on(table.creatorId, table.active),
 	],
 );
 
@@ -99,6 +100,8 @@ export const transactions = pgTable(
 			onDelete: "set null",
 		}),
 		amount: integer("amount").notNull(), // Positive for add, negative for remove/usage
+		amountMoney: integer("amount_money"), // The cost in cents if it was a purchase
+		currency: currencyEnum("currency"), // The currency if amountMoney is set
 		type: transactionTypeEnum("type").notNull(),
 		status: transactionStatusEnum("status").default("ongoing").notNull(),
 		description: text("description"),
@@ -110,6 +113,8 @@ export const transactions = pgTable(
 		index("tx_creator_idx").on(table.creatorId),
 		index("tx_product_idx").on(table.productId),
 		index("tx_created_at_idx").on(table.createdAt),
+		index("tx_user_type_idx").on(table.userId, table.type),
+		index("tx_creator_type_idx").on(table.creatorId, table.type),
 	],
 );
 
@@ -137,6 +142,7 @@ export const invites = pgTable(
 	(table) => [
 		index("invite_creator_idx").on(table.creatorId),
 		index("invite_email_idx").on(table.email),
+		index("invite_email_status_idx").on(table.email, table.status),
 	],
 );
 

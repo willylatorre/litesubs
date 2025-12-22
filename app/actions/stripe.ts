@@ -70,10 +70,12 @@ export async function createCheckoutSession(productId: string) {
 			creatorId: product.creatorId,
 			productId: product.id,
 			amount: product.credits,
+			amountMoney: product.price,
+			currency: product.currency,
 			type: "purchase",
 			description: `Purchase of ${product.credits} credits`,
 			stripeCheckoutId: checkoutSession.id,
-			status: TRANSACTION_STATUSES[0],
+			status: "ongoing",
 		});
 	}
 

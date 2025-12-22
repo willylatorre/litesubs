@@ -5,7 +5,7 @@ import { db } from "@/app/db";
 import { transactions } from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
 
-export async function checkTransactionStatus(productId: string) {
+export async function checkTransactionStatus(productId: string): Promise<{ success: boolean; status: string } | undefined> {
 	return authenticatedAction(async (session) => {
 		// Look for a recent transaction for this user and product
 		// We can look for transactions created in the last few minutes
@@ -22,9 +22,9 @@ export async function checkTransactionStatus(productId: string) {
 		});
 
 		if (transaction) {
-			return { success: true, status: transaction.status };
+			return { success: true, data: { status: transaction.status } };
 		}
 
-		return { success: true, status: "pending" };
-	});
+		return { success: true, data: { status: "pending" } };
+	}).then((res) => res?.data || { status: "pending" });
 }

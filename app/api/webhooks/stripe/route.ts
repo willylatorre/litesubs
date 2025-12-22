@@ -76,6 +76,8 @@ export async function POST(req: Request) {
 						.update(transactions)
 						.set({
 							status: "completed",
+							amountMoney: session.amount_total ?? existingTransaction.amountMoney,
+							currency: (session.currency as any) ?? existingTransaction.currency,
 						})
 						.where(eq(transactions.id, existingTransaction.id));
 				} else {
@@ -85,6 +87,8 @@ export async function POST(req: Request) {
 						creatorId: metadata.creatorId,
 						productId: metadata.productId,
 						amount: creditsToAdd,
+						amountMoney: session.amount_total,
+						currency: session.currency as any,
 						type: "purchase",
 						description: `Purchase of ${creditsToAdd} credits`,
 						stripeCheckoutId: session.id,
