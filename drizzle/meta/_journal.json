@@ -1,55 +1,55 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1766135502469,
-      "tag": "0000_tearful_sue_storm",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1766227593174,
-      "tag": "0001_lean_iron_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1766232484710,
-      "tag": "0002_mute_jackal",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1766241758274,
-      "tag": "0003_careful_big_bertha",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1766394929464,
-      "tag": "0004_light_infant_terrible",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1766395563637,
-      "tag": "0005_wonderful_joshua_kane",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1766396693587,
-      "tag": "0006_majestic_nightcrawler",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "postgresql",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "7",
+			"when": 1766135502469,
+			"tag": "0000_tearful_sue_storm",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1766227593174,
+			"tag": "0001_lean_iron_man",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1766232484710,
+			"tag": "0002_mute_jackal",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1766241758274,
+			"tag": "0003_careful_big_bertha",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1766394929464,
+			"tag": "0004_light_infant_terrible",
+			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1766395563637,
+			"tag": "0005_wonderful_joshua_kane",
+			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1766396693587,
+			"tag": "0006_majestic_nightcrawler",
+			"breakpoints": true
+		}
+	]
 }

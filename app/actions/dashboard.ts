@@ -1,122 +1,119 @@
-'use server'
+"use server";
 
-import { db } from '@/app/db'
-import { transactions, products, userBalances } from '@/app/db/schema'
-import { auth } from '@/lib/auth'
-import { eq, and, count, sum, inArray } from 'drizzle-orm'
-import { headers } from 'next/headers'
+import { and, count, eq, inArray, sum } from "drizzle-orm";
+import { headers } from "next/headers";
+import { db } from "@/app/db";
+import { products, transactions, userBalances } from "@/app/db/schema";
+import { auth } from "@/lib/auth";
 
 export async function getCreatorStats() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  })
+	const session = await auth.api.getSession({
+		headers: await headers(),
+	});
 
-  if (!session?.user) {
-    return {
-      totalRevenue: 0,
-      activeProducts: 0,
-      totalCustomers: 0,
-    }
-  }
+	if (!session?.user) {
+		return {
+			totalRevenue: 0,
+			activeProducts: 0,
+			totalCustomers: 0,
+		};
+	}
 
-  const [revenueResult] = await db
-    .select({ value: sum(products.price) })
-    .from(transactions)
-    .innerJoin(products, eq(transactions.productId, products.id))
-    .where(
-      and(
-        eq(transactions.creatorId, session.user.id),
-        eq(transactions.type, 'purchase')
-      )
-    )
+	const [revenueResult] = await db
+		.select({ value: sum(products.price) })
+		.from(transactions)
+		.innerJoin(products, eq(transactions.productId, products.id))
+		.where(
+			and(
+				eq(transactions.creatorId, session.user.id),
+				eq(transactions.type, "purchase"),
+			),
+		);
 
-  const [productsResult] = await db
-    .select({ count: count() })
-    .from(products)
-    .where(
-      and(
-        eq(products.creatorId, session.user.id),
-        eq(products.active, true)
-      )
-    )
+	const [productsResult] = await db
+		.select({ count: count() })
+		.from(products)
+		.where(
+			and(eq(products.creatorId, session.user.id), eq(products.active, true)),
+		);
 
-  const [customersResult] = await db
-    .select({ count: count() })
-    .from(userBalances)
-    .where(eq(userBalances.creatorId, session.user.id))
+	const [customersResult] = await db
+		.select({ count: count() })
+		.from(userBalances)
+		.where(eq(userBalances.creatorId, session.user.id));
 
-  return {
-    totalRevenue: Number(revenueResult?.value || 0),
-    activeProducts: Number(productsResult?.count || 0),
-    totalCustomers: Number(customersResult?.count || 0),
-  }
+	return {
+		totalRevenue: Number(revenueResult?.value || 0),
+		activeProducts: Number(productsResult?.count || 0),
+		totalCustomers: Number(customersResult?.count || 0),
+	};
 }
 
 export async function getConsumerStats() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  })
+	const session = await auth.api.getSession({
+		headers: await headers(),
+	});
 
-  if (!session?.user) {
-    return {
-      totalSpent: 0,
-      activeSubscriptionsCount: 0,
-    }
-  }
+	if (!session?.user) {
+		return {
+			totalSpent: 0,
+			activeSubscriptionsCount: 0,
+		};
+	}
 
-  const [spentResult] = await db
-    .select({ value: sum(products.price) })
-    .from(transactions)
-    .innerJoin(products, eq(transactions.productId, products.id))
-    .where(
-      and(
-        eq(transactions.userId, session.user.id),
-        eq(transactions.type, 'purchase')
-      )
-    )
+	const [spentResult] = await db
+		.select({ value: sum(products.price) })
+		.from(transactions)
+		.innerJoin(products, eq(transactions.productId, products.id))
+		.where(
+			and(
+				eq(transactions.userId, session.user.id),
+				eq(transactions.type, "purchase"),
+			),
+		);
 
-  const [subsResult] = await db
-    .select({ count: count() })
-    .from(userBalances)
-    .where(eq(userBalances.userId, session.user.id))
+	const [subsResult] = await db
+		.select({ count: count() })
+		.from(userBalances)
+		.where(eq(userBalances.userId, session.user.id));
 
-  return {
-    totalSpent: Number(spentResult?.value || 0),
-    activeSubscriptionsCount: Number(subsResult?.count || 0),
-  }
+	return {
+		totalSpent: Number(spentResult?.value || 0),
+		activeSubscriptionsCount: Number(subsResult?.count || 0),
+	};
 }
 
 export async function getUserSubscriptions() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  })
+	const session = await auth.api.getSession({
+		headers: await headers(),
+	});
 
-  if (!session?.user) {
-    return []
-  }
+	if (!session?.user) {
+		return [];
+	}
 
-  const balances = await db.query.userBalances.findMany({
-    where: eq(userBalances.userId, session.user.id),
-    with: {
-      creator: true,
-    },
-  })
+	const balances = await db.query.userBalances.findMany({
+		where: eq(userBalances.userId, session.user.id),
+		with: {
+			creator: true,
+		},
+	});
 
-  if (balances.length === 0) {
-    return []
-  }
+	if (balances.length === 0) {
+		return [];
+	}
 
-  const creatorIds = balances.map((b) => b.creatorId)
-  
-  const creatorProducts = await db.query.products.findMany({
-    where: and(
-        inArray(products.creatorId, creatorIds),
-        eq(products.active, true)
-    )
-  })
+	const creatorIds = balances.map((b) => b.creatorId);
 
-  return balances.map((balance) => ({
-      ...balance,
-      packs: creatorProducts.filter((p) => p.creatorId === balance.creatorId)
-  }))
+	const creatorProducts = await db.query.products.findMany({
+		where: and(
+			inArray(products.creatorId, creatorIds),
+			eq(products.active, true),
+		),
+	});
+
+	return balances.map((balance) => ({
+		...balance,
+		packs: creatorProducts.filter((p) => p.creatorId === balance.creatorId),
+	}));
 }

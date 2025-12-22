@@ -1,10 +1,11 @@
 "use client";
 
-import { PackItem } from "@/components/pack-item";
-import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
+import { IconInnerShadowTop } from "@tabler/icons-react";
 import { useState } from "react";
+import { PackItem } from "@/components/pack-item";
+import { Button } from "@/components/ui/button";
 
 export default function Home() {
 	const defaultText =
@@ -20,10 +21,13 @@ export default function Home() {
 				className="w-full max-w-4xl text-center flex flex-col items-center gap-16"
 			>
 				<div className="flex flex-col items-center gap-4 max-w-xl">
-					{/* Title */}
-					<h1 className="text-5xl md:text-6xl font-bold tracking-tight">
-						LiteSubs
-					</h1>
+					{/* Logo */}
+					<div className="flex items-center gap-2">
+						<IconInnerShadowTop className="size-8 md:size-10" />
+						<h1 className="text-4xl md:text-5xl font-bold tracking-tight">
+							liteSubs
+						</h1>
+					</div>
 
 					{/* Description */}
 					<p className="text-base md:text-lg text-muted-foreground">
@@ -56,13 +60,13 @@ export default function Home() {
 								className="border-primary/20 bg-background/50 backdrop-blur-xl"
 								onCreditsHover={(hovering) =>
 									setExplanation(
-										hovering ? "Credits are valid for 12 months." : defaultText,
+										hovering ? "You decide the amount of credits and their expiration" : defaultText,
 									)
 								}
 								onPriceHover={(hovering) =>
 									setExplanation(
 										hovering
-											? "One-time payment. No hidden fees."
+											? "You pick the price your customers will pay for this pack"
 											: defaultText,
 									)
 								}
@@ -98,9 +102,6 @@ export default function Home() {
 					<div className="flex gap-4">
 						<Button size="lg" className="px-8" asChild>
 							<a href="/dashboard">Go to dashboard</a>
-						</Button>
-						<Button size="lg" variant="outline" className="px-8" asChild>
-							<a href="/auth/sign-in">Login</a>
 						</Button>
 					</div>
 					<span className="text-xs text-muted-foreground">

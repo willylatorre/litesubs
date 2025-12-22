@@ -1,3 +1,4 @@
+import { signup } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -15,8 +16,6 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { signup } from '@/app/actions/auth'
-
 
 export function LoginForm({
 	className,

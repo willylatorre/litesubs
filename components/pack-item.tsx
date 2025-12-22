@@ -1,9 +1,9 @@
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { Coins } from "lucide-react";
 import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 export interface PackItemProduct {
 	name: string;
@@ -76,7 +76,8 @@ export function PackItem({
 					onMouseEnter={() => onCreditsHover?.(true)}
 					onMouseLeave={() => onCreditsHover?.(false)}
 				>
-					{credits}{creditsSuffix}
+					{credits}
+					{creditsSuffix}
 				</span>
 				<div
 					onMouseEnter={() => onPriceHover?.(true)}
