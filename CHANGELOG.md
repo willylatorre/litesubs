@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - 2025-12-22
+
+### Added
+- **Invite System Overhaul**:
+  - Implemented generic invite links (email optional) for broader sharing.
+  - Added `app/invite/[token]/page.tsx` to handle invite acceptance and display linked products.
+  - Added `claimInvite` server action to associate generic invites with the current user and auto-accept them.
+  - Added "Generate Invite Link" action to `PackActions`, creating a unique link pre-filled with the selected pack.
+  - Updated `app/dashboard/subscriptions/page.tsx` to show pending product invites and a low-credit alert (< 2 credits).
+- **Authentication Improvements**:
+  - Added `middleware.ts` to protect `/dashboard` routes and redirect unauthenticated users to `/auth/sign-in`.
+  - Updated `PackItem` component to handle authentication internally, showing a "Log in to Buy" button if no session exists.
+  - Improved `NavUser` logout flow to be more reliable.
+- **UI Components**:
+  - Created `components/buy-button.tsx` for reusable purchase logic.
+  - Enhanced `PackItem` with `creditsSuffix` prop and customizable action area.
+
+### Changed
+- **Database Schema**:
+  - Added `productId` to `invites` table to link invites to specific packs.
+  - Made `email` field in `invites` table optional.
+- **API & Hooks**:
+  - Updated `/api/invites` and `useCreateInvite` to support optional email and `productId`.
+  - Updated `getUserPendingInvites` to include product details.
+- **Dashboard & UX**:
+  - Removed deprecated public "View Page" and "Copy Link" actions from `PackActions` in favor of the new invite flow.
+  - Consolidated purchase flow: users are redirected to the dashboard or invite page to buy, ensuring valid sessions.
+  - Updated `InviteUserDialog` to support controlled state and pack selection.
+
+### Removed
+- Deleted `app/buy` directory as the purchase flow is now handled via invites and the dashboard.
+
 ## [Unreleased] - 2025-12-21
 
 ### Added
