@@ -40,49 +40,25 @@ This model establishes a direct relationship between the creator and the buyer, 
 
 ---
 
-# Implementation Plan
+# Next tasks
 
-## Phase 1: Data Modeling & Core Backend
-- [x] **Database Schema Design**
-  - Define `packs` table (creator_id, name, price, credits, active, expiration).
-  - Define `user_credits` or `subscriptions` table (user_id, pack_id, current_credits, status).
-  - Define `transactions` table (audit log for credit changes).
-- [ ] **Database Migration**
-  - Generate and push Drizzle migrations.
+### 🛠 Customer & Credit Management
+- [ ] **Detailed Transaction History:** Implement a view for creators and customers to see a full ledger of credit changes (purchases, manual adjustments, API consumption).
+- [ ] **Enhanced Credit UI:** Add "Reason" notes to manual credit adjustments for better bookkeeping.
+- [ ] **Account Management:** Allow users to view their billing history and manage their profile.
 
-## Phase 2: Creator Dashboard (Packs)
-- [x] **Create Pack UI**
-  - Form to input pack details (Name, Price, Credits).
-  - Server Action to save pack to DB.
-- [x] **Pack List**
-  - Display created packs with status toggle (Active/Disabled).
-  - "Copy Link" functionality for sharing.
+### 🔗 Public Pages & SEO
+- [ ] **Pack Detail Pages:** Create dedicated landing pages for each pack with rich descriptions and a clear "Buy" call-to-action.
+- [ ] **SEO Optimization:** Implement dynamic OpenGraph images and meta tags for pack sharing links.
+- [ ] **Public Creator Profiles:** A simple page listing all available packs for a specific creator.
+- [ ] **Help & FAQ:** Add a dedicated Help/FAQ page for both creators and customers.
 
-## Phase 3: Public Views & Authentication
-- [x] **Public Pack Page** (`/buy/[packId]`)
-  - Fetch and display pack details publically.
-  - Integration with Auth:
-    - If user not logged in -> Redirect to Register -> Return to Pack Page.
-    - If user logged in -> Show "Buy with Stripe" button.
+### 💻 Developer Experience (API)
+- [ ] **API Key Management:** UI for creators to generate/revoke API keys for their projects.
+- [ ] **Credit Consumption API:** Build a secure endpoint for external applications to deduct credits from a user's balance.
+- [ ] **Webhooks:** Set up outgoing webhooks to notify external services of successful purchases or balance changes.
 
-## Phase 4: Stripe Integration
-- [x] **Stripe Setup**
-  - Configure Stripe SDK.
-  - Create Checkout Sessions for packs.
-- [x] **Webhooks**
-  - Handle `checkout.session.completed`.
-  - Create `user_credits` record upon successful payment.
-
-## Phase 5: Creator Dashboard (Customers)
-- [x] **Customer Table**
-  - Fetch users who bought packs from the current creator.
-  - Display current credit balance.
-- [x] **Credit Management Actions**
-  - UI (Dialog/Popover) to "Add/Remove Credits".
-  - Server Action to update `user_credits` and log to `transactions`.
-
-## Phase 6: Polish & API
-- [ ] **Landing Page Update**
-  - Refresh `app/page.tsx` to reflect current branding and features.
-- [ ] **API Endpoint (Basic)**
-  - Endpoint for creators to check a user's balance programmatically.
+### 🚀 Polish & Performance
+- [ ] **Performance Audit:** Review Server vs. Client component usage to optimize initial load times and interactivity.
+- [ ] **Stripe Webhook Reliability:** Ensure idempotent processing of Stripe events to handle retries safely.
+- [ ] **Cal.com Integration:** Explore allowing users to "spend" credits to book appointments via Cal.com.
