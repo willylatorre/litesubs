@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - 2025-12-23
+
+### Added
+- **Detailed Plan & Ledger System**:
+  - Created `app/dashboard/subscriptions/[subscriptionId]/page.tsx` for customers to view credits and usage history for specific plans.
+  - Implemented a "Transaction Ledger" table showing all credit changes (purchases, adjustments).
+  - Added "Top up" functionality directly from the plan detail view.
+- **Enhanced Creator Management**:
+  - Created `CustomerDetailsDialog` to manage individual customers via a minimalist modal.
+  - Display "Total Spent" for each customer based on their purchase history.
+  - Integrated **React Query** into the customer details modal for progressive loading (Skeletons) and instant updates.
+  - Added `PackDetailsDialog` to the Packs page, showing pack stats and a list of current subscribers.
+  - Implemented quick credit adjustment: added a "-1 Credit" button for rapid balance management.
+- **Data Fetching & API**:
+  - Added `getCustomerDetails` and `getPackDetails` server actions to fetch detailed relationship data.
+  - Updated `getCreatorCustomers` to include per-customer pack subscriptions and individual credit balances.
+  - Added `getUserTransactions` and `getCreatorCustomerTransactions` for ledger data.
+
+### Changed
+- **Invite Flow Polish**:
+  - Refactored `app/invite/[token]` to use a manual "Accept Invite" button, resolving a `revalidatePath` rendering error.
+  - Improved invite status handling: users are now informed if an invite has already been claimed or has expired.
+- **UI/UX Improvements**:
+  - Redesigned the customer and pack details views to be more minimalistic, removing unnecessary borders and simplifying typography.
+  - Harmonized button sizes across the dashboard for better visual consistency.
+  - Replaced the standalone `/dashboard/customers/[customerId]` page with the more efficient `CustomerDetailsDialog` modal.
+- **Buy Button**:
+  - Updated `BuyButton` to support `fullWidth` prop for better layout flexibility in headers.
+
+### Fixed
+- Resolved "Route /invite/[token] used 'revalidatePath' during render" error by moving side effects to client-side actions.
+- Fixed a syntax error in `app/actions/products.ts` caused by nested export declarations.
+
 ## [Unreleased] - 2025-12-22
 
 ### Added

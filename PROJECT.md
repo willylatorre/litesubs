@@ -43,8 +43,8 @@ This model establishes a direct relationship between the creator and the buyer, 
 # Next tasks
 
 ### 🛠 Customer & Credit Management
-- [ ] **Detailed Plan view:** Implement a view for creators and customers to see a full ledger of credit changes (purchases, manual adjustments, API consumption). It is a strict link between customer-planId.
-- [ ] **Enhanced Credit UI:** Add the possibility to manually adjust credits, increase or decrease in the detailed plan view.
+- [x] **Detailed Plan view:** Implement a view for creators and customers to see a full ledger of credit changes (purchases, manual adjustments, API consumption). It is a strict link between customer-planId.
+- [x] **Enhanced Credit UI:** Add the possibility to manually adjust credits, increase or decrease in the detailed plan view.
 - [ ] **Account Management:** Allow users to view their billing history and manage their profile using the betterauth-UI components like `AccountView`
 
 ### 🔗 Public Pages & SEO
