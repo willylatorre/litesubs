@@ -19,6 +19,7 @@ export function Providers({ children }: { children: ReactNode }) {
 				navigate={router.push}
 				social={{ providers: ["google"] }}
 				replace={router.replace}
+				redirectTo="/dashboard"
 				onSessionChange={() => {
 					// Clear router cache (protected routes)
 					router.refresh();

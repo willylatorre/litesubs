@@ -13,6 +13,7 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 export function BuyButton({
 	productId,
@@ -21,6 +22,7 @@ export function BuyButton({
 	label,
 	productName,
 	disabled,
+	fullWidth = true,
 }: {
 	productId: string;
 	price: number;
@@ -28,6 +30,7 @@ export function BuyButton({
 	label?: string;
 	productName?: string;
 	disabled?: boolean;
+	fullWidth?: boolean;
 }) {
 	const [isPending, startTransition] = useTransition();
 	const [open, setOpen] = useState(false);
@@ -42,7 +45,11 @@ export function BuyButton({
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
-				<Button className="w-full" size="lg" disabled={disabled}>
+				<Button
+					className={cn(fullWidth ? "w-full" : "w-auto")}
+					size="lg"
+					disabled={disabled}
+				>
 					{triggerLabel}
 				</Button>
 			</DialogTrigger>

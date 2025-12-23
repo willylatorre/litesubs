@@ -7,12 +7,15 @@ import {
 	getUserSubscriptions,
 } from "@/app/actions/dashboard";
 import { getUserPendingInvites } from "@/app/actions/invites";
+import { BuyButton } from "@/components/buy-button";
 import { ConsumerStatsCards } from "@/components/consumer-stats-cards";
 import { InviteItem } from "@/components/invite-item";
 import { PackItem } from "@/components/pack-item";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTransactionCheck } from "@/hooks/use-transaction-check";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 
@@ -155,6 +158,23 @@ function DashboardContent() {
 											creditsSuffix=" credits left"
 											creatorName={sub.creator?.name}
 											isLoading={isPurchased}
+											action={
+												<div className="flex items-center gap-2 w-full">
+													<Button variant="outline" size="sm" className="flex-1" asChild>
+														<Link href={`/dashboard/subscriptions/${sub.id}`}>Details</Link>
+													</Button>
+													<div className="flex-1">
+														<BuyButton
+															disabled={!sub.product.id}
+															productId={sub.product.id}
+															price={sub.product.price}
+															currency={sub.product.currency}
+															productName={sub.product.name}
+															label="Top up"
+														/>
+													</div>
+												</div>
+											}
 										/>
 									);
 								})}

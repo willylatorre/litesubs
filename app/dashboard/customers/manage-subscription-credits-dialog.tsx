@@ -3,7 +3,7 @@
 import { IconAdjustments } from "@tabler/icons-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { updateCustomerCredits } from "@/app/actions/customers";
+import { updateSubscriptionCredits } from "@/app/actions/customers";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -17,14 +17,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function ManageCreditsDialog({
-	userId,
-	customerName,
+export function ManageSubscriptionCreditsDialog({
+	subscriptionId,
+	planName,
 	currentCredits,
+	onSuccess,
 }: {
-	userId: string;
-	customerName: string;
+	subscriptionId: string;
+	planName: string;
 	currentCredits: number;
+	onSuccess?: () => void;
 }) {
 	const [open, setOpen] = useState(false);
 	const [amount, setAmount] = useState("");
@@ -40,12 +42,13 @@ export function ManageCreditsDialog({
 		}
 
 		startTransition(async () => {
-			const res = await updateCustomerCredits(userId, val, description);
+			const res = await updateSubscriptionCredits(subscriptionId, val, description);
 			if (res.success) {
 				toast.success("Credits updated");
 				setOpen(false);
 				setAmount("");
 				setDescription("");
+				onSuccess?.();
 			} else {
 				toast.error(res.error as string);
 			}
@@ -63,9 +66,9 @@ export function ManageCreditsDialog({
 			<DialogContent className="sm:max-w-[425px]">
 				<form onSubmit={handleSubmit}>
 					<DialogHeader>
-						<DialogTitle>Manage Credits</DialogTitle>
+						<DialogTitle>Manage Plan Credits</DialogTitle>
 						<DialogDescription>
-							Adjust credits for {customerName}. Current balance:{" "}
+							Adjust credits for {planName}. Current balance:{" "}
 							{currentCredits}
 						</DialogDescription>
 					</DialogHeader>

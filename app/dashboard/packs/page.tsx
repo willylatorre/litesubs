@@ -13,6 +13,7 @@ import {
 import { useProducts } from "@/hooks/use-products";
 import { CreatePackDialog } from "./create-pack-dialog";
 import { PackActions } from "./pack-actions";
+import { PackDetailsDialog } from "./pack-details-dialog";
 
 export default function PacksPage() {
 	const { data: packs, isLoading, isError } = useProducts();
@@ -78,14 +79,16 @@ export default function PacksPage() {
 							packs?.map((pack) => (
 								<TableRow key={pack.id}>
 									<TableCell className="font-medium">
-										<div className="flex flex-col">
-											<span>{pack.name}</span>
-											{pack.description && (
-												<span className="text-xs text-muted-foreground">
-													{pack.description}
-												</span>
-											)}
-										</div>
+										<PackDetailsDialog packId={pack.id}>
+											<div className="flex flex-col cursor-pointer hover:underline">
+												<span>{pack.name}</span>
+												{pack.description && (
+													<span className="text-xs text-muted-foreground">
+														{pack.description}
+													</span>
+												)}
+											</div>
+										</PackDetailsDialog>
 									</TableCell>
 									<TableCell>
 										{new Intl.NumberFormat("en-US", {

@@ -28,3 +28,50 @@ export async function checkTransactionStatus(productId: string) {
 		return { success: true, data: { status: "pending" } };
 	}).then((res) => res?.data || { status: "pending" });
 }
+
+export async function getCreatorCustomerTransactions(
+	customerId: string,
+	productId?: string,
+) {
+	return authenticatedAction(async (session) => {
+		const conditions = [
+			eq(transactions.userId, customerId),
+			eq(transactions.creatorId, session.user.id),
+		];
+
+		if (productId) {
+			conditions.push(eq(transactions.productId, productId));
+		}
+
+		const txs = await db.query.transactions.findMany({
+			where: and(...conditions),
+			orderBy: [desc(transactions.createdAt)],
+			with: {
+				product: true,
+			},
+		});
+
+		return { success: true, data: txs };
+	});
+}
+
+export async function getUserTransactions(productId?: string) {
+	return authenticatedAction(async (session) => {
+		const conditions = [eq(transactions.userId, session.user.id)];
+
+		if (productId) {
+			conditions.push(eq(transactions.productId, productId));
+		}
+
+		const txs = await db.query.transactions.findMany({
+			where: and(...conditions),
+			orderBy: [desc(transactions.createdAt)],
+			with: {
+				creator: true,
+				product: true,
+			},
+		});
+
+		return { success: true, data: txs };
+	});
+}

@@ -11,6 +11,27 @@ import {
 } from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
 
+export async function getUserSubscriptionDetails(subscriptionId: string) {
+	return authenticatedAction(async (session) => {
+		const sub = await db.query.liteSubscriptions.findFirst({
+			where: and(
+				eq(liteSubscriptions.id, subscriptionId),
+				eq(liteSubscriptions.userId, session.user.id),
+			),
+			with: {
+				creator: true,
+				product: true,
+			},
+		});
+
+		if (!sub) {
+			return { success: false, error: "Subscription not found" };
+		}
+
+		return { success: true, data: sub };
+	});
+}
+
 export async function getDashboardData() {
 	return authenticatedAction(async (session) => {
 		const [statsResult, subsResult, invitesResult] = await Promise.all([

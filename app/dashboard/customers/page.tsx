@@ -1,5 +1,6 @@
 import { getCreatorCustomers } from "@/app/actions/customers";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
 	Table,
 	TableBody,
@@ -8,7 +9,10 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { ManageCreditsDialog } from "./manage-credits-dialog";
+import { ChevronRight } from "lucide-react";
+import { CustomerDetailsDialog } from "./customer-details-dialog";
+import { Badge } from "@/components/ui/badge";
+import { DecreaseCreditButton } from "./decrease-credit-button";
 
 export default async function CustomersPage() {
 	const customers = await getCreatorCustomers();
@@ -29,7 +33,8 @@ export default async function CustomersPage() {
 					<TableHeader>
 						<TableRow>
 							<TableHead>Customer</TableHead>
-							<TableHead>Current Credits</TableHead>
+							<TableHead>Active Packs</TableHead>
+							<TableHead>Total Credits</TableHead>
 							<TableHead>Last Updated</TableHead>
 							<TableHead className="text-right">Actions</TableHead>
 						</TableRow>
@@ -38,7 +43,7 @@ export default async function CustomersPage() {
 						{customers.length === 0 ? (
 							<TableRow>
 								<TableCell
-									colSpan={4}
+									colSpan={5}
 									className="text-center h-24 text-muted-foreground"
 								>
 									No customers found. Share your packs to get started!
@@ -48,22 +53,51 @@ export default async function CustomersPage() {
 							customers.map((record) => (
 								<TableRow key={record.id}>
 									<TableCell className="font-medium">
-										<div className="flex items-center gap-3">
-											<Avatar className="h-8 w-8">
-												<AvatarImage
-													src={record.user.image || ""}
-													alt={record.user.name}
-												/>
-												<AvatarFallback>
-													{record.user.name.substring(0, 2).toUpperCase()}
-												</AvatarFallback>
-											</Avatar>
-											<div className="flex flex-col">
-												<span>{record.user.name}</span>
-												<span className="text-xs text-muted-foreground">
-													{record.user.email}
-												</span>
+										<CustomerDetailsDialog
+											customerId={record.userId}
+											customer={{
+												name: record.user.name,
+												email: record.user.email,
+												image: record.user.image,
+											}}
+											initialSubscriptions={record.activePacks}
+										>
+											<div className="flex items-center gap-3 cursor-pointer hover:underline">
+												<Avatar className="h-8 w-8">
+													<AvatarImage
+														src={record.user.image || ""}
+														alt={record.user.name}
+													/>
+													<AvatarFallback>
+														{record.user.name.substring(0, 2).toUpperCase()}
+													</AvatarFallback>
+												</Avatar>
+												<div className="flex flex-col">
+													<span>{record.user.name}</span>
+													<span className="text-xs text-muted-foreground">
+														{record.user.email}
+													</span>
+												</div>
 											</div>
+										</CustomerDetailsDialog>
+									</TableCell>
+									<TableCell>
+										<div className="flex flex-wrap gap-1">
+											{record.activePacks.length > 0 ? (
+												record.activePacks.map((pack) => (
+													<Badge
+														key={pack.id}
+														variant="secondary"
+														className="text-xs"
+													>
+														{pack.name}
+													</Badge>
+												))
+											) : (
+												<span className="text-muted-foreground text-xs">
+													-
+												</span>
+											)}
 										</div>
 									</TableCell>
 									<TableCell className="font-mono text-lg">
@@ -73,11 +107,30 @@ export default async function CustomersPage() {
 										{new Date(record.updatedAt).toLocaleDateString()}
 									</TableCell>
 									<TableCell className="text-right">
-										<ManageCreditsDialog
-											userId={record.userId}
-											customerName={record.user.name}
-											currentCredits={record.credits}
-										/>
+										<div className="flex items-center justify-end gap-2">
+											{record.activePacks.length === 1 && (
+												<DecreaseCreditButton
+													subscriptionId={record.activePacks[0].subscriptionId}
+													currentCredits={record.activePacks[0].credits}
+													variant="outline"
+													size="sm"
+												/>
+											)}
+											<CustomerDetailsDialog
+												customerId={record.userId}
+												customer={{
+													name: record.user.name,
+													email: record.user.email,
+													image: record.user.image,
+												}}
+												initialSubscriptions={record.activePacks}
+											>
+												<Button variant="ghost" size="sm">
+													Details
+													<ChevronRight className="ml-2 h-4 w-4" />
+												</Button>
+											</CustomerDetailsDialog>
+										</div>
 									</TableCell>
 								</TableRow>
 							))

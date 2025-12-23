@@ -1,11 +1,9 @@
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { claimInvite } from "@/app/actions/invites";
+import { notFound } from "next/navigation";
 import { db } from "@/app/db";
 import { invites } from "@/app/db/schema";
-import { BuyButton } from "@/components/buy-button";
 import { PackItem } from "@/components/pack-item";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +15,7 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
+import { AcceptInviteButton } from "./accept-invite-button";
 
 export default async function InvitePage({
 	params,
@@ -34,7 +33,7 @@ export default async function InvitePage({
 		},
 	});
 
-	if (!invite || invite.status !== "pending") {
+	if (!invite) {
 		return notFound();
 	}
 
@@ -42,12 +41,44 @@ export default async function InvitePage({
 		headers: await headers(),
 	});
 
-	if (session?.user) {
-		const result = await claimInvite(token);
-		if (result.success) {
-			redirect("/dashboard/subscriptions");
+	if (invite.status === "accepted") {
+		if (session?.user?.email && invite.email === session.user.email) {
+			return (
+				<div className="flex min-h-screen items-center justify-center bg-muted/50 p-4">
+					<Card className="max-w-md w-full shadow-xl border-0">
+						<CardHeader>
+							<CardTitle>Invite Accepted</CardTitle>
+							<CardDescription>
+								You have already accepted this invitation.
+							</CardDescription>
+						</CardHeader>
+						<CardFooter>
+							<Button className="w-full" size="lg" asChild>
+								<Link href="/dashboard">Go to Dashboard</Link>
+							</Button>
+						</CardFooter>
+					</Card>
+				</div>
+			);
 		}
-		// If error (e.g. invite for another user), we stay here and show the page (which will likely show the mismatch info if I added it, or just the preview)
+		
+		return (
+			<div className="flex min-h-screen items-center justify-center bg-muted/50 p-4">
+				<Card className="max-w-md w-full shadow-xl border-0">
+					<CardHeader>
+						<CardTitle>Invite Expired</CardTitle>
+						<CardDescription>
+							This invitation link has already been claimed.
+						</CardDescription>
+					</CardHeader>
+					<CardFooter>
+						<Button className="w-full" size="lg" variant="outline" asChild>
+							<Link href="/">Go Home</Link>
+						</Button>
+					</CardFooter>
+				</Card>
+			</div>
+		);
 	}
 
 	const isProductInvite = !!invite.product;
@@ -81,6 +112,15 @@ export default async function InvitePage({
 						creditsSuffix=" credits"
 						session={session}
 						loginUrl={`/auth/sign-up?callbackURL=/invite/${token}${invite.email ? `&email=${encodeURIComponent(invite.email)}` : ""}`}
+						action={
+							session?.user ? (
+								<AcceptInviteButton
+									token={token}
+									label="Accept & Add to Dashboard"
+									className="w-full"
+								/>
+							) : undefined
+						}
 					/>
 				) : (
 					<Card className="shadow-xl border-0">
@@ -100,10 +140,8 @@ export default async function InvitePage({
 							</p>
 						</CardContent>
 						<CardFooter>
-							{session ? (
-								<Button className="w-full" size="lg">
-									Accept Invite
-								</Button>
+							{session?.user ? (
+								<AcceptInviteButton token={token} className="w-full" />
 							) : (
 								<div className="flex flex-col w-full gap-3">
 									<Button className="w-full" size="lg" asChild>

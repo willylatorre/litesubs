@@ -43,14 +43,15 @@ This model establishes a direct relationship between the creator and the buyer, 
 # Next tasks
 
 ### 🛠 Customer & Credit Management
-- [ ] **Detailed Transaction History:** Implement a view for creators and customers to see a full ledger of credit changes (purchases, manual adjustments, API consumption).
-- [ ] **Enhanced Credit UI:** Add "Reason" notes to manual credit adjustments for better bookkeeping.
-- [ ] **Account Management:** Allow users to view their billing history and manage their profile.
+- [ ] **Detailed Plan view:** Implement a view for creators and customers to see a full ledger of credit changes (purchases, manual adjustments, API consumption). It is a strict link between customer-planId.
+- [ ] **Enhanced Credit UI:** Add the possibility to manually adjust credits, increase or decrease in the detailed plan view.
+- [ ] **Account Management:** Allow users to view their billing history and manage their profile using the betterauth-UI components like `AccountView`
 
 ### 🔗 Public Pages & SEO
-- [ ] **Pack Detail Pages:** Create dedicated landing pages for each pack with rich descriptions and a clear "Buy" call-to-action.
-- [ ] **SEO Optimization:** Implement dynamic OpenGraph images and meta tags for pack sharing links.
-- [ ] **Public Creator Profiles:** A simple page listing all available packs for a specific creator.
+
+- [ ] **SEO Optimization:** Implement dynamic OpenGraph images and meta tags for pack sharing links. Use the favicon.svg as a logo.
+- [ ] **Pack Detail Pages:** Improve the `token/page.tsx` page to have more information and SEO capabilities.
+- [ ] **Public Creator Profiles:** A simple page listing all available packs for a specific creator. All the links in the end should redirect you to login/signup to litesubs.com in order to be able to subscribe.
 - [ ] **Help & FAQ:** Add a dedicated Help/FAQ page for both creators and customers.
 
 ### 💻 Developer Experience (API)
