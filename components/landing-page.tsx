@@ -3,14 +3,14 @@
 import { motion } from "framer-motion";
 import { ArrowLeft, Check, ChevronDown, Copy, UserPlus } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
+import { CreatePackDialog, type DemoPackData } from "@/app/dashboard/packs/create-pack-dialog";
+import { AnimatedLogo } from "@/components/animated-logo";
 import { PackItem } from "@/components/pack-item";
 import { Button } from "@/components/ui/button";
-import { AnimatedLogo } from "@/components/animated-logo";
-import { CreatePackDemo, type DemoPackData } from "./landing/create-pack-demo";
-import { CustomersTableDemo } from "./landing/customers-table-demo";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { CustomersTableDemo } from "./landing/customers-table-demo";
 
 export function LandingPage() {
 	const defaultText =
@@ -38,7 +38,7 @@ export function LandingPage() {
 	};
 
 	return (
-		<main className="min-h-screen flex flex-col items-center px-6 py-12 gap-24">
+		<main className="min-h-screen flex flex-col items-center px-6 py-12 gap-24 mt-10">
 			{/* Hero Section */}
 			<motion.div
 				initial={{ opacity: 0, y: 8 }}
@@ -133,7 +133,13 @@ export function LandingPage() {
 			</motion.div>
 
 			{/* How it Works Section */}
-			<section className="w-full max-w-3xl flex flex-col items-center gap-12 pb-24">
+			<motion.section
+				initial={{ opacity: 0, y: 20 }}
+				whileInView={{ opacity: 1, y: 0 }}
+				viewport={{ once: true, margin: "-100px" }}
+				transition={{ duration: 0.5 }}
+				className="w-full max-w-3xl flex flex-col items-center gap-12 pb-24"
+			>
 				<div className="flex flex-col items-center gap-2 text-center">
 					<h2 className="text-2xl font-bold tracking-tight">How it works</h2>
 					<p className="text-muted-foreground">
@@ -181,7 +187,7 @@ export function LandingPage() {
 										/>
 									</div>
 								) : (
-									<CreatePackDemo onCreate={handleCreatePack} />
+									<CreatePackDialog onDemoCreate={handleCreatePack} />
 								)}
 							</div>
 						</div>
@@ -264,7 +270,42 @@ export function LandingPage() {
 						</div>
 					</div>
 				</div>
-			</section>
+			</motion.section>
+
+			{/* Final CTA Section */}
+			<motion.section
+				initial={{ opacity: 0, y: 20 }}
+				whileInView={{ opacity: 1, y: 0 }}
+				viewport={{ once: true, margin: "-100px" }}
+				transition={{ duration: 0.5, delay: 0.2 }}
+				className="w-full max-w-4xl px-6 pb-24"
+			>
+				<div className="relative overflow-hidden rounded-3xl bg-muted/50 border px-8 py-12 md:px-16 md:py-20 text-center">
+					<div className="relative z-10 flex flex-col items-center gap-6">
+						<h2 className="text-3xl md:text-4xl font-bold tracking-tight max-w-2xl">
+							Ready to simplify your credit system?
+						</h2>
+						<p className="text-muted-foreground text-lg max-w-xl">
+							Join our early access and start selling credit packs to your customers in minutes.
+						</p>
+						<div className="flex flex-col sm:flex-row gap-4 mt-2">
+							<Button size="lg" className="px-12 h-12 text-base" asChild>
+								<a href="/auth/sign-up">Get Started for Free</a>
+							</Button>
+							<Button size="lg" variant="outline" className="px-12 h-12 text-base" asChild>
+								<a href="/dashboard">Go to Dashboard</a>
+							</Button>
+						</div>
+						<p className="text-xs text-muted-foreground">
+							No credit card required during early access.
+						</p>
+					</div>
+					
+					{/* Decorative elements */}
+					<div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/4 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
+					<div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/4 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
+				</div>
+			</motion.section>
 		</main>
 	);
 }

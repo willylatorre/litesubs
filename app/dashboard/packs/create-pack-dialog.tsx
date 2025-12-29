@@ -25,22 +25,49 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCreateProduct } from "@/hooks/use-products";
 import { CURRENCIES } from "@/lib/constants";
 
-export function CreatePackDialog() {
+export interface DemoPackData {
+	name: string;
+	description: string;
+	price: number;
+	credits: number;
+	currency: string;
+}
+
+interface CreatePackDialogProps {
+	onDemoCreate?: (data: DemoPackData) => void;
+}
+
+export function CreatePackDialog({ onDemoCreate }: CreatePackDialogProps) {
 	const [open, setOpen] = useState(false);
-	const { mutate, isPending } = useCreateProduct();
+	const [demoPending, setDemoPending] = useState(false);
+	const { mutate, isPending: isMutatePending } = useCreateProduct();
+
+	const isPending = onDemoCreate ? demoPending : isMutatePending;
 
 	function onSubmit(e: React.FormEvent<HTMLFormElement>) {
 		e.preventDefault();
 		const formData = new FormData(e.currentTarget);
+		
+		const data = {
+			name: formData.get("name") as string,
+			description: formData.get("description") as string,
+			price: Number(formData.get("price")),
+			credits: Number(formData.get("credits")),
+			currency: (formData.get("currency") as any) || "usd",
+		};
+
+		if (onDemoCreate) {
+			setDemoPending(true);
+			setTimeout(() => {
+				onDemoCreate(data);
+				setDemoPending(false);
+				setOpen(false);
+			}, 600);
+			return;
+		}
 
 		mutate(
-			{
-				name: formData.get("name") as string,
-				description: formData.get("description") as string,
-				price: Number(formData.get("price")),
-				credits: Number(formData.get("credits")),
-				currency: (formData.get("currency") as any) || "usd",
-			},
+			data,
 			{
 				onSuccess: () => setOpen(false),
 			},
@@ -50,7 +77,7 @@ export function CreatePackDialog() {
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
-				<Button>
+				<Button size={onDemoCreate ? "lg" : "default"}>
 					<Plus className="mr-2 h-4 w-4" />
 					Create Pack
 				</Button>
@@ -71,6 +98,7 @@ export function CreatePackDialog() {
 								name="name"
 								placeholder="e.g. Starter Pack"
 								required
+								defaultValue={onDemoCreate ? "Starter Pack" : undefined}
 							/>
 						</div>
 						<div className="grid gap-2">
@@ -79,6 +107,7 @@ export function CreatePackDialog() {
 								id="description"
 								name="description"
 								placeholder="Optional description..."
+								defaultValue={onDemoCreate ? "Get 100 credits for your next project." : undefined}
 							/>
 						</div>
 						<div className="grid grid-cols-2 gap-4">
@@ -107,6 +136,7 @@ export function CreatePackDialog() {
 									step="0.01"
 									placeholder="10.00"
 									required
+									defaultValue={onDemoCreate ? "10" : undefined}
 								/>
 							</div>
 						</div>
@@ -120,6 +150,7 @@ export function CreatePackDialog() {
 								step="1"
 								placeholder="100"
 								required
+								defaultValue={onDemoCreate ? "100" : undefined}
 							/>
 						</div>
 					</div>

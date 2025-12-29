@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ChevronRight } from "lucide-react";
-import type { DemoPackData } from "./create-pack-demo";
+import type { DemoPackData } from "@/app/dashboard/packs/create-pack-dialog";
+import { CustomerDetailsDialog } from "@/app/dashboard/customers/customer-details-dialog";
 
 interface CustomersTableDemoProps {
 	pack: DemoPackData;
@@ -28,6 +29,35 @@ export function CustomersTableDemo({ pack }: CustomersTableDemoProps) {
 		activePacks: [pack],
 		updatedAt: new Date(),
 	};
+
+	const demoData = {
+		totalSpent: pack.price * 100,
+		subscriptions: [
+			{
+				id: "demo-sub-id",
+				productId: "demo-product-id",
+				product: { name: pack.name },
+				credits: pack.credits,
+			},
+		],
+		transactions: [
+			{
+				id: "demo-tx-id",
+				createdAt: new Date().toISOString(),
+				type: "purchase",
+				amount: pack.price,
+			},
+		],
+	};
+
+	const initialSubscriptions = [
+		{
+			id: "demo-product-id",
+			name: pack.name,
+			subscriptionId: "demo-sub-id",
+			credits: pack.credits,
+		},
+	];
 
 	return (
 		<div className="rounded-md border bg-card w-full max-w-3xl shadow-sm">
@@ -74,10 +104,21 @@ export function CustomersTableDemo({ pack }: CustomersTableDemoProps) {
 						</TableCell>
 						<TableCell className="text-right">
 							<div className="flex items-center justify-end gap-2">
-								<Button variant="ghost" size="sm" disabled>
-									Details
-									<ChevronRight className="ml-2 h-4 w-4" />
-								</Button>
+								<CustomerDetailsDialog
+									customerId="demo-id"
+									customer={{
+										name: customer.name,
+										email: customer.email,
+										image: customer.image,
+									}}
+									initialSubscriptions={initialSubscriptions}
+									demoData={demoData}
+								>
+									<Button variant="ghost" size="sm">
+										Details
+										<ChevronRight className="ml-2 h-4 w-4" />
+									</Button>
+								</CustomerDetailsDialog>
 							</div>
 						</TableCell>
 					</TableRow>

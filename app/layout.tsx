@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SiteFooter } from "@/components/site-footer";
 import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "./providers";
 
@@ -33,7 +34,12 @@ export default function RootLayout({
 			<body
 				className="antialiased light min-h-screen flex flex-col"
 			>
-				<Providers>{children}</Providers>
+				<Providers>
+					<div className="flex-1">
+						{children}
+					</div>
+					{/* <SiteFooter /> */}
+				</Providers>
 				<Toaster />
 			</body>
 		</html>

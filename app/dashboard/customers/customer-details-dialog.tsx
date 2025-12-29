@@ -39,6 +39,11 @@ interface CustomerDetailsDialogProps {
 		credits: number;
 	}[];
 	children?: React.ReactNode;
+	demoData?: {
+		totalSpent: number;
+		subscriptions: any[];
+		transactions: any[];
+	};
 }
 
 export function CustomerDetailsDialog({
@@ -46,19 +51,23 @@ export function CustomerDetailsDialog({
 	customer,
 	initialSubscriptions,
 	children,
+	demoData,
 }: CustomerDetailsDialogProps) {
 	const [open, setOpen] = useState(false);
 	const queryClient = useQueryClient();
 
-	const { data, isLoading } = useQuery({
+	const { data: fetchedData, isLoading: isQueryLoading } = useQuery({
 		queryKey: ["customer-details", customerId],
 		queryFn: async () => {
 			const res = await getCustomerDetails(customerId);
 			if (res.success) return res.data;
 			throw new Error(res.error as string);
 		},
-		enabled: open,
+		enabled: open && !demoData,
 	});
+
+	const data = demoData || fetchedData;
+	const isLoading = !demoData && isQueryLoading;
 
 	const subscriptions = isLoading
 		? initialSubscriptions.map((s) => ({
@@ -70,6 +79,7 @@ export function CustomerDetailsDialog({
 		: data?.subscriptions || [];
 
 	const handleSuccess = () => {
+		if (demoData) return;
 		queryClient.invalidateQueries({ queryKey: ["customer-details", customerId] });
 	};
 
@@ -151,21 +161,22 @@ export function CustomerDetailsDialog({
 													cr
 												</span>
 											</div>
-																							<div className="flex items-center gap-1">
-																								<DecreaseCreditButton
-																									subscriptionId={sub.id}
-																									currentCredits={sub.credits}
-																									size="sm"
-																									onSuccess={handleSuccess}
-																								/>
-																								<ManageSubscriptionCreditsDialog
-																									subscriptionId={sub.id}
-																									planName={sub.product.name}
-																									currentCredits={sub.credits}
-																									onSuccess={handleSuccess}
-																								/>
-																							</div>
-											
+											{!demoData && (
+												<div className="flex items-center gap-1">
+													<DecreaseCreditButton
+														subscriptionId={sub.id}
+														currentCredits={sub.credits}
+														size="sm"
+														onSuccess={handleSuccess}
+													/>
+													<ManageSubscriptionCreditsDialog
+														subscriptionId={sub.id}
+														planName={sub.product.name}
+														currentCredits={sub.credits}
+														onSuccess={handleSuccess}
+													/>
+												</div>
+											)}
 										</div>
 									</div>
 								))
