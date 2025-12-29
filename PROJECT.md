@@ -48,6 +48,7 @@ This model establishes a direct relationship between the creator and the buyer, 
 - [x] **Account Management:** Allow users to view their billing history and manage their profile using the betterauth-UI components like `AccountView`. Accessing to your account info should be done through the links in the `nav-user.tsx` component. You can learn more at https://better-auth-ui.com/llms.txt .
 - [x] **Pack Detail Pages:** Improve the `token/page.tsx` page to have more information and SEO capabilities. Make it reusable so the creator can send it again to ask them for payment.
 - [ ] **Payment links:** Add the ability to generate stripe payment links for a specific combination of pack/customer. This should be able to be created from the Customer details modal, next to the subscription row.
+- [ ] **Payouts:** Create the whole payouts flow following the prompt in PAYOUTS.md
 
 ### 🔗 Public Pages & SEO
 
@@ -71,7 +72,7 @@ This model establishes a direct relationship between the creator and the buyer, 
   - [ ] Ensure UI consistency.
 
 ### Integrations
-- [ ] **Stripe connect:** Eplore allowing users to connect their own "stripe" account so the purchases of the packs will go directly to them.
+- [ ] **Stripe connect:** Eplore allowing users to connect their own "stripe" account so the purchases of the packs will go directly to them. If connected, we skip/disable the whole Payouts section as it is handled automatically.
 - [ ] **Cal.com Integration:** Explore allowing users to connect their account and automatically "spend" credits when booking appointments via Cal.com through a webhook.
 - [ ] **Calendly Integration:** Explore allowing users to connect their account and automatically "spend" credits when booking appointments via Cal.com through a webhook.
 
