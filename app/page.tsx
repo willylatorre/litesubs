@@ -1,11 +1,11 @@
 "use client";
 
-import { IconInnerShadowTop } from "@tabler/icons-react";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { PackItem } from "@/components/pack-item";
 import { Button } from "@/components/ui/button";
+import { AnimatedLogo } from "@/components/animated-logo";
 
 export default function Home() {
 	const defaultText =
@@ -22,12 +22,7 @@ export default function Home() {
 			>
 				<div className="flex flex-col items-center gap-4 max-w-xl">
 					{/* Logo */}
-					<div className="flex items-center gap-2">
-						<IconInnerShadowTop className="size-8 md:size-10" />
-						<h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-							liteSubs
-						</h1>
-					</div>
+					<AnimatedLogo />
 
 					{/* Description */}
 					<p className="text-base md:text-lg text-muted-foreground">

@@ -8,6 +8,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import { db } from "@/app/db";
 import { invites } from "@/app/db/schema";
+import { AnimatedLogo } from '@/components/animated-logo'
 import { PackItem } from "@/components/pack-item";
 import { Button } from "@/components/ui/button";
 import {
@@ -194,12 +195,8 @@ export default async function InvitePage({
 		<div className="min-h-screen flex flex-col items-center justify-center p-6 gap-8 bg-muted/30">
 			{/* Header Section */}
 			<div className="flex flex-col items-center gap-4 text-center max-w-xl">
-				<div className="flex items-center gap-2">
-					<IconInnerShadowTop className="size-8 md:size-10" />
-					<h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-						liteSubs
-					</h1>
-				</div>
+
+					<AnimatedLogo />
 				<p className="text-base md:text-lg text-muted-foreground">
 					Simple credit packs instead of heavy subscriptions.
 				</p>

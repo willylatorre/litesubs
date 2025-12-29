@@ -4,20 +4,17 @@ import {
 	IconChecklist,
 	IconCode,
 	IconDashboard,
-	IconHelp,
-	IconInnerShadowTop,
 	IconPackage,
-	IconSearch,
-	IconSettings,
 	IconUsers,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import type * as React from "react";
 
+import { AnimatedLogo } from "@/components/animated-logo";
 import { NavMain } from "@/components/nav-main";
 import { NavSecondary } from "@/components/nav-secondary";
 import { NavUser } from "@/components/nav-user";
-import {
+import 
 	Sidebar,
 	SidebarContent,
 	SidebarFooter,
@@ -95,12 +92,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 					<SidebarMenuItem>
 						<SidebarMenuButton
 							asChild
-							className="data-[slot=sidebar-menu-button]:!p-1.5"
+							className="data-[slot=sidebar-menu-button]:!p-1.5 hover:bg-transparent active:bg-transparent"
 						>
-							<a href="#">
-								<IconInnerShadowTop className="!size-5" />
-								<span className="text-base font-semibold">liteSubs</span>
-							</a>
+							<Link href="/" className="flex items-center gap-0">
+								<AnimatedLogo
+									iconClassName="size-6 md:size-6"
+									textClassName="text-base font-semibold md:text-base tracking-normal"
+								/>
+							</Link>
 						</SidebarMenuButton>
 					</SidebarMenuItem>
 				</SidebarMenu>
