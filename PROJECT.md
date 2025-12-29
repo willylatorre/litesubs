@@ -45,21 +45,25 @@ This model establishes a direct relationship between the creator and the buyer, 
 ### 🛠 Customer & Credit Management
 - [x] **Detailed Plan view:** Implement a view for creators and customers to see a full ledger of credit changes (purchases, manual adjustments, API consumption). It is a strict link between customer-planId.
 - [x] **Enhanced Credit UI:** Add the possibility to manually adjust credits, increase or decrease in the detailed plan view.
-- [ ] **Account Management:** Allow users to view their billing history and manage their profile using the betterauth-UI components like `AccountView`
+- [x] **Account Management:** Allow users to view their billing history and manage their profile using the betterauth-UI components like `AccountView`. Accessing to your account info should be done through the links in the `nav-user.tsx` component. You can learn more at https://better-auth-ui.com/llms.txt .
 
 ### 🔗 Public Pages & SEO
 
-- [ ] **SEO Optimization:** Implement dynamic OpenGraph images and meta tags for pack sharing links. Use the favicon.svg as a logo.
+- [ ] **SEO Optimization:** Implement dynamic OpenGraph images and meta tags for pack sharing links. Use the favicon.svg as a logo. Checklist at https://dminhvu.com/post/nextjs-seo
 - [ ] **Pack Detail Pages:** Improve the `token/page.tsx` page to have more information and SEO capabilities.
 - [ ] **Public Creator Profiles:** A simple page listing all available packs for a specific creator. All the links in the end should redirect you to login/signup to litesubs.com in order to be able to subscribe.
 - [ ] **Help & FAQ:** Add a dedicated Help/FAQ page for both creators and customers.
+
+### 🚀 Polish & Performance
+- [ ] **Performance Audit:** Review Server vs. Client component usage to optimize initial load times and interactivity.
+- [ ] **Stripe Webhook Reliability:** Ensure idempotent processing of Stripe events to handle retries safely.
+
+### Integrations
+- [ ] **Stripe connect:** Eplore allowing users to connect their own "stripe" account so the purchases of the packs will go directly to them.
+- [ ] **Cal.com Integration:** Explore allowing users to connect their account and automatically "spend" credits when booking appointments via Cal.com through a webhook.
+- [ ] **Calendly Integration:** Explore allowing users to connect their account and automatically "spend" credits when booking appointments via Cal.com through a webhook.
 
 ### 💻 Developer Experience (API)
 - [ ] **API Key Management:** UI for creators to generate/revoke API keys for their projects.
 - [ ] **Credit Consumption API:** Build a secure endpoint for external applications to deduct credits from a user's balance.
 - [ ] **Webhooks:** Set up outgoing webhooks to notify external services of successful purchases or balance changes.
-
-### 🚀 Polish & Performance
-- [ ] **Performance Audit:** Review Server vs. Client component usage to optimize initial load times and interactivity.
-- [ ] **Stripe Webhook Reliability:** Ensure idempotent processing of Stripe events to handle retries safely.
-- [ ] **Cal.com Integration:** Explore allowing users to "spend" credits to book appointments via Cal.com.
