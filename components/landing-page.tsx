@@ -74,7 +74,7 @@ export function LandingPage() {
 						<div className="relative bg-background rounded-lg shadow-xl">
 							<PackItem
 								product={{
-									name: "250 Credit Plan",
+									name: "250 Credits Plan",
 									credits: 250,
 									price: 12000,
 									badge: "Active",
