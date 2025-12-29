@@ -14,7 +14,7 @@ import { AnimatedLogo } from "@/components/animated-logo";
 import { NavMain } from "@/components/nav-main";
 import { NavSecondary } from "@/components/nav-secondary";
 import { NavUser } from "@/components/nav-user";
-import 
+import {
 	Sidebar,
 	SidebarContent,
 	SidebarFooter,
@@ -26,6 +26,7 @@ import
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from "@/components/ui/sidebar";
+
 import { authClient } from "@/lib/auth-client";
 
 const data = {
