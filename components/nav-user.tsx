@@ -103,21 +103,15 @@ export function NavUser({
 						<DropdownMenuSeparator />
 						<DropdownMenuGroup>
 							<DropdownMenuItem asChild>
-								<Link href="/dashboard/account/settings">
+								<Link href="/dashboard/account">
 									<IconUserCircle />
 									Account
 								</Link>
 							</DropdownMenuItem>
-							<DropdownMenuItem asChild>
-								<Link href="/dashboard/account/billing">
-									<IconCreditCard />
-									Billing
-								</Link>
-							</DropdownMenuItem>
-							<DropdownMenuItem>
+							{/* <DropdownMenuItem>
 								<IconNotification />
 								Notifications
-							</DropdownMenuItem>
+							</DropdownMenuItem> */}
 						</DropdownMenuGroup>
 						<DropdownMenuSeparator />
 						<DropdownMenuItem onClick={handleLogout}>

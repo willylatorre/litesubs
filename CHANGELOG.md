@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - 2025-12-29
+
+### Added
+- **Account Management**:
+  - Integrated `better-auth-ui` for user profile and security settings.
+  - Created a new dashboard-integrated account section at `app/dashboard/account/[path]`.
+  - Added a "Billing History" placeholder page at `app/dashboard/account/billing`.
+  - Updated `NavUser` component to provide direct links to "Account" and "Billing" settings.
+  - Harmonized account page styling with the rest of the dashboard layout.
+
 ## [Unreleased] - 2025-12-23
 
 ### Added

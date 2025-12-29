@@ -7,7 +7,6 @@ import { db } from "@/app/db";
 import { products, transactions } from "@/app/db/schema";
 import { auth } from "@/lib/auth";
 import { stripe } from "@/lib/stripe";
-import {TRANSACTION_STATUSES} from '@/lib/constants'
 
 export async function createCheckoutSession(productId: string) {
 	const session = await auth.api.getSession({ headers: await headers() });
@@ -81,5 +80,29 @@ export async function createCheckoutSession(productId: string) {
 
 	if (checkoutSession.url) {
 		redirect(checkoutSession.url);
+	}
+}
+
+export async function createCustomerPortalSession() {
+	const session = await auth.api.getSession({ headers: await headers() });
+	if (!session?.user) {
+		return { error: "Unauthorized" };
+	}
+
+	const customerId = (session.user as any).stripeCustomerId;
+
+	if (!customerId) {
+		return { error: "No billing account found" };
+	}
+
+	const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://litesubs.com";
+
+	const portalSession = await stripe.billingPortal.sessions.create({
+		customer: customerId,
+		return_url: `${appUrl}/dashboard/account`,
+	});
+
+	if (portalSession.url) {
+		redirect(portalSession.url);
 	}
 }
