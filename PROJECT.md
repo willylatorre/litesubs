@@ -46,19 +46,22 @@ This model establishes a direct relationship between the creator and the buyer, 
 - [x] **Detailed Plan view:** Implement a view for creators and customers to see a full ledger of credit changes (purchases, manual adjustments, API consumption). It is a strict link between customer-planId.
 - [x] **Enhanced Credit UI:** Add the possibility to manually adjust credits, increase or decrease in the detailed plan view.
 - [x] **Account Management:** Allow users to view their billing history and manage their profile using the betterauth-UI components like `AccountView`. Accessing to your account info should be done through the links in the `nav-user.tsx` component. You can learn more at https://better-auth-ui.com/llms.txt .
-- [ ] **Pack Detail Pages:** Improve the `token/page.tsx` page to have more information and SEO capabilities. Make it reusable so the creator can send it again to ask them for payment.
+- [x] **Pack Detail Pages:** Improve the `token/page.tsx` page to have more information and SEO capabilities. Make it reusable so the creator can send it again to ask them for payment.
 - [ ] **Payment links:** Add the ability to generate stripe payment links for a specific combination of pack/customer. This should be able to be created from the Customer details modal, next to the subscription row.
 
 ### 🔗 Public Pages & SEO
 
 - [ ] **Landing:** Improve the landing showcasing a simple three steps process to showcase how easy it is to setup a plan. Keep the minimalist approach.
-- [ ] **SEO Optimization:** Implement dynamic OpenGraph images and meta tags for pack sharing links. Use the favicon.svg as a logo. Checklist at https://dminhvu.com/post/nextjs-seo
-- [ ] **Pack Detail Pages:** Improve the `token/page.tsx` page to have more information and SEO capabilities. Make it reusable so the creator can send it again to ask them for payment.
+- [x] **SEO Optimization:** Implement dynamic OpenGraph images and meta tags for pack sharing links. Use the favicon.svg as a logo. Checklist at https://dminhvu.com/post/nextjs-seo
+- [x] **Pack Detail Pages:** Improve the `token/page.tsx` page to have more information and SEO capabilities. Make it reusable so the creator can send it again to ask them for payment.
 - [ ] **Public Creator Profiles:** A simple page listing all available packs for a specific creator. All the links in the end should redirect you to login/signup to litesubs.com in order to be able to subscribe.
 - [ ] **Help & FAQ:** Add a dedicated Help/FAQ page for both creators and customers.
 
 ### 🚀 Polish & Performance
-- [ ] **Performance Audit:** Review Server vs. Client component usage to optimize initial load times and interactivity.
+- [ ] **Performance Audit:** Review Server vs. Client component usage to optimize initial load times and interactivity. Perform an analysis of the main pages to address architectural correctness.
+ - [ ] Analyze if calls can be optimized
+ - [ ] Divide complex pages in smaller subcomponents
+ - [ ] Generate a list of all the possible improvements and best practice recommendations to be taken. Divide them by page.
 - [ ] **Stripe Webhook Reliability:** Ensure idempotent processing of Stripe events to handle retries safely.
 - [ ] **Better ui:**
   - [ ] Ensure font sizes across the whole app. All titles need to have the same font size and weight. Same thing goes for modals, buttons, etc.

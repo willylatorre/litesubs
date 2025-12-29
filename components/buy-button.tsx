@@ -74,9 +74,7 @@ export function BuyButton({
 					<div className="flex items-start gap-3 rounded-md border p-3 text-xs text-muted-foreground">
 						<IconLock className="mt-0.5 size-4 shrink-0 text-primary" />
 						<p>
-							Payments are processed securely by{" "}
-							<span className="font-medium text-foreground">Stripe</span>. Your
-							payment information is never stored on our servers.
+						All payments are securely processed through Stripe, a trusted and PCI-DSS compliant payment provider. We do not store or process your credit card information. Your payment details are encrypted and handled directly by Stripe.
 						</p>
 					</div>
 				</div>

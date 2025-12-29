@@ -141,15 +141,26 @@ export function PackItem({
 							onCreditsHover &&
 							"cursor-help hover:text-primary transition-colors",
 					)}
-					onMouseEnter={handleCreditsEnter}
-					onMouseLeave={handleCreditsLeave}
+					{...(withEvents
+						? {
+								onMouseEnter: handleCreditsEnter,
+								onMouseLeave: handleCreditsLeave,
+						  }
+						: {})}
 				>
 					{credits}
 					<span className="text-sm font-normal text-muted-foreground ml-1">
 						{creditsSuffix}
 					</span>
 				</div>
-				<div onMouseEnter={handlePriceEnter} onMouseLeave={handlePriceLeave}>
+				<div
+					{...(withEvents
+						? {
+								onMouseEnter: handlePriceEnter,
+								onMouseLeave: handlePriceLeave,
+						  }
+						: {})}
+				>
 					{renderAction()}
 				</div>
 			</div>

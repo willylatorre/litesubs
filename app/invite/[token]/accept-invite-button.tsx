@@ -27,7 +27,7 @@ export function AcceptInviteButton({
 				const result = await claimInvite(token);
 				if (result.success) {
 					toast.success("Invite accepted successfully!");
-					router.push("/dashboard/subscriptions");
+					router.push("/dashboard");
 				} else {
 					toast.error(result.error || "Failed to accept invite");
 				}
