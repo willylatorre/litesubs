@@ -14,7 +14,7 @@ LiteSubs is a platform where creators sell credit-based plans to customers. Curr
 ## Feature Requirements
 
 ### Core Functionality
-Implement a complete payout system that allows creators to request payouts from their accumulated earnings using Stripe Payouts API. Payouts should be on-demand only (no automatic scheduling).
+Implement a complete payout system that allows creators to request payouts from their accumulated earnings using Stripe Payouts API (https://docs.stripe.com/global-payouts/stripe-hosted-recipient-creation). Payouts should be on-demand only (no automatic scheduling).
 
 ### Database Schema Migration
 
@@ -23,19 +23,6 @@ Create a new migration that includes:
 **1. Creator Payout Accounts Table** (`creator_payout_accounts`)
 - `id` (primary key)
 - `user_id` (foreign key to users table, unique)
-- `account_holder_name` (string, required)
-- `account_type` (enum: 'individual' or 'business')
-- `bank_account_number` (string, encrypted, required)
-- `bank_routing_number` (string, required) - or appropriate field for country
-- `bank_country` (string, required, default 'US')
-- `bank_currency` (string, required, default 'USD')
-- `tax_id` (string, encrypted, nullable) - SSN/EIN for US tax reporting
-- `address_line1` (string, required)
-- `address_line2` (string, nullable)
-- `address_city` (string, required)
-- `address_state` (string, required)
-- `address_postal_code` (string, required)
-- `address_country` (string, required)
 - `verification_status` (enum: 'pending', 'verified', 'failed')
 - `stripe_recipient_id` (string, nullable) - if Stripe creates a recipient object
 - `is_active` (boolean, default true)
@@ -227,32 +214,9 @@ Display:
 
 **2. Payout Account Setup Dialog/Page**
 
-Form with sections:
-- **Account Holder Information**:
-  - Full legal name (must match bank account)
-  - Account type (Individual/Business)
-  
-- **Bank Account Details**:
-  - Bank country (dropdown)
-  - Account number (with show/hide toggle)
-  - Routing number (with validation)
-  - Confirm account number field
-  
-- **Address Information** (required for compliance):
-  - Street address
-  - City, State, ZIP
-  - Country
-  
-- **Tax Information** (US only):
-  - SSN or EIN (encrypted)
-  - Explanation: "Required for tax reporting (1099-K) if you earn over $600/year"
-  - Make this optional but show warning
+Use the accounts link API from Stripe to setup all of the information https://docs.stripe.com/global-payouts/stripe-hosted-recipient-creation 
 
-- **Validation & Security**:
-  - Show real-time validation errors
-  - Confirm all fields before submitting
-  - Show encryption/security badges
-  - "Your information is encrypted and secure" message
+Analyze if you can retrieve the information and persist it in the DB or if not, just store the ID of the customer created for the payout.
 
 **3. Request Payout Dialog**
 
