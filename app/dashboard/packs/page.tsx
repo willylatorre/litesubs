@@ -19,16 +19,16 @@ export default function PacksPage() {
 	const { data: packs, isLoading, isError } = useProducts();
 
 	if (isError) {
-		return <div className="p-6 text-red-500">Failed to load packs.</div>;
+		return <div className="p-6 text-red-500">Failed to load plans.</div>;
 	}
 
 	return (
 		<div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
 			<div className="flex items-center justify-between">
 				<div>
-					<h1 className="text-2xl font-bold tracking-tight">Packs</h1>
+					<h1 className="text-2xl font-bold tracking-tight">Credit Plans</h1>
 					<p className="text-muted-foreground text-sm">
-						Manage the credit packs you offer to your customers.
+						Manage the credit plans you offer to your customers.
 					</p>
 				</div>
 				<CreatePackDialog />
@@ -72,7 +72,7 @@ export default function PacksPage() {
 									colSpan={5}
 									className="text-center h-24 text-muted-foreground"
 								>
-									No packs created yet. Click "Create Pack" to get started.
+									No plans created yet. Click "Create Plan" to get started.
 								</TableCell>
 							</TableRow>
 						) : (

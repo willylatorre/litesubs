@@ -85,7 +85,7 @@ export async function getPackDetails(packId: string) {
 		});
 
 		if (!product) {
-			return { success: false, error: "Pack not found" };
+			return { success: false, error: "Plan not found" };
 		}
 
 		const subscribers = await db.query.liteSubscriptions.findMany({

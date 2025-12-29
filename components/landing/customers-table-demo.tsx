@@ -65,7 +65,7 @@ export function CustomersTableDemo({ pack }: CustomersTableDemoProps) {
 				<TableHeader>
 					<TableRow>
 						<TableHead>Customer</TableHead>
-						<TableHead>Active Packs</TableHead>
+						<TableHead>Active Plans</TableHead>
 						<TableHead>Total Credits</TableHead>
 						<TableHead>Last Updated</TableHead>
 						<TableHead className="text-right">Actions</TableHead>

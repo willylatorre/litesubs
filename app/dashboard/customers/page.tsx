@@ -33,7 +33,7 @@ export default async function CustomersPage() {
 					<TableHeader>
 						<TableRow>
 							<TableHead>Customer</TableHead>
-							<TableHead>Active Packs</TableHead>
+							<TableHead>Active Plans</TableHead>
 							<TableHead>Total Credits</TableHead>
 							<TableHead>Last Updated</TableHead>
 							<TableHead className="text-right">Actions</TableHead>
@@ -46,7 +46,7 @@ export default async function CustomersPage() {
 									colSpan={5}
 									className="text-center h-24 text-muted-foreground"
 								>
-									No customers found. Share your packs to get started!
+									No customers found. Share your plans to get started!
 								</TableCell>
 							</TableRow>
 						) : (

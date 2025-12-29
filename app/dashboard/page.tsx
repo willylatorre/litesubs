@@ -1,6 +1,9 @@
 "use client";
 
 import { IconAlertCircle } from "@tabler/icons-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import {
 	getConsumerStats,
 	getDashboardData,
@@ -15,9 +18,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTransactionCheck } from "@/hooks/use-transaction-check";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
 
 // Re-exporting actions to be used in the effect
 export { getConsumerStats, getUserSubscriptions, getUserPendingInvites };
@@ -108,7 +108,7 @@ function DashboardContent() {
 					)}
 
 					<h2 className="text-lg font-semibold mt-4 mb-2">
-						Active Subscriptions
+						Active Credit Plans
 					</h2>
 
 					{!isLoading && hasLowCredits && (
@@ -121,7 +121,7 @@ function DashboardContent() {
 
 							<AlertDescription>
 								You have less than 2 credits left on one or more subscriptions.
-								Please buy a pack below to add more credits.
+								Please buy a plan below to add more credits.
 							</AlertDescription>
 						</Alert>
 					)}

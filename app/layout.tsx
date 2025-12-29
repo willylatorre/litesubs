@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
 	title: "liteSubs",
-	description: "Simple credit packs instead of heavy subscriptions",
+	description: "Simple credit plans instead of heavy subscriptions. Sell one-time credit plans or set up auto-refill credits, both in one simple system.",
 	icons: {
 		icon: "/favicon.svg",
 	},

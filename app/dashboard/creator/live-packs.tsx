@@ -22,9 +22,9 @@ export function LivePacks() {
 		<Card className="flex flex-col">
 			<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 				<div className="grid gap-1">
-					<CardTitle>Your Live Packs</CardTitle>
+					<CardTitle>Your Live Plans</CardTitle>
 					<CardDescription>
-						Packs currently available for purchase.
+						Plans currently available for purchase.
 					</CardDescription>
 				</div>
 				<Button asChild variant="ghost" size="sm" className="hidden sm:flex">
@@ -50,7 +50,7 @@ export function LivePacks() {
 						))}
 					</div>
 				) : livePacks.length === 0 ? (
-					<p className="text-sm text-muted-foreground">No active packs.</p>
+					<p className="text-sm text-muted-foreground">No active plans.</p>
 				) : (
 					<div className="grid gap-4">
 						{livePacks.slice(0, 5).map((pack) => (

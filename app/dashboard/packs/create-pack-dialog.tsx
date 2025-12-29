@@ -79,15 +79,15 @@ export function CreatePackDialog({ onDemoCreate }: CreatePackDialogProps) {
 			<DialogTrigger asChild>
 				<Button size={onDemoCreate ? "lg" : "default"}>
 					<Plus className="mr-2 h-4 w-4" />
-					Create Pack
+					Create Plan
 				</Button>
 			</DialogTrigger>
 			<DialogContent className="sm:max-w-[425px]">
 				<form onSubmit={onSubmit}>
 					<DialogHeader>
-						<DialogTitle>Create Pack</DialogTitle>
+						<DialogTitle>Create Credit Plan</DialogTitle>
 						<DialogDescription>
-							Create a new credit pack for your customers.
+							Create a new credit plan for your customers.
 						</DialogDescription>
 					</DialogHeader>
 					<div className="grid gap-4 py-4">
@@ -96,9 +96,9 @@ export function CreatePackDialog({ onDemoCreate }: CreatePackDialogProps) {
 							<Input
 								id="name"
 								name="name"
-								placeholder="e.g. Starter Pack"
+								placeholder="e.g. Starter Plan"
 								required
-								defaultValue={onDemoCreate ? "Starter Pack" : undefined}
+								defaultValue={onDemoCreate ? "Starter Plan" : undefined}
 							/>
 						</div>
 						<div className="grid gap-2">
@@ -157,7 +157,7 @@ export function CreatePackDialog({ onDemoCreate }: CreatePackDialogProps) {
 					<DialogFooter>
 						<Button type="submit" disabled={isPending}>
 							{isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-							Create Pack
+							Create Plan
 						</Button>
 					</DialogFooter>
 				</form>

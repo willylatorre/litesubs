@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import { LandingPage } from "@/components/landing-page";
 
 export const metadata: Metadata = {
-	title: "LiteSubs - Simple Credit Packs",
+	title: "LiteSubs - Simple Credit Plans",
 	description:
-		"Simple credit packs instead of heavy subscriptions. Buy credits, assign them to a person, and let them be used when needed.",
+		"Simple credit plans instead of heavy subscriptions. Sell one-time credit plans or set up auto-refill credits, both in one simple system.",
 	openGraph: {
-		title: "LiteSubs - Simple Credit Packs",
+		title: "LiteSubs - Simple Credit Plans",
 		description:
-			"Simple credit packs instead of heavy subscriptions. Buy credits, assign them to a person, and let them be used when needed.",
+			"Simple credit plans instead of heavy subscriptions. Sell one-time credit plans or set up auto-refill credits, both in one simple system.",
 		url: "https://litesubs.com",
 		siteName: "LiteSubs",
 		images: [
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 				url: "/og-image.png", // Assuming this exists or will exist, usually good practice to define
 				width: 1200,
 				height: 630,
-				alt: "LiteSubs - Simple Credit Packs",
+				alt: "LiteSubs - Simple Credit Plans",
 			},
 		],
 		locale: "en_US",
@@ -24,9 +24,9 @@ export const metadata: Metadata = {
 	},
 	twitter: {
 		card: "summary_large_image",
-		title: "LiteSubs - Simple Credit Packs",
+		title: "LiteSubs - Simple Credit Plans",
 		description:
-			"Simple credit packs instead of heavy subscriptions. Buy credits, assign them to a person, and let them be used when needed.",
+			"Simple credit plans instead of heavy subscriptions. Sell one-time credit bundles or set up auto-refill credits, both in one simple system.",
 		creator: "@litesubs", // Placeholder, adjust if known
 		images: ["/og-image.png"],
 	},
@@ -39,7 +39,7 @@ export default function Home() {
 	const jsonLd = {
 		"@context": "https://schema.org",
 		"@type": "SoftwareApplication",
-		name: "LiteSubs",
+		name: "liteSubs - Simple Credit Plans",
 		applicationCategory: "BusinessApplication",
 		operatingSystem: "Web",
 		offers: {
@@ -49,7 +49,7 @@ export default function Home() {
 			description: "Free during early access",
 		},
 		description:
-			"Simple credit packs instead of heavy subscriptions. Buy credits, assign them to a person, and let them be used when needed.",
+			"Simple credit plans instead of heavy subscriptions. Sell one-time credit plans or set up auto-refill credits, both in one simple system.",
 	};
 
 	return (

@@ -49,16 +49,15 @@ export function LandingPage() {
 				<div className="flex flex-col items-center gap-4 max-w-xl">
 					{/* Logo - Wrapped in h1 for SEO, styled to look normal */}
 					<h1 className="sr-only">
-						LiteSubs - Simple credit packs instead of heavy subscriptions
+						LiteSubs - Simple credit plans instead of heavy subscriptions
 					</h1>
 					<AnimatedLogo />
 
 					{/* Description */}
 					<p className="text-base md:text-lg text-muted-foreground">
-						Simple credit packs instead of heavy subscriptions.
+					Simple credit plans instead of heavy subscriptions.
 						<br />
-						Buy credits, assign them to a person, and let them be used when
-						needed.
+						Sell one-time credit bundles or set up auto-refill credits, both in one simple system.
 					</p>
 				</div>
 
@@ -75,11 +74,11 @@ export function LandingPage() {
 						<div className="relative bg-background rounded-lg shadow-xl">
 							<PackItem
 								product={{
-									name: "250 Credit Pack",
+									name: "250 Credit Plan",
 									credits: 250,
 									price: 12000,
 									badge: "Active",
-									description: "Simple pack of credits that you can consume.",
+									description: "Simple plan of credits that you can consume.",
 								}}
 								className="border-primary/20 bg-background/50 backdrop-blur-xl"
 								withEvents={true}
@@ -94,7 +93,7 @@ export function LandingPage() {
 								onPriceHover={(hovering) =>
 									setExplanation(
 										hovering
-											? "You pick the price your customers will pay for this pack"
+											? "You pick the price your customers will pay for this plan"
 											: defaultText,
 									)
 								}
@@ -167,7 +166,7 @@ export function LandingPage() {
 							</div>
 						</div>
 						<div className="flex flex-col gap-4 pt-1 w-full">
-							<h3 className="text-lg font-semibold">Create a Pack</h3>
+							<h3 className="text-lg font-semibold">Create a Plan</h3>
 							<p className="text-muted-foreground text-sm max-w-md">
 								Define how many credits you want to sell and at what price.
 							</p>
@@ -286,7 +285,7 @@ export function LandingPage() {
 							Ready to simplify your credit system?
 						</h2>
 						<p className="text-muted-foreground text-lg max-w-xl">
-							Join our early access and start selling credit packs to your customers in minutes.
+							Join our early access and start selling credit plans to your customers in minutes.
 						</p>
 						<div className="flex flex-col sm:flex-row gap-4 mt-2">
 							<Button size="lg" className="px-12 h-12 text-base" asChild>

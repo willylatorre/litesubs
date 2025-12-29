@@ -72,9 +72,9 @@ export function PackDetailsDialog({
 				</DialogTrigger>
 				<DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
 					<DialogHeader>
-						<DialogTitle>Pack Details</DialogTitle>
+						<DialogTitle>Plan Details</DialogTitle>
 						<DialogDescription>
-							View details and subscribers for this pack.
+							View details and customers for this plan.
 						</DialogDescription>
 					</DialogHeader>
 
@@ -127,7 +127,7 @@ export function PackDetailsDialog({
 							<div className="flex flex-col gap-4 border-t pt-4">
 								<h3 className="font-semibold flex items-center gap-2">
 									<IconUsers className="h-4 w-4" />
-									Subscribers ({details.subscribers.length})
+									Customers ({details.subscribers.length})
 								</h3>
 
 								<div className="rounded-md border">
@@ -146,7 +146,7 @@ export function PackDetailsDialog({
 														colSpan={3}
 														className="text-center h-24 text-muted-foreground"
 													>
-														No subscribers yet.
+														No customers yet.
 													</TableCell>
 												</TableRow>
 											) : (

@@ -160,12 +160,12 @@ export function InviteUserDialog({
 						</div>
 						<div className="grid grid-cols-4 items-center gap-4">
 							<Label htmlFor="packId" className="text-right">
-								Link Pack
+								Link Plan
 							</Label>
 							<div className="col-span-3">
 								<Select name="packId" defaultValue={defaultPackId || "none"}>
 									<SelectTrigger>
-										<SelectValue placeholder="Select a pack (optional)" />
+										<SelectValue placeholder="Select a plan (optional)" />
 									</SelectTrigger>
 									<SelectContent>
 										<SelectItem value="none">None</SelectItem>

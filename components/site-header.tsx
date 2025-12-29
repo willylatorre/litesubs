@@ -1,7 +1,6 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 
@@ -9,11 +8,10 @@ export function SiteHeader() {
 	const pathname = usePathname();
 
 	const getPageTitle = (path: string) => {
-		if (path === "/dashboard") return "Active Subscriptions";
+		if (path === "/dashboard") return "Active Credit Plans";
 		if (path.startsWith("/dashboard/creator")) return "Creator Dashboard";
-		if (path.startsWith("/dashboard/subscriptions")) return "Subscriptions";
 		if (path.startsWith("/dashboard/customers")) return "Customers";
-		if (path.startsWith("/dashboard/packs")) return "Packs";
+		if (path.startsWith("/dashboard/packs")) return "Credit Plans";
 		if (path.startsWith("/dashboard/account")) return "Account";
 
 		// Fallback: capitalize last segment

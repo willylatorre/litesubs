@@ -195,9 +195,9 @@ export default async function InvitePage({
 			{/* Header Section */}
 			<div className="flex flex-col items-center gap-4 text-center max-w-xl">
 
-					<AnimatedLogo />
+				<AnimatedLogo />
 				<p className="text-base md:text-lg text-muted-foreground">
-					Simple credit packs instead of heavy subscriptions.
+				Simple credit plans instead of heavy subscriptions. Sell one-time credit bundles or set up auto-refill credits, both in one simple system.
 				</p>
 			</div>
 
