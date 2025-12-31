@@ -1,0 +1,1 @@
+ALTER TABLE "creator_payout_accounts" RENAME COLUMN "stripe_account_id" TO "stripe_recipient_id";

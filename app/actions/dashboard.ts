@@ -1,13 +1,12 @@
 "use server";
 
-import { and, count, countDistinct, eq, inArray, sum } from "drizzle-orm";
+import { and, count, countDistinct, eq, sum } from "drizzle-orm";
 import { db } from "@/app/db";
 import {
 	invites,
 	liteSubscriptions,
 	products,
 	transactions,
-	userBalances,
 } from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
 
@@ -102,13 +101,13 @@ export async function getDashboardData() {
 export async function getCreatorStats() {
 	return authenticatedAction(async (session) => {
 		const [revenueResult] = await db
-			.select({ value: sum(products.price) })
+			.select({ value: sum(transactions.amountMoney) })
 			.from(transactions)
-			.innerJoin(products, eq(transactions.productId, products.id))
 			.where(
 				and(
 					eq(transactions.creatorId, session.user.id),
 					eq(transactions.type, "purchase"),
+					eq(transactions.status, "completed"),
 				),
 			);
 
