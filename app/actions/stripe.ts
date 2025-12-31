@@ -106,3 +106,65 @@ export async function createCustomerPortalSession() {
 		redirect(portalSession.url);
 	}
 }
+
+export async function createPaymentLink(
+	customerId: string,
+	productId: string,
+): Promise<{ success: boolean; url?: string; error?: string }> {
+	const session = await auth.api.getSession({ headers: await headers() });
+	if (!session?.user) {
+		return { success: false, error: "Unauthorized" };
+	}
+
+	// Fetch the product to ensure it belongs to the current creator
+	const product = await db.query.products.findFirst({
+		where: eq(products.id, productId),
+	});
+
+	if (!product) {
+		return { success: false, error: "Product not found" };
+	}
+
+	if (product.creatorId !== session.user.id) {
+		return { success: false, error: "Unauthorized" };
+	}
+
+	const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+	// Create a Stripe Price for this product (needed for payment links)
+	const stripePrice = await stripe.prices.create({
+		currency: product.currency,
+		unit_amount: product.price,
+		product_data: {
+			name: product.name,
+			metadata: {
+				productId: product.id,
+			},
+		},
+	});
+
+	// Create the payment link with metadata matching the webhook expectations
+	const paymentLink = await stripe.paymentLinks.create({
+		line_items: [
+			{
+				price: stripePrice.id,
+				quantity: 1,
+			},
+		],
+		metadata: {
+			userId: customerId,
+			productId: product.id,
+			credits: product.credits.toString(),
+			creatorId: product.creatorId,
+			type: "credit_purchase",
+		},
+		after_completion: {
+			type: "redirect",
+			redirect: {
+				url: `${appUrl}/dashboard?success=true&productId=${product.id}`,
+			},
+		},
+	});
+
+	return { success: true, url: paymentLink.url };
+}
