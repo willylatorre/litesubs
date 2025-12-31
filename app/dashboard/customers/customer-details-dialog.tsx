@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { ManageSubscriptionCreditsDialog } from "./manage-subscription-credits-dialog";
 import { DecreaseCreditButton } from "./decrease-credit-button";
-import { PaymentLinkButton } from "./payment-link-button";
+import { SubscriptionMoreActions } from "./subscription-more-actions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -164,10 +164,6 @@ export function CustomerDetailsDialog({
 											</div>
 											{!demoData && (
 												<div className="flex items-center gap-1">
-													<PaymentLinkButton
-														customerId={customerId}
-														productId={sub.productId}
-													/>
 													<DecreaseCreditButton
 														subscriptionId={sub.id}
 														currentCredits={sub.credits}
@@ -179,6 +175,10 @@ export function CustomerDetailsDialog({
 														planName={sub.product.name}
 														currentCredits={sub.credits}
 														onSuccess={handleSuccess}
+													/>
+													<SubscriptionMoreActions
+														customerId={customerId}
+														productId={sub.productId}
 													/>
 												</div>
 											)}
