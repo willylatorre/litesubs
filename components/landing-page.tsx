@@ -4,13 +4,16 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Check, ChevronDown, Copy, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { CreatePackDialog, type DemoPackData } from "@/app/dashboard/packs/create-pack-dialog";
 import { AnimatedLogo } from "@/components/animated-logo";
 import { PackItem } from "@/components/pack-item";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { CustomersTableDemo } from "./landing/customers-table-demo";
+import {
+	CreatePackDialogDemo,
+	type DemoPackData,
+} from "@/components/landing/create-pack-dialog-demo";
 
 export function LandingPage() {
 	const defaultText =
@@ -186,7 +189,7 @@ export function LandingPage() {
 										/>
 									</div>
 								) : (
-									<CreatePackDialog onDemoCreate={handleCreatePack} />
+									<CreatePackDialogDemo onDemoCreate={handleCreatePack} />
 								)}
 							</div>
 						</div>

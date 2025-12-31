@@ -22,39 +22,48 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useCreateProduct } from "@/hooks/use-products";
 import { CURRENCIES } from "@/lib/constants";
 
-export function CreatePackDialog() {
-	const [open, setOpen] = useState(false);
-	const { mutate, isPending: isMutatePending } = useCreateProduct();
+export interface DemoPackData {
+	name: string;
+	description: string;
+	price: number;
+	credits: number;
+	currency: string;
+}
 
-	const isPending = isMutatePending;
+export function CreatePackDialogDemo({
+	onDemoCreate,
+}: {
+	onDemoCreate: (data: DemoPackData) => void;
+}) {
+	const [open, setOpen] = useState(false);
+	const [isPending, setIsPending] = useState(false);
 
 	function onSubmit(e: React.FormEvent<HTMLFormElement>) {
 		e.preventDefault();
 		const formData = new FormData(e.currentTarget);
-		
-		const data = {
+
+		const data: DemoPackData = {
 			name: formData.get("name") as string,
-			description: formData.get("description") as string,
+			description: (formData.get("description") as string) || "",
 			price: Number(formData.get("price")),
 			credits: Number(formData.get("credits")),
-			currency: (formData.get("currency") as any) || "usd",
+			currency: (formData.get("currency") as string) || "usd",
 		};
 
-		mutate(
-			data,
-			{
-				onSuccess: () => setOpen(false),
-			},
-		);
+		setIsPending(true);
+		setTimeout(() => {
+			onDemoCreate(data);
+			setIsPending(false);
+			setOpen(false);
+		}, 600);
 	}
 
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
-				<Button>
+				<Button size="lg">
 					<Plus className="mr-2 h-4 w-4" />
 					Create Plan
 				</Button>
@@ -75,6 +84,7 @@ export function CreatePackDialog() {
 								name="name"
 								placeholder="e.g. Starter Plan"
 								required
+								defaultValue="Starter Plan"
 							/>
 						</div>
 						<div className="grid gap-2">
@@ -83,6 +93,7 @@ export function CreatePackDialog() {
 								id="description"
 								name="description"
 								placeholder="Optional description..."
+								defaultValue="Get 100 credits for your next project."
 							/>
 						</div>
 						<div className="grid grid-cols-2 gap-4">
@@ -111,6 +122,7 @@ export function CreatePackDialog() {
 									step="0.01"
 									placeholder="10.00"
 									required
+									defaultValue="10"
 								/>
 							</div>
 						</div>
@@ -124,6 +136,7 @@ export function CreatePackDialog() {
 								step="1"
 								placeholder="100"
 								required
+								defaultValue="100"
 							/>
 						</div>
 					</div>
@@ -138,3 +151,4 @@ export function CreatePackDialog() {
 		</Dialog>
 	);
 }
+

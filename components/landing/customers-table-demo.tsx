@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ChevronRight } from "lucide-react";
-import type { DemoPackData } from "@/app/dashboard/packs/create-pack-dialog";
+import type { DemoPackData } from "@/components/landing/create-pack-dialog-demo";
 import { CustomerDetailsDialog } from "@/app/dashboard/customers/customer-details-dialog";
 
 interface CustomersTableDemoProps {

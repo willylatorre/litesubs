@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/app/db"; // your drizzle instance
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 
 export const auth = betterAuth({
 	database: drizzleAdapter(db, {
@@ -30,11 +30,15 @@ export const auth = betterAuth({
 	],
 
 	plugins: [
-		baStripe({
-			stripeClient: stripe,
-			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
-			createCustomerOnSignUp: true,
-		}),
+		...(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
+			? [
+					baStripe({
+						stripeClient: getStripe(),
+						stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+						createCustomerOnSignUp: true,
+					}),
+				]
+			: []),
 		nextCookies(),
 	], // make sure this is the last plugin in the array
 });
