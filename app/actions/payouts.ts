@@ -145,12 +145,12 @@ export const setupPayoutAccount = authenticatedAction(async (session) => {
 		if (account) {
 			await db
 				.update(creatorPayoutAccounts)
-				.set({ stripeAccountId })
+				.set({ stripeRecipientId })
 				.where(eq(creatorPayoutAccounts.userId, userId));
 		} else {
 			await db.insert(creatorPayoutAccounts).values({
 				userId,
-				stripeAccountId,
+				stripeRecipientId,
 				verificationStatus: "pending",
 			});
 		}
@@ -172,9 +172,9 @@ export const syncPayoutAccountStatus = authenticatedAction(async (session) => {
 		where: eq(creatorPayoutAccounts.userId, session.user.id),
 	});
 
-	if (!account?.stripeAccountId) return { success: false, error: "No account" };
+	if (!account?.stripeRecipientId) return { success: false, error: "No account" };
 
-	const stripeAccount = await stripe.accounts.retrieve(account.stripeAccountId);
+	const stripeAccount = await stripe.accounts.retrieve(account.stripeRecipientId);
 
 	const isEnabled = stripeAccount.payouts_enabled && stripeAccount.charges_enabled;
 	// Note: details_submitted is strictly for onboarding completion
@@ -242,61 +242,75 @@ export const requestPayout = authenticatedAction(
 				where: eq(creatorPayoutAccounts.userId, userId),
 			});
 
-			if (
-				!payoutAccount ||
-				payoutAccount.verificationStatus !== "verified" ||
-				!payoutAccount.stripeAccountId
-			) {
-				throw new Error("Payout account not verified");
-			}
-
-			// 3. Create Payout Record
-			const newPayout = await tx
-				.insert(payouts)
-				.values({
-					userId,
-					amount: amount.toString(),
-					netAmount: amount.toString(),
-					platformFee: "0",
-					status: "pending",
-				})
-				.returning();
-
-			return { payoutId: newPayout[0].id, stripeAccountId: payoutAccount.stripeAccountId };
-		});
-
-		const { payoutId, stripeAccountId } = result;
-
-		// 4. Trigger Stripe Payout (Global Payouts API)
-		try {
-			// Using stripe.payouts.create with destination as the connected account (Recipient)
-			const stripePayout = await stripe.payouts.create({
-				amount: Math.round(amount * 100), // cents
-				currency: "usd",
-				destination: stripeAccountId,
-			});
-
-			await db
-				.update(payouts)
-				.set({
-					status: "processing",
-					stripePayoutId: stripePayout.id,
-				})
-				.where(eq(payouts.id, payoutId));
-
-			// 5. Add to Ledger (Negative entry)
-			await db.insert(earningsLedger).values({
-				userId,
-				transactionType: "payout",
-				amount: (-amount).toString(),
-				relatedPayoutId: payoutId,
-				description: `Payout request ${payoutId}`,
-			});
-
-			revalidatePath("/dashboard/payouts");
-			return { success: true, data: { payoutId } };
-		} catch (error: any) {
-			console.error("Stripe Payout Error:", error);
+			            			if (
+			            				!payoutAccount ||
+			            				payoutAccount.verificationStatus !== "verified" ||
+			            				!payoutAccount.stripeRecipientId
+			            			) {
+			            				throw new Error("Payout account not verified");
+			            			}
+			            
+			            			// 3. Create Payout Record
+			            			const newPayout = await tx
+			            				.insert(payouts)
+			            				.values({
+			            					userId,
+			            					amount: amount.toString(),
+			            					netAmount: amount.toString(),
+			            					platformFee: "0",
+			            					status: "pending",
+			            				})
+			            				.returning();
+			            
+			            			return {
+			            				payoutId: newPayout[0].id,
+			            				stripeRecipientId: payoutAccount.stripeRecipientId,
+			            			};
+			            		});
+			            
+			            		const { payoutId, stripeRecipientId } = result;
+			            
+			            		// 4. Trigger Stripe Payout (Global Payouts V2 API)
+			            		try {
+			            			// We use the v2 moneyManagement outboundPayments create method as requested.
+			            			// Note: The financial_account and payout_method might be needed from environment variables or account settings.
+			            			// @ts-ignore - V2 types might be pending in some environments
+			            			const outboundPayment = await stripe.v2.moneyManagement.outboundPayments.create({
+			            				from: {
+			            					financial_account: process.env.STRIPE_FINANCIAL_ACCOUNT_ID || "",
+			            					currency: "usd",
+			            				},
+			            				to: {
+			            					recipient: stripeRecipientId,
+			            					// payout_method: process.env.STRIPE_PAYOUT_METHOD_ID, // Optional or retrieved from account
+			            				},
+			            				amount: {
+			            					value: Math.round(amount * 100), // in minor units (cents)
+			            					currency: "usd",
+			            				},
+			            				description: `Payout for user ${userId}`,
+			            			});
+			            
+			            			await db
+			            				.update(payouts)
+			            				.set({
+			            					status: "processing",
+			            					stripePayoutId: outboundPayment.id,
+			            				})
+			            				.where(eq(payouts.id, payoutId));
+			            
+			            			// 5. Add to Ledger (Negative entry)
+			            			await db.insert(earningsLedger).values({
+			            				userId,
+			            				transactionType: "payout",
+			            				amount: (-amount).toString(),
+			            				relatedPayoutId: payoutId,
+			            				description: `Payout request ${payoutId}`,
+			            			});
+			            
+			            			revalidatePath("/dashboard/payouts");
+			            			return { success: true, data: { payoutId } };
+			            		} catch (error: any) {			console.error("Stripe Payout Error:", error);
 			await db
 				.update(payouts)
 				.set({

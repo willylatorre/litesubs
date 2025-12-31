@@ -36,7 +36,7 @@ export function SetupPayoutAccount({
 		);
 	}
 	
-	const isPending = payoutAccount?.verificationStatus === 'pending' && payoutAccount?.stripeAccountId;
+	const isPending = payoutAccount?.verificationStatus === 'pending' && payoutAccount?.stripeRecipientId;
 
 	return (
 		<Button onClick={() => execute({})} disabled={isExecuting}>

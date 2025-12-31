@@ -104,6 +104,10 @@ export function RequestPayoutDialog({
 							<span>You will receive:</span>
 							<span>${parsedAmount.toFixed(2)}</span>
 						</div>
+						<div className="flex justify-between pt-2">
+							<span>Method:</span>
+							<span>Connected Bank Account</span>
+						</div>
 					</div>
 					
 					<div className="flex items-center space-x-2">

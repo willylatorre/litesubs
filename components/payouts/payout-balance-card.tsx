@@ -45,7 +45,7 @@ export function PayoutBalanceCard({
 
 	const isAccountVerified =
 		payoutAccount?.verificationStatus === "verified" &&
-		payoutAccount?.stripeAccountId;
+		payoutAccount?.stripeRecipientId;
 
 	return (
 		<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
