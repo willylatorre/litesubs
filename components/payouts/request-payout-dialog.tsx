@@ -14,7 +14,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useAction } from "next-safe-action/hooks";
 import { requestPayout } from "@/app/actions/payouts";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -37,25 +36,32 @@ export function RequestPayoutDialog({
 	const [open, setOpen] = useState(false);
 	const [amount, setAmount] = useState(availableBalance.toString());
 	const [confirmed, setConfirmed] = useState(false);
+	const [isExecuting, setIsExecuting] = useState(false);
 
-	const { execute, isExecuting } = useAction(requestPayout, {
-		onSuccess: (data) => {
-			toast.success("Payout request submitted! Funds will arrive in 5-7 business days.");
-			setOpen(false);
-			onSuccess();
-		},
-		onError: (error) => {
-			toast.error(error.error.serverError || "Failed to request payout");
-		},
-	});
-
-	const handleRequest = () => {
+	const handleRequest = async () => {
 		const val = parseFloat(amount);
 		if (isNaN(val) || val < minimumPayout || val > availableBalance) {
 			toast.error("Invalid amount");
 			return;
 		}
-		execute({ amount: val });
+
+		setIsExecuting(true);
+		try {
+			const result = await requestPayout({ amount: val });
+			if (result.success) {
+				toast.success(
+					"Payout request submitted! Funds will arrive in 5-7 business days.",
+				);
+				setOpen(false);
+				onSuccess();
+			} else {
+				toast.error(result.error || "Failed to request payout");
+			}
+		} catch (error) {
+			toast.error("An unexpected error occurred");
+		} finally {
+			setIsExecuting(false);
+		}
 	};
 
 	const parsedAmount = parseFloat(amount) || 0;
