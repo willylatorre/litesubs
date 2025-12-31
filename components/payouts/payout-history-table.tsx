@@ -1,3 +1,5 @@
+import { format } from "date-fns";
+import { Badge } from "@/components/ui/badge";
 import {
 	Table,
 	TableBody,
@@ -6,11 +8,29 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
+
+export interface PayoutHistoryItem {
+	id: string;
+	userId: string;
+	amount: string;
+	currency: string;
+	platformFee: string;
+	netAmount: string;
+	status: "pending" | "processing" | "completed" | "failed" | "cancelled";
+	stripePayoutId: string | null;
+	stripeTransferId: string | null;
+	failureCode: string | null;
+	failureMessage: string | null;
+	requestedAt: Date;
+	processedAt: Date | null;
+	completedAt: Date | null;
+	notes: string | null;
+	createdAt: Date;
+	updatedAt: Date;
+}
 
 interface PayoutHistoryTableProps {
-	history: any[];
+	history: PayoutHistoryItem[];
 }
 
 export function PayoutHistoryTable({ history }: PayoutHistoryTableProps) {

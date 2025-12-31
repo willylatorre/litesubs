@@ -1,7 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { Loader2 } from "lucide-react";
+import { useId, useState } from "react";
+import { toast } from "sonner";
+import { requestPayout } from "@/app/actions/payouts";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
 	Dialog,
 	DialogContent,
@@ -13,10 +17,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { requestPayout } from "@/app/actions/payouts";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
 
 interface RequestPayoutDialogProps {
 	availableBalance: number;
@@ -37,10 +37,12 @@ export function RequestPayoutDialog({
 	const [amount, setAmount] = useState(availableBalance.toString());
 	const [confirmed, setConfirmed] = useState(false);
 	const [isExecuting, setIsExecuting] = useState(false);
+	const amountId = useId();
+	const confirmId = useId();
 
 	const handleRequest = async () => {
 		const val = parseFloat(amount);
-		if (isNaN(val) || val < minimumPayout || val > availableBalance) {
+		if (Number.isNaN(val) || val < minimumPayout || val > availableBalance) {
 			toast.error("Invalid amount");
 			return;
 		}
@@ -57,7 +59,7 @@ export function RequestPayoutDialog({
 			} else {
 				toast.error(result.error || "Failed to request payout");
 			}
-		} catch (error) {
+		} catch (_error) {
 			toast.error("An unexpected error occurred");
 		} finally {
 			setIsExecuting(false);
@@ -65,10 +67,7 @@ export function RequestPayoutDialog({
 	};
 
 	const parsedAmount = parseFloat(amount) || 0;
-	// Fee is already deducted from available balance in the display logic of previous prompt?
-	// Prompt: "Request amount: $450.00. Platform fee (10%): Already deducted. You will receive: $450.00"
-	// So we don't show fee deduction here again on the requested amount.
-	
+
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
@@ -83,11 +82,11 @@ export function RequestPayoutDialog({
 				</DialogHeader>
 				<div className="grid gap-4 py-4">
 					<div className="grid grid-cols-4 items-center gap-4">
-						<Label htmlFor="amount" className="text-right">
+						<Label htmlFor={amountId} className="text-right">
 							Amount
 						</Label>
 						<Input
-							id="amount"
+							id={amountId}
 							type="number"
 							value={amount}
 							onChange={(e) => setAmount(e.target.value)}
@@ -115,14 +114,14 @@ export function RequestPayoutDialog({
 							<span>Connected Bank Account</span>
 						</div>
 					</div>
-					
+
 					<div className="flex items-center space-x-2">
-						<Checkbox 
-							id="confirm" 
+						<Checkbox
+							id={confirmId}
 							checked={confirmed}
 							onCheckedChange={(c) => setConfirmed(!!c)}
 						/>
-						<Label htmlFor="confirm" className="text-sm font-normal">
+						<Label htmlFor={confirmId} className="text-sm font-normal">
 							I confirm the bank account details are correct
 						</Label>
 					</div>
@@ -131,9 +130,14 @@ export function RequestPayoutDialog({
 					<Button variant="outline" onClick={() => setOpen(false)}>
 						Cancel
 					</Button>
-					<Button 
-						onClick={handleRequest} 
-						disabled={!confirmed || isExecuting || parsedAmount < minimumPayout || parsedAmount > availableBalance}
+					<Button
+						onClick={handleRequest}
+						disabled={
+							!confirmed ||
+							isExecuting ||
+							parsedAmount < minimumPayout ||
+							parsedAmount > availableBalance
+						}
 					>
 						{isExecuting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
 						Request Payout

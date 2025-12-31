@@ -1,28 +1,32 @@
-import { Button } from "@/components/ui/button";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardFooter,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { AlertCircle, CheckCircle2, DollarSign, Wallet } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RequestPayoutDialog } from "./request-payout-dialog";
 import { SetupPayoutAccount } from "./setup-payout-account";
 
+export interface PayoutBalance {
+	totalEarnings: number;
+	platformFees: number;
+	totalPaidOut: number;
+	totalRefunds: number;
+	pendingPayouts: number;
+	availableBalance: number;
+	canRequestPayout: boolean;
+	minimumPayout: number;
+	platformFeePercent: number;
+}
+
+export interface PayoutAccount {
+	id: string;
+	userId: string;
+	verificationStatus: "pending" | "verified" | "failed";
+	stripeRecipientId: string | null;
+	isActive: boolean;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
 interface PayoutBalanceCardProps {
-	balance: {
-		totalEarnings: number;
-		platformFees: number;
-		totalPaidOut: number;
-		pendingPayouts: number;
-		availableBalance: number;
-		canRequestPayout: boolean;
-		minimumPayout: number;
-	};
-	payoutAccount: any;
+	balance: PayoutBalance;
+	payoutAccount: PayoutAccount | null | undefined;
 	onPayoutRequested: () => void;
 	onAccountSetup: () => void;
 }
@@ -35,12 +39,12 @@ export function PayoutBalanceCard({
 }: PayoutBalanceCardProps) {
 	const {
 		totalEarnings,
-		platformFees,
 		totalPaidOut,
 		pendingPayouts,
 		availableBalance,
 		canRequestPayout,
 		minimumPayout,
+		platformFeePercent,
 	} = balance;
 
 	const isAccountVerified =
@@ -76,7 +80,7 @@ export function PayoutBalanceCard({
 								minimumPayout={minimumPayout}
 								onSuccess={onPayoutRequested}
 								disabled={!canRequestPayout || pendingPayouts > 0}
-								platformFeePercent={10} // Hardcoded for display as per prompt
+								platformFeePercent={platformFeePercent}
 							/>
 						) : (
 							<SetupPayoutAccount
