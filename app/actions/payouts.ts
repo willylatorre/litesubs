@@ -11,7 +11,7 @@ import {
 } from "@/app/db/payouts-schema";
 import { MIN_PAYOUT_AMOUNT, PLATFORM_FEE_PERCENT } from "@/lib/constants";
 import { authenticatedAction } from "@/lib/safe-action";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 
 // Schemas
 const requestPayoutSchema = z.object({
@@ -126,6 +126,13 @@ export async function getPayoutHistory() {
 
 export async function setupPayoutAccount() {
 	return authenticatedAction(async (session) => {
+		let stripe;
+		try {
+			stripe = getStripe();
+		} catch {
+			return { success: false, error: "Stripe is not configured" };
+		}
+
 		const userId = session.user.id;
 		const userEmail = session.user.email;
 
@@ -191,6 +198,13 @@ export async function setupPayoutAccount() {
 
 export async function syncPayoutAccountStatus() {
 	return authenticatedAction(async (session) => {
+		let stripe;
+		try {
+			stripe = getStripe();
+		} catch {
+			return { success: false, error: "Stripe is not configured" };
+		}
+
 		const account = await db.query.creatorPayoutAccounts.findFirst({
 			where: eq(creatorPayoutAccounts.userId, session.user.id),
 		});
@@ -286,6 +300,7 @@ export async function requestPayout(
 
 			// 4. Trigger Stripe Payout (Global Payouts V2 API)
 			try {
+				const stripe = getStripe();
 				const outboundPayment =
 					await stripe.v2.moneyManagement.outboundPayments.create({
 						from: {

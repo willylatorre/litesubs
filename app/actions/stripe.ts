@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/app/db";
 import { products, transactions } from "@/app/db/schema";
 import { auth } from "@/lib/auth";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 
 export async function createCheckoutSession(productId: string) {
 	const session = await auth.api.getSession({ headers: await headers() });
@@ -61,7 +61,13 @@ export async function createCheckoutSession(productId: string) {
 		sessionParams.customer_email = session.user.email;
 	}
 
-	const checkoutSession = await stripe.checkout.sessions.create(sessionParams);
+	let checkoutSession;
+	try {
+		const stripe = getStripe();
+		checkoutSession = await stripe.checkout.sessions.create(sessionParams);
+	} catch {
+		return { error: "Stripe is not configured" };
+	}
 
 	if (checkoutSession.id) {
 		await db.insert(transactions).values({
@@ -97,10 +103,16 @@ export async function createCustomerPortalSession() {
 
 	const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://litesubs.com";
 
-	const portalSession = await stripe.billingPortal.sessions.create({
-		customer: customerId,
-		return_url: `${appUrl}/dashboard/account`,
-	});
+	let portalSession;
+	try {
+		const stripe = getStripe();
+		portalSession = await stripe.billingPortal.sessions.create({
+			customer: customerId,
+			return_url: `${appUrl}/dashboard/account`,
+		});
+	} catch {
+		return { error: "Stripe is not configured" };
+	}
 
 	if (portalSession.url) {
 		redirect(portalSession.url);

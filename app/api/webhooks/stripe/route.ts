@@ -3,20 +3,25 @@ import { headers } from "next/headers";
 import { db } from "@/app/db";
 import { liteSubscriptions, transactions } from "@/app/db/schema";
 import { earningsLedger, payouts } from "@/app/db/payouts-schema";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import type { Stripe } from "stripe";
 
 export async function POST(req: Request) {
+	if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_PURCHASES) {
+		return new Response("Stripe is not configured", { status: 500 });
+	}
+
 	const body = await req.text();
 	const headersList = await headers();
 	const signature = headersList.get("Stripe-Signature")!;
 
 	let event: Stripe.Event;
 	try {
+		const stripe = getStripe();
 		event = stripe.webhooks.constructEvent(
 			body,
 			signature,
-			process.env.STRIPE_WEBHOOK_PURCHASES!,
+			process.env.STRIPE_WEBHOOK_PURCHASES,
 		);
 	} catch (error: any) {
 		console.error("Webhook signature verification failed.", error.message);

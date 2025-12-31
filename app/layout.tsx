@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { SiteFooter } from "@/components/site-footer";
 import { Toaster } from "@/components/ui/sonner";
-import { Providers } from "./providers";
 
 import "./globals.css";
 
@@ -17,6 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+	metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://litesubs.com"),
 	title: "liteSubs",
 	description: "Simple credit plans instead of heavy subscriptions. Sell one-time credit plans or set up auto-refill credits, both in one simple system.",
 	icons: {
@@ -34,12 +33,7 @@ export default function RootLayout({
 			<body
 				className="antialiased light min-h-screen flex flex-col"
 			>
-				<Providers>
-					<div className="flex-1">
-						{children}
-					</div>
-					{/* <SiteFooter /> */}
-				</Providers>
+				<div className="flex-1">{children}</div>
 				<Toaster />
 			</body>
 		</html>
