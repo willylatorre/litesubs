@@ -143,40 +143,46 @@ export async function createPaymentLink(
 
 	const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-	// Create a Stripe Price for this product (needed for payment links)
-	const stripePrice = await stripe.prices.create({
-		currency: product.currency,
-		unit_amount: product.price,
-		product_data: {
-			name: product.name,
+	try {
+		const stripe = getStripe();
+
+		// Create a Stripe Price for this product (needed for payment links)
+		const stripePrice = await stripe.prices.create({
+			currency: product.currency,
+			unit_amount: product.price,
+			product_data: {
+				name: product.name,
+				metadata: {
+					productId: product.id,
+				},
+			},
+		});
+
+		// Create the payment link with metadata matching the webhook expectations
+		const paymentLink = await stripe.paymentLinks.create({
+			line_items: [
+				{
+					price: stripePrice.id,
+					quantity: 1,
+				},
+			],
 			metadata: {
+				userId: customerId,
 				productId: product.id,
+				credits: product.credits.toString(),
+				creatorId: product.creatorId,
+				type: "credit_purchase",
 			},
-		},
-	});
+			after_completion: {
+				type: "redirect",
+				redirect: {
+					url: `${appUrl}/dashboard?success=true&productId=${product.id}`,
+				},
+			},
+		});
 
-	// Create the payment link with metadata matching the webhook expectations
-	const paymentLink = await stripe.paymentLinks.create({
-		line_items: [
-			{
-				price: stripePrice.id,
-				quantity: 1,
-			},
-		],
-		metadata: {
-			userId: customerId,
-			productId: product.id,
-			credits: product.credits.toString(),
-			creatorId: product.creatorId,
-			type: "credit_purchase",
-		},
-		after_completion: {
-			type: "redirect",
-			redirect: {
-				url: `${appUrl}/dashboard?success=true&productId=${product.id}`,
-			},
-		},
-	});
-
-	return { success: true, url: paymentLink.url };
+		return { success: true, url: paymentLink.url };
+	} catch {
+		return { success: false, error: "Stripe is not configured" };
+	}
 }
