@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { ManageSubscriptionCreditsDialog } from "./manage-subscription-credits-dialog";
 import { DecreaseCreditButton } from "./decrease-credit-button";
+import { SubscriptionMoreActions } from "./subscription-more-actions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -174,6 +175,10 @@ export function CustomerDetailsDialog({
 														planName={sub.product.name}
 														currentCredits={sub.credits}
 														onSuccess={handleSuccess}
+													/>
+													<SubscriptionMoreActions
+														customerId={customerId}
+														productId={sub.productId}
 													/>
 												</div>
 											)}
