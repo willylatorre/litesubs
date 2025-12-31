@@ -14,6 +14,8 @@ import { CustomerDetailsDialog } from "./customer-details-dialog";
 import { Badge } from "@/components/ui/badge";
 import { DecreaseCreditButton } from "./decrease-credit-button";
 
+export const dynamic = "force-dynamic";
+
 export default async function CustomersPage() {
 	const customers = await getCreatorCustomers();
 

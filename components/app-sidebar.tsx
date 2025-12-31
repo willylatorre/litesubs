@@ -6,6 +6,7 @@ import {
 	IconDashboard,
 	IconPackage,
 	IconUsers,
+	IconWallet,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import type * as React from "react";
@@ -46,6 +47,11 @@ const data = {
 			title: "Credit Plans",
 			url: "/dashboard/packs",
 			icon: IconPackage,
+		},
+		{
+			title: "Payouts",
+			url: "/dashboard/payouts",
+			icon: IconWallet,
 		},
 		{
 			title: "Customers",

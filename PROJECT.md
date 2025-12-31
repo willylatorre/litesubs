@@ -55,7 +55,6 @@ This model establishes a direct relationship between the creator and the buyer, 
 - [ ] **Landing:** Improve the landing showcasing a simple three steps process to showcase how easy it is to setup a plan. Keep the minimalist approach.
 - [x] **SEO Optimization:** Implement dynamic OpenGraph images and meta tags for pack sharing links. Use the favicon.svg as a logo. Checklist at https://dminhvu.com/post/nextjs-seo
 - [x] **Pack Detail Pages:** Improve the `token/page.tsx` page to have more information and SEO capabilities. Make it reusable so the creator can send it again to ask them for payment.
-- [ ] **Public Creator Profiles:** A simple page listing all available packs for a specific creator. All the links in the end should redirect you to login/signup to litesubs.com in order to be able to subscribe.
 - [ ] **Help & FAQ:** Add a dedicated Help/FAQ page for both creators and customers.
 
 ### 🚀 Polish & Performance
@@ -75,6 +74,9 @@ This model establishes a direct relationship between the creator and the buyer, 
 - [ ] **Stripe connect:** Eplore allowing users to connect their own "stripe" account so the purchases of the packs will go directly to them. If connected, we skip/disable the whole Payouts section as it is handled automatically.
 - [ ] **Cal.com Integration:** Explore allowing users to connect their account and automatically "spend" credits when booking appointments via Cal.com through a webhook.
 - [ ] **Calendly Integration:** Explore allowing users to connect their account and automatically "spend" credits when booking appointments via Cal.com through a webhook.
+
+### Subscriptions
+- [ ] **Subscriptions plan:** Add support for subscriptions. This is actually just a plan but with a periodicity of "monthly" instead of "one-time". When creating the payment, it should create a subscription and listen every month to the webhook to add revenue to the creator. The card should have some slightly different actions, like "Cancel subscription" instead of "add credits".
 
 ### 💻 Developer Experience (API)
 - [ ] **API Key Management:** UI for creators to generate/revoke API keys for their projects.

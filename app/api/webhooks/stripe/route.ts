@@ -2,30 +2,37 @@ import { and, eq, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { db } from "@/app/db";
 import { liteSubscriptions, transactions } from "@/app/db/schema";
-import { stripe } from "@/lib/stripe";
+import { earningsLedger, payouts } from "@/app/db/payouts-schema";
+import { getStripe } from "@/lib/stripe";
 import type { Stripe } from "stripe";
 
 export async function POST(req: Request) {
+	if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_PURCHASES) {
+		return new Response("Stripe is not configured", { status: 500 });
+	}
+
 	const body = await req.text();
 	const headersList = await headers();
 	const signature = headersList.get("Stripe-Signature")!;
 
 	let event: Stripe.Event;
 	try {
+		const stripe = getStripe();
 		event = stripe.webhooks.constructEvent(
 			body,
 			signature,
-			process.env.STRIPE_WEBHOOK_PURCHASES!,
+			process.env.STRIPE_WEBHOOK_PURCHASES,
 		);
 	} catch (error: any) {
 		console.error("Webhook signature verification failed.", error.message);
 		return new Response(`Webhook Error: ${error.message}`, { status: 400 });
 	}
 
-	const session = event.data.object as Stripe.Checkout.Session;
+	const session = event.data.object as any;
 
 	if (event.type === "checkout.session.completed") {
-		const metadata = session.metadata;
+		const checkoutSession = session as Stripe.Checkout.Session;
+		const metadata = checkoutSession.metadata;
 
 		if (!metadata?.userId || !metadata?.productId) {
 			console.error("Webhook received with missing metadata");
@@ -35,7 +42,7 @@ export async function POST(req: Request) {
 		try {
 			// Idempotency check
 			const existingTransaction = await db.query.transactions.findFirst({
-				where: eq(transactions.stripeCheckoutId, session.id),
+				where: eq(transactions.stripeCheckoutId, checkoutSession.id),
 			});
 			
 			if (existingTransaction && existingTransaction.status === "completed") {
@@ -76,8 +83,8 @@ export async function POST(req: Request) {
 						.update(transactions)
 						.set({
 							status: "completed",
-							amountMoney: session.amount_total ?? existingTransaction.amountMoney,
-							currency: (session.currency as any) ?? existingTransaction.currency,
+							amountMoney: checkoutSession.amount_total ?? existingTransaction.amountMoney,
+							currency: (checkoutSession.currency as any) ?? existingTransaction.currency,
 						})
 						.where(eq(transactions.id, existingTransaction.id));
 				} else {
@@ -87,12 +94,24 @@ export async function POST(req: Request) {
 						creatorId: metadata.creatorId,
 						productId: metadata.productId,
 						amount: creditsToAdd,
-						amountMoney: session.amount_total,
-						currency: session.currency as any,
+						amountMoney: checkoutSession.amount_total,
+						currency: checkoutSession.currency as any,
 						type: "purchase",
 						description: `Purchase of ${creditsToAdd} credits`,
-						stripeCheckoutId: session.id,
+						stripeCheckoutId: checkoutSession.id,
 						status: "completed",
+					});
+				}
+
+				// Add to Earnings Ledger
+				if (metadata.creatorId && checkoutSession.amount_total) {
+					await tx.insert(earningsLedger).values({
+						userId: metadata.creatorId,
+						transactionType: "sale",
+						amount: (checkoutSession.amount_total / 100).toFixed(2),
+						currency: checkoutSession.currency || "usd",
+						relatedPaymentIntentId: checkoutSession.payment_intent as string,
+						description: `Sale of ${creditsToAdd} credits`,
 					});
 				}
 			});
@@ -102,9 +121,10 @@ export async function POST(req: Request) {
 		}
 	} else if (event.type === "checkout.session.expired") {
 		// Handle expired session (user didn't complete payment)
+		const checkoutSession = session as Stripe.Checkout.Session;
 		try {
 			const existingTransaction = await db.query.transactions.findFirst({
-				where: eq(transactions.stripeCheckoutId, session.id),
+				where: eq(transactions.stripeCheckoutId, checkoutSession.id),
 			});
 
 			if (existingTransaction && existingTransaction.status === "ongoing") {
@@ -117,6 +137,44 @@ export async function POST(req: Request) {
 			}
 		} catch (error: any) {
 			console.error("Failed to process expired session:", error);
+		}
+	} else if (event.type === "payout.paid") {
+		const payout = session as Stripe.Payout;
+		await db
+			.update(payouts)
+			.set({
+				status: "completed",
+				completedAt: new Date(),
+			})
+			.where(eq(payouts.stripePayoutId, payout.id));
+	} else if (event.type === "payout.failed" || event.type === "payout.canceled") {
+		const payout = session as Stripe.Payout;
+		const status = event.type === "payout.failed" ? "failed" : "cancelled";
+		
+		const existingPayout = await db.query.payouts.findFirst({
+			where: eq(payouts.stripePayoutId, payout.id),
+		});
+
+		if (existingPayout && existingPayout.status !== status) {
+			await db.transaction(async (tx) => {
+				await tx
+					.update(payouts)
+					.set({
+						status: status,
+						failureCode: payout.failure_code,
+						failureMessage: payout.failure_message,
+					})
+					.where(eq(payouts.stripePayoutId, payout.id));
+
+				// Restore balance by adding a positive adjustment to ledger
+				await tx.insert(earningsLedger).values({
+					userId: existingPayout.userId,
+					transactionType: "adjustment",
+					amount: existingPayout.amount, // amount is decimal string
+					relatedPayoutId: existingPayout.id,
+					description: `Restored balance due to ${status} payout ${existingPayout.id}`,
+				});
+			});
 		}
 	}
 

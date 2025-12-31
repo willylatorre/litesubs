@@ -5,6 +5,8 @@ import { InviteUserDialog } from "./invite-user-dialog";
 import { LivePacks } from "./live-packs";
 import { RecentInvites } from "./recent-invites";
 
+export const dynamic = "force-dynamic";
+
 export default async function CreatorDashboardPage() {
 	const stats = await getCreatorStats();
 

@@ -20,6 +20,7 @@ import { user } from "./auth-schema";
 
 // Re-export auth schema
 export * from "./auth-schema";
+export * from "./payouts-schema";
 
 // Enums
 export const productTypeEnum = pgEnum("product_type", PRODUCT_TYPES);
