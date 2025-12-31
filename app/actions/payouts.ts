@@ -2,65 +2,84 @@
 
 import { and, desc, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { MIN_PAYOUT_AMOUNT, PLATFORM_FEE_PERCENT } from "@/lib/constants";
-import { stripe } from "@/lib/stripe";
 import { z } from "zod";
 import { db } from "@/app/db";
-import { earningsLedger, payouts, creatorPayoutAccounts } from "@/app/db/payouts-schema";
+import {
+	creatorPayoutAccounts,
+	earningsLedger,
+	payouts,
+} from "@/app/db/payouts-schema";
+import { MIN_PAYOUT_AMOUNT, PLATFORM_FEE_PERCENT } from "@/lib/constants";
 import { authenticatedAction } from "@/lib/safe-action";
+import { stripe } from "@/lib/stripe";
 
 // Schemas
 const requestPayoutSchema = z.object({
 	amount: z.number().positive().min(MIN_PAYOUT_AMOUNT),
 });
 
+// Type for database or transaction context
+type DbOrTx = Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db;
+
 // Helpers
 
-async function calculateUserBalance(tx: any, userId: string) {
-	// Calculate totals from ledger
-	const ledgerEntries = await tx
+async function calculateUserBalance(tx: DbOrTx, userId: string) {
+	// Use SQL aggregation for efficiency - groups by transaction type and sums amounts
+	const ledgerTotals = await tx
 		.select({
-			amount: earningsLedger.amount,
 			type: earningsLedger.transactionType,
+			total: sql<string>`COALESCE(SUM(${earningsLedger.amount}), 0)`,
 		})
 		.from(earningsLedger)
-		.where(eq(earningsLedger.userId, userId));
+		.where(eq(earningsLedger.userId, userId))
+		.groupBy(earningsLedger.transactionType);
 
 	let totalEarnings = 0;
 	let totalPaidOut = 0;
+	let totalRefunds = 0;
 	let totalAdjustments = 0;
 
-	for (const entry of ledgerEntries) {
-		const amount = parseFloat(entry.amount);
-		if (entry.type === "sale") {
-			totalEarnings += amount;
-		} else if (entry.type === "payout") {
-			totalPaidOut += Math.abs(amount);
-		} else {
-			totalAdjustments += amount;
+	for (const row of ledgerTotals) {
+		const amount = parseFloat(row.total);
+		switch (row.type) {
+			case "sale":
+				totalEarnings = amount;
+				break;
+			case "payout":
+				totalPaidOut = Math.abs(amount);
+				break;
+			case "refund":
+				totalRefunds = Math.abs(amount);
+				break;
+			case "adjustment":
+				totalAdjustments = amount;
+				break;
 		}
 	}
 
-	// Calculate pending payouts separately from payout table to be accurate
+	// Calculate pending payouts separately from payout table
 	// Only count 'pending' status because 'processing' and 'completed' are already in the ledger
-	const pendingPayoutRecs = await tx
-		.select({ amount: payouts.amount })
+	const pendingPayoutResult = await tx
+		.select({ total: sql<string>`COALESCE(SUM(${payouts.amount}), 0)` })
 		.from(payouts)
 		.where(and(eq(payouts.userId, userId), eq(payouts.status, "pending")));
 
-	let pendingPayouts = 0;
-	for (const p of pendingPayoutRecs) {
-		pendingPayouts += parseFloat(p.amount);
-	}
+	const pendingPayouts = parseFloat(pendingPayoutResult[0]?.total || "0");
 
 	const platformFees = totalEarnings * PLATFORM_FEE_PERCENT;
 	const availableBalance =
-		totalEarnings - platformFees - totalPaidOut + totalAdjustments - pendingPayouts;
+		totalEarnings -
+		platformFees -
+		totalPaidOut -
+		totalRefunds +
+		totalAdjustments -
+		pendingPayouts;
 
 	return {
 		totalEarnings,
 		platformFees,
 		totalPaidOut,
+		totalRefunds,
 		pendingPayouts,
 		availableBalance,
 	};
@@ -80,6 +99,7 @@ export async function getAccountBalance() {
 				availableBalance: Math.max(0, balance.availableBalance), // No negative balance display
 				canRequestPayout: balance.availableBalance >= MIN_PAYOUT_AMOUNT,
 				minimumPayout: MIN_PAYOUT_AMOUNT,
+				platformFeePercent: PLATFORM_FEE_PERCENT * 100, // Return as percentage (e.g., 10 for 10%)
 			},
 		};
 	});
@@ -110,7 +130,7 @@ export async function setupPayoutAccount() {
 		const userEmail = session.user.email;
 
 		// 1. Check if local record exists
-		let account = await db.query.creatorPayoutAccounts.findFirst({
+		const account = await db.query.creatorPayoutAccounts.findFirst({
 			where: eq(creatorPayoutAccounts.userId, userId),
 		});
 
@@ -175,13 +195,21 @@ export async function syncPayoutAccountStatus() {
 			where: eq(creatorPayoutAccounts.userId, session.user.id),
 		});
 
-		if (!account?.stripeRecipientId) return { success: false, error: "No account" };
+		if (!account?.stripeRecipientId)
+			return { success: false, error: "No account" };
 
-		const stripeAccount = await stripe.accounts.retrieve(account.stripeRecipientId);
+		const stripeAccount = await stripe.accounts.retrieve(
+			account.stripeRecipientId,
+		);
 
-		const isEnabled = stripeAccount.payouts_enabled && stripeAccount.charges_enabled;
+		const isEnabled =
+			stripeAccount.payouts_enabled && stripeAccount.charges_enabled;
 		// Note: details_submitted is strictly for onboarding completion
-		const status = stripeAccount.details_submitted ? (isEnabled ? 'verified' : 'pending') : 'pending';
+		const status = stripeAccount.details_submitted
+			? isEnabled
+				? "verified"
+				: "pending"
+			: "pending";
 
 		await db
 			.update(creatorPayoutAccounts)
@@ -193,108 +221,123 @@ export async function syncPayoutAccountStatus() {
 	});
 }
 
+export async function requestPayout(
+	input: z.infer<typeof requestPayoutSchema>,
+) {
+	return authenticatedAction(
+		async (session, input: z.infer<typeof requestPayoutSchema>) => {
+			const userId = session.user.id;
+			const { amount } = input;
 
-export async function requestPayout(input: z.infer<typeof requestPayoutSchema>) {
-	return authenticatedAction(async (session, input: z.infer<typeof requestPayoutSchema>) => {
-		const userId = session.user.id;
-		const { amount } = input;
-
-		// 1. Re-validate Balance inside a transaction
-		const result = await db.transaction(async (tx) => {
-			const { availableBalance } = await calculateUserBalance(tx, userId);
-
-			if (amount > availableBalance) {
-				throw new Error("Insufficient funds");
-			}
-
-			if (amount < MIN_PAYOUT_AMOUNT) {
-				throw new Error(`Minimum payout is $${MIN_PAYOUT_AMOUNT}`);
-			}
-
-			// 2. Check Payout Account
-			const payoutAccount = await tx.query.creatorPayoutAccounts.findFirst({
-				where: eq(creatorPayoutAccounts.userId, userId),
-			});
-
-			if (
-				!payoutAccount ||
-				payoutAccount.verificationStatus !== "verified" ||
-				!payoutAccount.stripeRecipientId
-			) {
-				throw new Error("Payout account not verified");
-			}
-
-			// 3. Create Payout Record
-			const newPayout = await tx
-				.insert(payouts)
-				.values({
+			// 1. Validate and create payout record inside a transaction
+			const result = await db.transaction(async (tx) => {
+				const { availableBalance, pendingPayouts } = await calculateUserBalance(
+					tx,
 					userId,
-					amount: amount.toString(),
-					netAmount: amount.toString(),
-					platformFee: "0",
-					status: "pending",
-				})
-				.returning();
+				);
 
-			return {
-				payoutId: newPayout[0].id,
-				stripeRecipientId: payoutAccount.stripeRecipientId,
-			};
-		});
+				// Check for existing pending payouts
+				if (pendingPayouts > 0) {
+					throw new Error(
+						"You already have a pending payout request. Please wait for it to complete.",
+					);
+				}
 
-		const { payoutId, stripeRecipientId } = result;
+				if (amount > availableBalance) {
+					throw new Error("Insufficient funds");
+				}
 
-		// 4. Trigger Stripe Payout (Global Payouts V2 API)
-		try {
-			// We use the v2 moneyManagement outboundPayments create method as requested.
-			// Note: The financial_account and payout_method might be needed from environment variables or account settings.
-			// @ts-ignore - V2 types might be pending in some environments
-			const outboundPayment = await stripe.v2.moneyManagement.outboundPayments.create({
-				from: {
-					financial_account: process.env.STRIPE_FINANCIAL_ACCOUNT_ID || "",
-					currency: "usd",
-				},
-				to: {
-					recipient: stripeRecipientId,
-					// payout_method: process.env.STRIPE_PAYOUT_METHOD_ID, // Optional or retrieved from account
-				},
-				amount: {
-					value: Math.round(amount * 100), // in minor units (cents)
-					currency: "usd",
-				},
-				description: `Payout for user ${userId}`,
+				if (amount < MIN_PAYOUT_AMOUNT) {
+					throw new Error(`Minimum payout is $${MIN_PAYOUT_AMOUNT}`);
+				}
+
+				// 2. Check Payout Account
+				const payoutAccount = await tx.query.creatorPayoutAccounts.findFirst({
+					where: eq(creatorPayoutAccounts.userId, userId),
+				});
+
+				if (
+					!payoutAccount ||
+					payoutAccount.verificationStatus !== "verified" ||
+					!payoutAccount.stripeRecipientId
+				) {
+					throw new Error("Payout account not verified");
+				}
+
+				// 3. Create Payout Record
+				const newPayout = await tx
+					.insert(payouts)
+					.values({
+						userId,
+						amount: amount.toString(),
+						netAmount: amount.toString(),
+						platformFee: "0",
+						status: "pending",
+					})
+					.returning();
+
+				return {
+					payoutId: newPayout[0].id,
+					stripeRecipientId: payoutAccount.stripeRecipientId,
+				};
 			});
 
-			await db
-				.update(payouts)
-				.set({
-					status: "processing",
-					stripePayoutId: outboundPayment.id,
-				})
-				.where(eq(payouts.id, payoutId));
+			const { payoutId, stripeRecipientId } = result;
 
-			// 5. Add to Ledger (Negative entry)
-			await db.insert(earningsLedger).values({
-				userId,
-				transactionType: "payout",
-				amount: (-amount).toString(),
-				relatedPayoutId: payoutId,
-				description: `Payout request ${payoutId}`,
-			});
+			// 4. Trigger Stripe Payout (Global Payouts V2 API)
+			try {
+				const outboundPayment =
+					await stripe.v2.moneyManagement.outboundPayments.create({
+						from: {
+							financial_account: process.env.STRIPE_FINANCIAL_ACCOUNT_ID || "",
+							currency: "usd",
+						},
+						to: {
+							recipient: stripeRecipientId,
+						},
+						amount: {
+							value: Math.round(amount * 100), // in minor units (cents)
+							currency: "usd",
+						},
+						description: `Payout for user ${userId}`,
+					});
 
-			revalidatePath("/dashboard/payouts");
-			return { success: true, data: { payoutId } };
-		} catch (error: any) {
-			console.error("Stripe Payout Error:", error);
-			await db
-				.update(payouts)
-				.set({
-					status: "failed",
-					failureMessage: error.message,
-				})
-				.where(eq(payouts.id, payoutId));
+				// 5. Update status and add ledger entry atomically
+				await db.transaction(async (tx) => {
+					await tx
+						.update(payouts)
+						.set({
+							status: "processing",
+							stripePayoutId: outboundPayment.id,
+						})
+						.where(eq(payouts.id, payoutId));
 
-			throw new Error(error.message || "Payout failed");
-		}
-	}, input);
+					await tx.insert(earningsLedger).values({
+						userId,
+						transactionType: "payout",
+						amount: (-amount).toString(),
+						relatedPayoutId: payoutId,
+						description: `Payout request ${payoutId}`,
+					});
+				});
+
+				revalidatePath("/dashboard/payouts");
+				return { success: true, data: { payoutId } };
+			} catch (error: unknown) {
+				console.error("Stripe Payout Error:", error);
+				const errorMessage =
+					error instanceof Error ? error.message : "Payout failed";
+				await db
+					.update(payouts)
+					.set({
+						status: "failed",
+						failureMessage: errorMessage,
+					})
+					.where(eq(payouts.id, payoutId));
+
+				throw new Error(errorMessage);
+			}
+		},
+		input,
+	);
 }

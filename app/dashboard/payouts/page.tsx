@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import {
 	getAccountBalance,
 	getPayoutAccount,
@@ -5,15 +6,14 @@ import {
 	syncPayoutAccountStatus,
 } from "@/app/actions/payouts";
 import { PayoutView } from "@/components/payouts/payout-view";
-import { Suspense } from "react";
 
 export default async function PayoutsPage({
 	searchParams,
 }: {
 	searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-    const sp = await searchParams;
-    
+	const sp = await searchParams;
+
 	// Handle setup callbacks
 	if (sp.setup === "complete" || sp.setup === "refresh") {
 		await syncPayoutAccountStatus();
@@ -29,10 +29,12 @@ export default async function PayoutsPage({
 		totalEarnings: 0,
 		platformFees: 0,
 		totalPaidOut: 0,
+		totalRefunds: 0,
 		pendingPayouts: 0,
 		availableBalance: 0,
 		canRequestPayout: false,
 		minimumPayout: 50,
+		platformFeePercent: 10,
 	};
 
 	const payoutAccount = accountRes?.data;

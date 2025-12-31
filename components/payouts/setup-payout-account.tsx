@@ -1,22 +1,22 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { setupPayoutAccount } from "@/app/actions/payouts";
-import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
+import { setupPayoutAccount } from "@/app/actions/payouts";
+import { Button } from "@/components/ui/button";
+import type { PayoutAccount } from "./payout-balance-card";
 
 interface SetupPayoutAccountProps {
-	payoutAccount: any;
+	payoutAccount: PayoutAccount | null | undefined;
+	// onSuccess is called via page refresh when user returns from Stripe onboarding
 	onSuccess: () => void;
 }
 
 export function SetupPayoutAccount({
 	payoutAccount,
-	onSuccess,
+	onSuccess: _onSuccess,
 }: SetupPayoutAccountProps) {
-	const router = useRouter();
 	const [isExecuting, setIsExecuting] = useState(false);
 
 	const handleSetup = async () => {
@@ -28,7 +28,7 @@ export function SetupPayoutAccount({
 			} else if (result.error) {
 				toast.error(result.error || "Failed to start setup");
 			}
-		} catch (error) {
+		} catch (_error) {
 			toast.error("An unexpected error occurred");
 		} finally {
 			setIsExecuting(false);

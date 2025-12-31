@@ -1,15 +1,22 @@
 "use client";
 
-import { PayoutBalanceCard } from "./payout-balance-card";
-import { PayoutHistoryTable } from "./payout-history-table";
-import { PayoutFAQ } from "./payout-faq";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import {
+	type PayoutAccount,
+	type PayoutBalance,
+	PayoutBalanceCard,
+} from "./payout-balance-card";
+import { PayoutFAQ } from "./payout-faq";
+import {
+	type PayoutHistoryItem,
+	PayoutHistoryTable,
+} from "./payout-history-table";
 
 interface PayoutViewProps {
-	balance: any;
-	payoutAccount: any;
-	history: any[];
+	balance: PayoutBalance;
+	payoutAccount: PayoutAccount | null | undefined;
+	history: PayoutHistoryItem[];
 }
 
 export function PayoutView({
