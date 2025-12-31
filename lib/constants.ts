@@ -9,3 +9,6 @@ export const TRANSACTION_TYPES = [
 ] as const;
 
 export const TRANSACTION_STATUSES = ["ongoing", "completed", "declined"] as const;
+
+export const PLATFORM_FEE_PERCENT = 0.1; // 10%
+export const MIN_PAYOUT_AMOUNT = 50.0;
