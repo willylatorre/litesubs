@@ -85,11 +85,13 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	const session = authClient.useSession();
-	const user = session.data?.user || {
-		name: "User",
-		email: "user@example.com",
-		image: "",
-	};
+	const user = session.data?.user
+		? {
+				name: session.data.user.name,
+				email: session.data.user.email,
+				avatar: session.data.user.image || "",
+			}
+		: undefined;
 
 	return (
 		<Sidebar collapsible="offcanvas" {...props}>
@@ -136,13 +138,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 				<NavSecondary items={data.navSecondary} className="mt-auto" />
 			</SidebarContent>
 			<SidebarFooter>
-				<NavUser
-					user={{
-						name: user.name,
-						email: user.email,
-						avatar: user.image || "",
-					}}
-				/>
+				<NavUser user={user} />
 			</SidebarFooter>
 		</Sidebar>
 	);
