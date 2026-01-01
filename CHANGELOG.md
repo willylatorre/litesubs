@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - 2026-01-01
+
+### Added
+- **Landing Page & SEO**:
+  - Improved the landing page with a minimalist 3-step "How it works" demo.
+  - Added comprehensive metadata (OpenGraph/Twitter/Canonical) and JSON-LD structured data.
+  - Added `app/robots.ts` and `app/sitemap.ts` for better indexing.
+- **Payment Links**:
+  - Added Stripe payment link generation for a specific customer + pack from the Customer details subscription row.
+- **Payouts**:
+  - Implemented the payouts flow with balance/earnings history and a dedicated `app/dashboard/payouts` page.
+- **Help & FAQ**:
+  - Added a dedicated dashboard FAQ page at `app/dashboard/faq`.
+
 ## [Unreleased] - 2025-12-29
 
 ### Added
