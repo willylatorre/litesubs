@@ -300,9 +300,27 @@ export async function requestPayout(
 
 			// 4. Trigger Stripe Payout (Global Payouts V2 API)
 			try {
-				const stripe = getStripe();
-				const outboundPayment =
-					await stripe.v2.moneyManagement.outboundPayments.create({
+				// The stable Stripe SDK types don't currently expose all v2 "moneyManagement" APIs.
+				// Use a narrow runtime-checked escape hatch so `next build` (which runs TS) succeeds
+				// while still failing loudly at runtime if the method isn't available.
+				const stripe = getStripe() as unknown as {
+					v2?: {
+						moneyManagement?: {
+							outboundPayments?: {
+								create?: (params: unknown) => Promise<{ id: string }>;
+							};
+						};
+					};
+				};
+
+				const createOutboundPayment = stripe.v2?.moneyManagement?.outboundPayments?.create;
+				if (!createOutboundPayment) {
+					throw new Error(
+						"Stripe SDK does not support v2 moneyManagement outboundPayments in this build. Update the payout implementation or use a Stripe SDK version that supports this API."
+					);
+				}
+
+				const outboundPayment = await createOutboundPayment({
 						from: {
 							financial_account: process.env.STRIPE_FINANCIAL_ACCOUNT_ID || "",
 							currency: "usd",
