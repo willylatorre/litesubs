@@ -301,8 +301,12 @@ export async function requestPayout(
 			// 4. Trigger Stripe Payout (Global Payouts V2 API)
 			try {
 				const stripe = getStripe();
-				const outboundPayment =
-					await stripe.v2.moneyManagement.outboundPayments.create({
+				// Stripe's SDK doesn't always ship typed helpers for every v2/preview endpoint.
+				// Use `rawRequest` to call the endpoint directly while keeping a stable `stripe` SDK version.
+				const outboundPaymentResponse = await stripe.rawRequest(
+					"POST",
+					"/v2/money_management/outbound_payments",
+					{
 						from: {
 							financial_account: process.env.STRIPE_FINANCIAL_ACCOUNT_ID || "",
 							currency: "usd",
@@ -315,7 +319,14 @@ export async function requestPayout(
 							currency: "usd",
 						},
 						description: `Payout for user ${userId}`,
-					});
+					},
+				);
+
+				const outboundPaymentId = (outboundPaymentResponse as unknown as { id?: unknown })
+					.id;
+				if (typeof outboundPaymentId !== "string" || outboundPaymentId.length === 0) {
+					throw new Error("Stripe payout creation failed: missing outbound payment id");
+				}
 
 				// 5. Update status and add ledger entry atomically
 				await db.transaction(async (tx) => {
@@ -323,7 +334,7 @@ export async function requestPayout(
 						.update(payouts)
 						.set({
 							status: "processing",
-							stripePayoutId: outboundPayment.id,
+							stripePayoutId: outboundPaymentId,
 						})
 						.where(eq(payouts.id, payoutId));
 
