@@ -2,14 +2,30 @@ import { stripe as baStripe } from "@better-auth/stripe";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
+import crypto from "node:crypto";
 import { db } from "@/app/db"; // your drizzle instance
 import { getStripe } from "@/lib/stripe";
+
+const buildPhases = new Set(["phase-production-build", "phase-export"]);
+const isBuildTime = buildPhases.has(process.env.NEXT_PHASE ?? "");
+
+const betterAuthSecret =
+	process.env.BETTER_AUTH_SECRET ??
+	((isBuildTime || process.env.NODE_ENV !== "production")
+		? crypto.randomBytes(32).toString("hex")
+		: undefined);
+
+if (!process.env.BETTER_AUTH_SECRET && !isBuildTime && process.env.NODE_ENV !== "production") {
+	console.warn(
+		"[better-auth] BETTER_AUTH_SECRET is not set. Using a temporary random secret for this process."
+	);
+}
 
 export const auth = betterAuth({
 	database: drizzleAdapter(db, {
 		provider: "pg", // or "mysql", "sqlite"
 	}),
-	secret: process.env.BETTER_AUTH_SECRET as string,
+	secret: betterAuthSecret,
 	emailAndPassword: {
 		enabled: true,
 	},

@@ -112,5 +112,18 @@
 		"better-auth": {
 			"drizzle-orm": "^0.45.1"
 		}
+	},
+	"pnpm": {
+		"onlyBuiltDependencies": [
+			"@prisma/engines",
+			"core-js",
+			"esbuild",
+			"node-pty",
+			"prisma",
+			"protobufjs",
+			"sharp",
+			"tree-sitter-bash",
+			"unrs-resolver"
+		]
 	}
 }
