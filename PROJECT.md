@@ -58,17 +58,17 @@ This model establishes a direct relationship between the creator and the buyer, 
 - [ ] **Help & FAQ:** Add a dedicated Help/FAQ page for both creators and customers.
 
 ### 🚀 Polish & Performance
-- [ ] **Performance Audit:** Review Server vs. Client component usage to optimize initial load times and interactivity. Perform an analysis of the main pages to address architectural correctness.
- - [ ] Analyze if calls can be optimized
- - [ ] Divide complex pages in smaller subcomponents
- - [ ] Generate a list of all the possible improvements and best practice recommendations to be taken. Divide them by page.
-- [ ] **Stripe Webhook Reliability:** Ensure idempotent processing of Stripe events to handle retries safely.
-- [ ] **Better ui:**
-  - [ ] Ensure font sizes across the whole app. All titles need to have the same font size and weight. Same thing goes for modals, buttons, etc.
-  - [ ] All cards need to have the same layouts and dimensions.
-  - [ ] All tables need to have the same layouts, dimensions and backgrounds.
-  - [ ] Make the decrease-credit-button component more elevated and minimalist. Same thing with the manage-subscription one.
-  - [ ] Ensure UI consistency.
+- [x] **Performance Audit:** Review Server vs. Client component usage to optimize initial load times and interactivity. Perform an analysis of the main pages to address architectural correctness. See `PERFORMANCE_AUDIT.md` for full details.
+ - [x] Analyze if calls can be optimized
+ - [x] Divide complex pages in smaller subcomponents
+ - [x] Generate a list of all the possible improvements and best practice recommendations to be taken. Divide them by page.
+- [x] **Stripe Webhook Reliability:** Ensure idempotent processing of Stripe events to handle retries safely.
+- [x] **Better ui:**
+  - [x] Ensure font sizes across the whole app. All titles need to have the same font size and weight. Same thing goes for modals, buttons, etc.
+  - [x] All cards need to have the same layouts and dimensions.
+  - [x] All tables need to have the same layouts, dimensions and backgrounds.
+  - [x] Make the decrease-credit-button component more elevated and minimalist. Same thing with the manage-subscription one.
+  - [x] Ensure UI consistency.
 
 ### Integrations
 - [ ] **Stripe connect:** Eplore allowing users to connect their own "stripe" account so the purchases of the packs will go directly to them. If connected, we skip/disable the whole Payouts section as it is handled automatically.

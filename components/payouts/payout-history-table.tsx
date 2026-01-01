@@ -58,7 +58,7 @@ export function PayoutHistoryTable({ history }: PayoutHistoryTableProps) {
 	};
 
 	return (
-		<div className="rounded-md border">
+		<div className="table-container">
 			<Table>
 				<TableHeader>
 					<TableRow>

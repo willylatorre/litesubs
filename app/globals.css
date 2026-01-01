@@ -169,6 +169,51 @@ code {
 }
 
 @layer components {
+	/* Consistent page header styling */
+	.page-header {
+		@apply flex items-center justify-between;
+	}
+	
+	.page-title {
+		@apply text-2xl font-bold tracking-tight;
+	}
+	
+	.page-description {
+		@apply text-muted-foreground text-sm;
+	}
+	
+	/* Consistent section header styling */
+	.section-title {
+		@apply text-lg font-semibold;
+	}
+	
+	/* Consistent table container styling */
+	.table-container {
+		@apply rounded-md border bg-card;
+	}
+	
+	/* Consistent card stat styling */
+	.stat-card {
+		@apply from-primary/5 to-card bg-gradient-to-t shadow-xs;
+	}
+	
+	.stat-card-value {
+		@apply text-2xl font-semibold tabular-nums;
+	}
+	
+	/* Consistent modal title styling */
+	.modal-title {
+		@apply text-lg font-bold;
+	}
+	
+	.modal-description {
+		@apply text-sm text-muted-foreground;
+	}
+	
+	/* Minimalist action button */
+	.action-btn-minimal {
+		@apply h-8 px-3 text-xs font-medium rounded-md border bg-background hover:bg-accent transition-colors;
+	}
 }
 
 @layer base {
