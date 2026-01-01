@@ -17,7 +17,7 @@ export function getStripe() {
 	}
 
 	stripeSingleton = new Stripe(apiKey, {
-		apiVersion: "2025-12-15.clover",
+		apiVersion: "2025-12-15.preview",
 		typescript: true,
 	});
 
