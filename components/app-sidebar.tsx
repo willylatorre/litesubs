@@ -4,6 +4,7 @@ import {
 	IconChecklist,
 	IconCode,
 	IconDashboard,
+	IconHelpCircle,
 	IconPackage,
 	IconUsers,
 	IconWallet,
@@ -65,21 +66,11 @@ const data = {
 		},
 	],
 	navSecondary: [
-		// {
-		//   title: "Settings",
-		//   url: "#",
-		//   icon: IconSettings,
-		// },
-		// {
-		//   title: "Get Help",
-		//   url: "#",
-		//   icon: IconHelp,
-		// },
-		// {
-		//   title: "Search",
-		//   url: "#",
-		//   icon: IconSearch,
-		// },
+		{
+			title: "FAQ",
+			url: "/dashboard/faq",
+			icon: IconHelpCircle,
+		},
 	],
 };
 

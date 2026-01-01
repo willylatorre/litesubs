@@ -26,7 +26,7 @@ export function PayoutFAQ() {
 			<AccordionItem value="item-3">
 				<AccordionTrigger>What is the platform fee?</AccordionTrigger>
 				<AccordionContent>
-					A 1% platform fee is deducted from your gross earnings to cover
+					A 10% platform fee is deducted from your gross earnings to cover
 					transaction costs and platform maintenance. This is deducted before
 					funds are added to your available balance.
 				</AccordionContent>
