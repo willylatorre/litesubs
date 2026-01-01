@@ -1,10 +1,8 @@
 "use client";
 
 import {
-	IconCreditCard,
 	IconDotsVertical,
 	IconLogout,
-	IconNotification,
 	IconUserCircle,
 } from "@tabler/icons-react";
 import Link from "next/link";
@@ -31,7 +29,7 @@ import { authClient } from "@/lib/auth-client";
 export function NavUser({
 	user,
 }: {
-	user: {
+	user?: {
 		name: string;
 		email: string;
 		avatar?: string;
@@ -39,6 +37,21 @@ export function NavUser({
 }) {
 	const { isMobile } = useSidebar();
 	const router = useRouter();
+
+	if (!user) {
+		return (
+			<SidebarMenu>
+				<SidebarMenuItem>
+					<SidebarMenuButton asChild size="lg">
+						<Link href="/auth/sign-in">
+							<IconUserCircle className="size-4" />
+							<span>Sign in</span>
+						</Link>
+					</SidebarMenuButton>
+				</SidebarMenuItem>
+			</SidebarMenu>
+		);
+	}
 
 	const handleLogout = async () => {
 		await authClient.signOut();
