@@ -92,28 +92,28 @@ export function PayoutBalanceCard({
 				</CardContent>
 			</Card>
 
-			<Card>
+			<Card className="stat-card">
 				<CardHeader className="pb-2">
 					<CardTitle className="text-sm font-medium text-muted-foreground">
 						Total Earnings
 					</CardTitle>
 				</CardHeader>
 				<CardContent>
-					<div className="text-2xl font-bold">${totalEarnings.toFixed(2)}</div>
+					<div className="stat-card-value">${totalEarnings.toFixed(2)}</div>
 					<p className="text-xs text-muted-foreground">
 						Gross earnings before fees
 					</p>
 				</CardContent>
 			</Card>
 
-			<Card>
+			<Card className="stat-card">
 				<CardHeader className="pb-2">
 					<CardTitle className="text-sm font-medium text-muted-foreground">
 						Total Paid Out
 					</CardTitle>
 				</CardHeader>
 				<CardContent>
-					<div className="text-2xl font-bold">${totalPaidOut.toFixed(2)}</div>
+					<div className="stat-card-value">${totalPaidOut.toFixed(2)}</div>
 					<p className="text-xs text-muted-foreground">
 						Successfully transferred
 					</p>

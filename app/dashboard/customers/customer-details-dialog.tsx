@@ -163,18 +163,20 @@ export function CustomerDetailsDialog({
 												</span>
 											</div>
 											{!demoData && (
-												<div className="flex items-center gap-1">
+												<div className="flex items-center gap-0.5">
 													<DecreaseCreditButton
 														subscriptionId={sub.id}
 														currentCredits={sub.credits}
 														size="sm"
 														onSuccess={handleSuccess}
+														showLabel={false}
 													/>
 													<ManageSubscriptionCreditsDialog
 														subscriptionId={sub.id}
 														planName={sub.product.name}
 														currentCredits={sub.credits}
 														onSuccess={handleSuccess}
+														compact
 													/>
 													<SubscriptionMoreActions
 														customerId={customerId}

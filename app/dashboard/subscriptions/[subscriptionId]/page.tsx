@@ -59,10 +59,10 @@ export default async function SubscriptionDetailPage({
 			</div>
 
 			<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-				<Card className="from-primary/5 to-card bg-gradient-to-t shadow-xs">
+				<Card className="stat-card @container/card">
 					<CardHeader>
 						<CardDescription>Credits Left</CardDescription>
-						<CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+						<CardTitle className="stat-card-value @[250px]/card:text-3xl">
 							{sub.credits}
 						</CardTitle>
 					</CardHeader>
@@ -70,11 +70,11 @@ export default async function SubscriptionDetailPage({
 			</div>
 
 			<div className="mt-6">
-				<h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
+				<h2 className="section-title flex items-center gap-2 mb-4">
 					<CreditCard className="h-5 w-5" />
 					Transaction Ledger
 				</h2>
-				<div className="rounded-md border bg-card">
+				<div className="table-container">
 					<Table>
 						<TableHeader>
 							<TableRow>
