@@ -21,6 +21,7 @@ import { user } from "./auth-schema";
 // Re-export auth schema
 export * from "./auth-schema";
 export * from "./payouts-schema";
+export * from "./stripe-connect-schema";
 
 // Enums
 export const productTypeEnum = pgEnum("product_type", PRODUCT_TYPES);
@@ -107,6 +108,10 @@ export const transactions = pgTable(
 		status: transactionStatusEnum("status").default("ongoing").notNull(),
 		description: text("description"),
 		stripeCheckoutId: text("stripe_checkout_id").unique(),
+		// Stripe Connect fields
+		usesStripeConnect: boolean("uses_stripe_connect").default(false),
+		stripeApplicationFee: integer("stripe_application_fee"), // Platform fee in cents
+		stripeConnectAccountId: text("stripe_connect_account_id"), // Connected account ID
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
@@ -116,6 +121,7 @@ export const transactions = pgTable(
 		index("tx_created_at_idx").on(table.createdAt),
 		index("tx_user_type_idx").on(table.userId, table.type),
 		index("tx_creator_type_idx").on(table.creatorId, table.type),
+		index("tx_uses_connect_idx").on(table.usesStripeConnect),
 	],
 );
 

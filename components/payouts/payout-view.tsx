@@ -12,17 +12,20 @@ import {
 	type PayoutHistoryItem,
 	PayoutHistoryTable,
 } from "./payout-history-table";
+import { SwitchToConnectBanner } from "./switch-to-connect-banner";
 
 interface PayoutViewProps {
 	balance: PayoutBalance;
 	payoutAccount: PayoutAccount | null | undefined;
 	history: PayoutHistoryItem[];
+	showConnectBanner?: boolean;
 }
 
 export function PayoutView({
 	balance,
 	payoutAccount,
 	history,
+	showConnectBanner = false,
 }: PayoutViewProps) {
 	const router = useRouter();
 
@@ -57,6 +60,9 @@ export function PayoutView({
 					</CardContent>
 				</Card>
 			</div>
+
+			{/* Banner suggesting Stripe Connect */}
+			{showConnectBanner && <SwitchToConnectBanner />}
 		</div>
 	);
 }
