@@ -3,6 +3,10 @@ import { headers } from "next/headers";
 import { db } from "@/app/db";
 import { liteSubscriptions, transactions } from "@/app/db/schema";
 import { earningsLedger, payouts } from "@/app/db/payouts-schema";
+import {
+	type StripeConnectStatus,
+	stripeConnectAccounts,
+} from "@/app/db/stripe-connect-schema";
 import { getStripe } from "@/lib/stripe";
 import type { Stripe } from "stripe";
 
@@ -66,6 +70,13 @@ async function handleCheckoutCompleted(
 					.where(eq(liteSubscriptions.id, subscription.id));
 			}
 
+			// Check if this is a Stripe Connect transaction
+			const usesStripeConnect = metadata.usesStripeConnect === "true";
+			const stripeConnectAccountId = metadata.stripeConnectAccountId || null;
+			const applicationFeeAmount = metadata.applicationFeeAmount
+				? parseInt(metadata.applicationFeeAmount, 10)
+				: null;
+
 			// Update or Insert transaction
 			if (existingTransaction) {
 				await tx
@@ -74,6 +85,9 @@ async function handleCheckoutCompleted(
 						status: "completed",
 						amountMoney: checkoutSession.amount_total ?? existingTransaction.amountMoney,
 						currency: (checkoutSession.currency as any) ?? existingTransaction.currency,
+						usesStripeConnect,
+						stripeApplicationFee: applicationFeeAmount,
+						stripeConnectAccountId,
 					})
 					.where(eq(transactions.id, existingTransaction.id));
 			} else {
@@ -89,11 +103,15 @@ async function handleCheckoutCompleted(
 					description: `Purchase of ${creditsToAdd} credits`,
 					stripeCheckoutId: checkoutSession.id,
 					status: "completed",
+					usesStripeConnect,
+					stripeApplicationFee: applicationFeeAmount,
+					stripeConnectAccountId,
 				});
 			}
 
-			// Add to Earnings Ledger (only if not already added)
-			if (metadata.creatorId && checkoutSession.amount_total) {
+			// Add to Earnings Ledger (only for non-Connect transactions)
+			// For Stripe Connect, funds go directly to creator, so no ledger entry needed
+			if (!usesStripeConnect && metadata.creatorId && checkoutSession.amount_total) {
 				// Check if ledger entry already exists for this payment intent
 				const paymentIntentId = checkoutSession.payment_intent as string;
 				if (paymentIntentId) {
@@ -298,6 +316,74 @@ async function handlePayoutFailedOrCanceled(
 	}
 }
 
+/**
+ * Process account.updated event
+ * Updates Stripe Connect account status when account details change
+ */
+async function handleAccountUpdated(
+	account: Stripe.Account,
+	eventId: string
+): Promise<Response> {
+	try {
+		// Find the Connect account in our database
+		const existingAccount = await db.query.stripeConnectAccounts.findFirst({
+			where: eq(stripeConnectAccounts.stripeAccountId, account.id),
+		});
+
+		if (!existingAccount) {
+			console.log("Connect account not found in database", {
+				eventId,
+				accountId: account.id,
+			});
+			return new Response(null, { status: 200 });
+		}
+
+		// Determine the status
+		let status: StripeConnectStatus = "pending";
+		if (account.details_submitted) {
+			if (account.charges_enabled && account.payouts_enabled) {
+				status = "active";
+			} else if (
+				account.requirements?.disabled_reason ||
+				(account.requirements?.currently_due?.length ?? 0) > 0
+			) {
+				status = "restricted";
+			}
+		}
+
+		// Update the database
+		await db
+			.update(stripeConnectAccounts)
+			.set({
+				status,
+				chargesEnabled: account.charges_enabled || false,
+				payoutsEnabled: account.payouts_enabled || false,
+				detailsSubmitted: account.details_submitted || false,
+				country: account.country,
+				defaultCurrency: account.default_currency,
+				updatedAt: new Date(),
+			})
+			.where(eq(stripeConnectAccounts.stripeAccountId, account.id));
+
+		console.log("Connect account updated", {
+			eventId,
+			accountId: account.id,
+			status,
+			chargesEnabled: account.charges_enabled,
+			payoutsEnabled: account.payouts_enabled,
+		});
+
+		return new Response(null, { status: 200 });
+	} catch (error: any) {
+		console.error("Failed to process account.updated:", {
+			eventId,
+			accountId: account.id,
+			error: error.message,
+		});
+		return new Response(`Webhook Error: ${error.message}`, { status: 500 });
+	}
+}
+
 export async function POST(req: Request) {
 	if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_PURCHASES) {
 		return new Response("Stripe is not configured", { status: 500 });
@@ -351,6 +437,9 @@ export async function POST(req: Request) {
 				event.type,
 				eventId
 			);
+
+		case "account.updated":
+			return handleAccountUpdated(session as Stripe.Account, eventId);
 
 		default:
 			console.log("Unhandled webhook event type", { eventType: event.type });

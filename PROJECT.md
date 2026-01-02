@@ -71,7 +71,7 @@ This model establishes a direct relationship between the creator and the buyer, 
   - [x] Ensure UI consistency.
 
 ### Integrations
-- [ ] **Stripe connect:** Explore allowing users to connect their own "stripe" account so the purchases of the packs will go directly to them. If connected, we skip/disable the whole Payouts section as it is handled automatically.
+- [x] **Stripe connect:** Explore allowing users to connect their own "stripe" account so the purchases of the packs will go directly to them. If connected, we skip/disable the whole Payouts section as it is handled automatically.
 - [ ] **Cal.com Integration:** Explore allowing users to connect their account and automatically "spend" credits when booking appointments via Cal.com through a webhook.
 - [ ] **Calendly Integration:** Explore allowing users to connect their account and automatically "spend" credits when booking appointments via Cal.com through a webhook.
 

@@ -12,3 +12,13 @@ export const TRANSACTION_STATUSES = ["ongoing", "completed", "declined"] as cons
 
 export const PLATFORM_FEE_PERCENT = 0.1; // 10%
 export const MIN_PAYOUT_AMOUNT = 50.0;
+
+// Stripe Connect
+export const STRIPE_CONNECT_ACCOUNT_TYPE = "express"; // 'express' or 'standard'
+export const STRIPE_CONNECT_STATUSES = [
+	"pending",
+	"active",
+	"restricted",
+	"disabled",
+] as const;
+export const PAYOUT_METHODS = ["stripe_connect", "platform_payouts"] as const;

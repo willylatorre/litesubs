@@ -24,6 +24,11 @@ type DbOrTx = Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db;
 // Helpers
 
 async function calculateUserBalance(tx: DbOrTx, userId: string) {
+	// Calculate balance for platform payouts (non-Connect transactions only)
+	// Note: Stripe Connect transactions are NOT added to the earningsLedger
+	// because those payments go directly to the creator's Stripe account.
+	// This ensures the balance here only reflects funds held by the platform.
+	
 	// Use SQL aggregation for efficiency - groups by transaction type and sums amounts
 	const ledgerTotals = await tx
 		.select({
@@ -242,6 +247,20 @@ export async function requestPayout(
 		async (session, input: z.infer<typeof requestPayoutSchema>) => {
 			const userId = session.user.id;
 			const { amount } = input;
+
+			// Check if user has an active Stripe Connect account - they shouldn't use manual payouts
+			const { stripeConnectAccounts } = await import(
+				"@/app/db/stripe-connect-schema"
+			);
+			const connectAccount = await db.query.stripeConnectAccounts.findFirst({
+				where: eq(stripeConnectAccounts.userId, userId),
+			});
+
+			if (connectAccount?.status === "active" && connectAccount.chargesEnabled) {
+				throw new Error(
+					"You have Stripe Connect enabled. Payments go directly to your Stripe account.",
+				);
+			}
 
 			// 1. Validate and create payout record inside a transaction
 			const result = await db.transaction(async (tx) => {
