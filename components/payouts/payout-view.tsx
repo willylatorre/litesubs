@@ -35,6 +35,9 @@ export function PayoutView({
 
 	return (
 		<div className="space-y-4">
+			{/* Banner suggesting Stripe Connect - shown at top */}
+			{showConnectBanner && <SwitchToConnectBanner />}
+
 			<PayoutBalanceCard
 				balance={balance}
 				payoutAccount={payoutAccount}
@@ -60,9 +63,6 @@ export function PayoutView({
 					</CardContent>
 				</Card>
 			</div>
-
-			{/* Banner suggesting Stripe Connect */}
-			{showConnectBanner && <SwitchToConnectBanner />}
 		</div>
 	);
 }

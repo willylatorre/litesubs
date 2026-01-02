@@ -248,7 +248,7 @@ export async function requestPayout(
 			const userId = session.user.id;
 			const { amount } = input;
 
-			// Check if user has Stripe Connect enabled - they shouldn't use manual payouts
+			// Check if user has an active Stripe Connect account - they shouldn't use manual payouts
 			const { stripeConnectAccounts } = await import(
 				"@/app/db/stripe-connect-schema"
 			);
@@ -256,7 +256,7 @@ export async function requestPayout(
 				where: eq(stripeConnectAccounts.userId, userId),
 			});
 
-			if (connectAccount?.status === "active") {
+			if (connectAccount?.status === "active" && connectAccount.chargesEnabled) {
 				throw new Error(
 					"You have Stripe Connect enabled. Payments go directly to your Stripe account.",
 				);

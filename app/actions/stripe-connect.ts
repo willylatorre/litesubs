@@ -7,7 +7,6 @@ import {
 	type StripeConnectStatus,
 	stripeConnectAccounts,
 } from "@/app/db/stripe-connect-schema";
-import { userPayoutPreferences } from "@/app/db/stripe-connect-schema";
 import { STRIPE_CONNECT_ACCOUNT_TYPE } from "@/lib/constants";
 import { authenticatedAction } from "@/lib/safe-action";
 import { getStripe } from "@/lib/stripe";
@@ -107,23 +106,6 @@ export async function createConnectAccount() {
 			country: account.country,
 			defaultCurrency: account.default_currency,
 		});
-
-		// Also set the payout preference to stripe_connect
-		const existingPref = await db.query.userPayoutPreferences.findFirst({
-			where: eq(userPayoutPreferences.userId, userId),
-		});
-
-		if (existingPref) {
-			await db
-				.update(userPayoutPreferences)
-				.set({ method: "stripe_connect", updatedAt: new Date() })
-				.where(eq(userPayoutPreferences.userId, userId));
-		} else {
-			await db.insert(userPayoutPreferences).values({
-				userId,
-				method: "stripe_connect",
-			});
-		}
 
 		// Create account link for onboarding
 		const accountLink = await createAccountLink(stripe, account.id);
@@ -284,11 +266,6 @@ export async function disconnectConnectAccount() {
 				updatedAt: new Date(),
 			})
 			.where(eq(stripeConnectAccounts.userId, session.user.id));
-
-		// Clear the payout preference so user can choose again
-		await db
-			.delete(userPayoutPreferences)
-			.where(eq(userPayoutPreferences.userId, session.user.id));
 
 		revalidatePath("/dashboard/payouts");
 
