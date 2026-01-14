@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { startTransition, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { checkTransactionStatus } from "@/app/actions/transactions";
 
@@ -10,24 +9,28 @@ interface UseTransactionCheckProps {
 }
 
 export function useTransactionCheck({ onSuccess }: UseTransactionCheckProps = {}) {
-	const searchParams = useSearchParams();
 	const pollingRef = useRef<NodeJS.Timeout | null>(null);
-
-	const success = searchParams.get("success");
-	const purchasedProductId = searchParams.get("productId");
+	// Use ref for onSuccess to avoid effect re-runs when callback changes
+	const onSuccessRef = useRef(onSuccess);
+	onSuccessRef.current = onSuccess;
 
 	useEffect(() => {
+		// Read params on-demand inside effect to avoid subscribing to all URL changes
+		const params = new URLSearchParams(window.location.search);
+		const success = params.get("success");
+		const purchasedProductId = params.get("productId");
+
 		if (success && purchasedProductId) {
 			toast.info("Purchase successful! Your credits are being updated...");
 
 			// Clear URL params
-			const newSearchParams = new URLSearchParams(searchParams.toString());
-			newSearchParams.delete("success");
-			newSearchParams.delete("productId");
+			params.delete("success");
+			params.delete("productId");
+			const newQueryString = params.toString();
 			window.history.replaceState(
 				null,
 				"",
-				`${window.location.pathname}?${newSearchParams.toString()}`,
+				newQueryString ? `${window.location.pathname}?${newQueryString}` : window.location.pathname,
 			);
 
 			const pollForUpdates = async () => {
@@ -39,7 +42,12 @@ export function useTransactionCheck({ onSuccess }: UseTransactionCheckProps = {}
 					const result = await checkTransactionStatus(purchasedProductId);
 
 					if (result?.status === "completed") {
-						if (onSuccess) await onSuccess();
+						// Use startTransition for non-urgent updates to maintain UI responsiveness
+						startTransition(() => {
+							if (onSuccessRef.current) {
+								onSuccessRef.current();
+							}
+						});
 						toast.success("Credits updated successfully!");
 						return true;
 					}
@@ -72,5 +80,5 @@ export function useTransactionCheck({ onSuccess }: UseTransactionCheckProps = {}
 				}
 			};
 		}
-	}, [success, purchasedProductId, searchParams, onSuccess]);
+	}, []); // Only run once on mount - params are read on-demand inside the effect
 }

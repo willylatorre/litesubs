@@ -4,6 +4,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface SectionCardsProps {
 	totalRevenue: number;
@@ -40,6 +41,31 @@ export function SectionCards({
 					<CardTitle className="stat-card-value @[250px]/card:text-3xl">
 						{totalCustomers}
 					</CardTitle>
+				</CardHeader>
+			</Card>
+		</div>
+	);
+}
+
+export function SectionCardsSkeleton() {
+	return (
+		<div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+			<Card className="stat-card @container/card">
+				<CardHeader>
+					<CardDescription>Total Revenue</CardDescription>
+					<Skeleton className="h-8 w-24 mt-1" />
+				</CardHeader>
+			</Card>
+			<Card className="stat-card @container/card">
+				<CardHeader>
+					<CardDescription>Active Plans</CardDescription>
+					<Skeleton className="h-8 w-16 mt-1" />
+				</CardHeader>
+			</Card>
+			<Card className="stat-card @container/card">
+				<CardHeader>
+					<CardDescription>Total Customers</CardDescription>
+					<Skeleton className="h-8 w-16 mt-1" />
 				</CardHeader>
 			</Card>
 		</div>

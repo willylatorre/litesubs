@@ -2,8 +2,7 @@
 
 import { IconAlertCircle } from "@tabler/icons-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getDashboardData } from "@/app/actions/dashboard";
 import { BuyButton } from "@/components/buy-button";
 import { ConsumerStatsCards } from "@/components/consumer-stats-cards";
@@ -48,12 +47,19 @@ interface DashboardClientProps {
 }
 
 export function DashboardClient({ initialData }: DashboardClientProps) {
-	const searchParams = useSearchParams();
 	const [data, setData] = useState(initialData);
 	const [isRefreshing, setIsRefreshing] = useState(false);
+	// Track purchased product ID locally to avoid re-renders from useSearchParams subscription
+	const [purchasedProductId, setPurchasedProductId] = useState<string | null>(null);
 
-	const success = searchParams.get("success");
-	const purchasedProductId = searchParams.get("productId");
+	// Read params on-demand at mount to avoid subscribing to all URL changes
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		const productId = params.get("productId");
+		if (productId) {
+			setPurchasedProductId(productId);
+		}
+	}, []);
 
 	const fetchData = useCallback(async () => {
 		setIsRefreshing(true);
@@ -69,7 +75,10 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 
 	// Use the custom hook for transaction checking
 	useTransactionCheck({
-		onSuccess: fetchData,
+		onSuccess: async () => {
+			await fetchData();
+			setPurchasedProductId(null); // Clear purchased product state after success
+		},
 	});
 
 	const { stats, subscriptions, pendingInvites } = data;
@@ -130,7 +139,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 								{allSubscriptions.map((sub) => {
 									const isPurchased =
-										success && sub.product.id === purchasedProductId;
+										purchasedProductId && sub.product.id === purchasedProductId;
 									return (
 										<PackItem
 											key={sub.id}

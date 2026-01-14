@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { getPackDetails } from "@/app/actions/products";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -35,22 +36,21 @@ export function PackDetailsDialog({
 	children?: React.ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
-	const [details, setDetails] = useState<any>(null);
-	const [loading, setLoading] = useState(false);
 	const [inviteOpen, setInviteOpen] = useState(false);
 
-	useEffect(() => {
-		if (open) {
-			setLoading(true);
-			getPackDetails(packId)
-				.then((res) => {
-					if (res.success) {
-						setDetails(res.data);
-					}
-				})
-				.finally(() => setLoading(false));
-		}
-	}, [open, packId]);
+	// Use React Query for automatic caching and deduplication
+	const { data: details, isLoading: loading } = useQuery({
+		queryKey: ["pack-details", packId],
+		queryFn: async () => {
+			const res = await getPackDetails(packId);
+			if (res.success) {
+				return res.data;
+			}
+			throw new Error("Failed to fetch pack details");
+		},
+		enabled: open, // Only fetch when dialog opens
+		staleTime: 30000, // Cache for 30 seconds
+	});
 
 	const displayedSubscribers = details?.subscribers?.slice(0, 5) || [];
 	const hasMoreSubscribers = (details?.subscribers?.length || 0) > 5;
