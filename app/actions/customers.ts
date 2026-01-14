@@ -61,43 +61,43 @@ export async function getCreatorCustomers() {
 
 export async function getCustomerDetails(customerId: string) {
 	return authenticatedAction(async (session) => {
-		const customer = await db.query.user.findFirst({
-			where: eq(user.id, customerId),
-		});
+		// Run all independent queries in parallel for ~4x faster response
+		const [customer, subscriptions, [spentResult], customerTransactions] =
+			await Promise.all([
+				db.query.user.findFirst({
+					where: eq(user.id, customerId),
+				}),
+				db.query.liteSubscriptions.findMany({
+					where: and(
+						eq(liteSubscriptions.userId, customerId),
+						eq(liteSubscriptions.creatorId, session.user.id),
+					),
+					with: {
+						product: true,
+					},
+				}),
+				db
+					.select({ value: sum(transactions.amountMoney) })
+					.from(transactions)
+					.where(
+						and(
+							eq(transactions.userId, customerId),
+							eq(transactions.creatorId, session.user.id),
+							eq(transactions.type, "purchase"),
+						),
+					),
+				db.query.transactions.findMany({
+					where: and(
+						eq(transactions.userId, customerId),
+						eq(transactions.creatorId, session.user.id),
+					),
+					orderBy: (transactions, { desc }) => [desc(transactions.createdAt)],
+				}),
+			]);
 
 		if (!customer) {
 			return { success: false, error: "Customer not found" };
 		}
-
-		const subscriptions = await db.query.liteSubscriptions.findMany({
-			where: and(
-				eq(liteSubscriptions.userId, customerId),
-				eq(liteSubscriptions.creatorId, session.user.id),
-			),
-			with: {
-				product: true,
-			},
-		});
-
-		// Calculate total spent
-		const [spentResult] = await db
-			.select({ value: sum(transactions.amountMoney) })
-			.from(transactions)
-			.where(
-				and(
-					eq(transactions.userId, customerId),
-					eq(transactions.creatorId, session.user.id),
-					eq(transactions.type, "purchase"),
-				),
-			);
-
-		const customerTransactions = await db.query.transactions.findMany({
-			where: and(
-				eq(transactions.userId, customerId),
-				eq(transactions.creatorId, session.user.id),
-			),
-			orderBy: (transactions, { desc }) => [desc(transactions.createdAt)],
-		});
 
 		return {
 			success: true,
