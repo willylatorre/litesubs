@@ -33,9 +33,43 @@ function DashboardSkeleton() {
 async function DashboardContent() {
 	const data = await getDashboardData();
 
+	// Minimize serialization at RSC boundary - extract only required fields
+	// This reduces payload size and improves hydration performance
+	const clientData = {
+		stats: {
+			totalSpent: data.stats.totalSpent,
+			activeSubscriptionsCount: data.stats.activeSubscriptionsCount,
+		},
+		subscriptions: data.subscriptions.map((sub) => ({
+			id: sub.id,
+			credits: sub.credits,
+			product: {
+				id: sub.product.id,
+				name: sub.product.name,
+				price: sub.product.price,
+				description: sub.product.description,
+				currency: sub.product.currency,
+			},
+			creator: sub.creator ? { name: sub.creator.name } : null,
+		})),
+		pendingInvites: data.pendingInvites.map((invite) => ({
+			id: invite.id,
+			product: invite.product
+				? {
+						name: invite.product.name,
+						credits: invite.product.credits,
+						price: invite.product.price,
+						description: invite.product.description,
+						currency: invite.product.currency,
+					}
+				: null,
+			creator: { name: invite.creator.name },
+		})),
+	};
+
 	return (
 		<Suspense fallback={<DashboardSkeleton />}>
-			<DashboardClient initialData={data} />
+			<DashboardClient initialData={clientData} />
 		</Suspense>
 	);
 }
