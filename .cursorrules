@@ -5,3 +5,54 @@ Use the latest version of Shadcn to install new components, like this command to
 ```bash
 npx shadcn@latest add button
 ```
+
+# Agent Skills
+
+This project has installed agent skills from [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills). The skills are located in the `skills/` directory.
+
+## Available Skills
+
+### react-best-practices
+
+React and Next.js performance optimization guidelines from Vercel Engineering. Contains 40+ rules across 8 categories, prioritized by impact.
+
+**Use when:**
+- Writing new React components or Next.js pages
+- Implementing data fetching (client or server-side)
+- Reviewing code for performance issues
+- Optimizing bundle size or load times
+
+**Location:** `skills/react-best-practices/SKILL.md`
+
+### web-design-guidelines
+
+Review UI code for compliance with web interface best practices. Audits your code for 100+ rules covering accessibility, performance, and UX.
+
+**Use when:**
+- "Review my UI"
+- "Check accessibility"
+- "Audit design"
+- "Review UX"
+- "Check my site against best practices"
+
+**Location:** `skills/web-design-guidelines/SKILL.md`
+
+### vercel-deploy-claimable
+
+Deploy applications and websites to Vercel instantly. No authentication required. Deployments are "claimable" - users can transfer ownership to their own Vercel account.
+
+**Use when:**
+- "Deploy my app"
+- "Deploy this to production"
+- "Push this live"
+- "Deploy and give me the link"
+
+**Location:** `skills/vercel-deploy-claimable/SKILL.md`
+
+## Skill Usage
+
+Skills are automatically available once installed. Reference the corresponding SKILL.md file when relevant tasks are detected. For detailed rules and references:
+
+- React performance: See `skills/react-best-practices/references/` for complete documentation
+- Web design: Fetch guidelines from the source URL specified in the SKILL.md
+- Vercel deploy: Use the script at `skills/vercel-deploy-claimable/scripts/deploy.sh`
