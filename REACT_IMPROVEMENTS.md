@@ -93,16 +93,22 @@ const connectAccount = await getCreatorConnectAccount(product.creatorId)
 
 ## 🟠 HIGH (Priority 3)
 
-### 4. Add `React.cache()` for Per-Request Deduplication
+### 4. Add `React.cache()` for Per-Request Auth Deduplication
 
-**Files:** Multiple server actions and API routes
+**Files:** `lib/safe-action.ts`, `app/dashboard/payouts/page.tsx`
 
-**Issue:** Authentication and user data are fetched multiple times within the same request without deduplication.
+**Issue:** Pages like `payouts/page.tsx` call 3-6 server actions in the same request, each invoking `authenticatedAction` which calls auth separately.
 
-**Current Pattern:**
+**Example of redundant calls (same request):**
 ```typescript
-// Called multiple times in different server actions during the same request
-const session = await auth.api.getSession({ headers: await headers() })
+// payouts/page.tsx - auth is called 3+ times in one request!
+await syncPayoutAccountStatus()           // auth call #1
+const connectAccountRes = await getConnectAccountStatus()  // auth call #2  
+const [balanceRes, accountRes, historyRes] = await Promise.all([
+  getAccountBalance(),   // auth call #3
+  getPayoutAccount(),    // auth call #4
+  getPayoutHistory(),    // auth call #5
+])
 ```
 
 **Fix:** Create cached auth helper:
@@ -117,7 +123,15 @@ export const getCurrentSession = cache(async () => {
 })
 ```
 
-**Impact:** Eliminates redundant auth calls within the same request.
+Then use `getCurrentSession()` in `authenticatedAction` instead of direct auth call.
+
+**⚠️ Safety Note:** `React.cache()` is **per-request only** - it does NOT cache across requests:
+- Each HTTP request gets a fresh cache
+- Logout = new request = fresh auth state (returns null)
+- Login = new request = fresh auth state (returns session)
+- This is NOT like LRU caching that persists data
+
+**Impact:** Eliminates 3-5 redundant auth calls per page load on pages with multiple server actions.
 
 ---
 
