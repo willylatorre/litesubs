@@ -10,14 +10,39 @@ import { InviteItem } from "@/components/invite-item";
 import { PackItem } from "@/components/pack-item";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useTransactionCheck } from "@/hooks/use-transaction-check";
+
+// Minimized types for RSC boundary serialization
+interface SubscriptionData {
+	id: string;
+	credits: number;
+	product: {
+		id: string;
+		name: string;
+		price: number;
+		description: string | null;
+		currency: string;
+	};
+	creator: { name: string } | null;
+}
+
+interface InviteData {
+	id: string;
+	product: {
+		name: string;
+		credits: number;
+		price: number;
+		description: string | null;
+		currency: string;
+	} | null;
+	creator: { name: string };
+}
 
 interface DashboardClientProps {
 	initialData: {
 		stats: { totalSpent: number; activeSubscriptionsCount: number };
-		subscriptions: any[];
-		pendingInvites: any[];
+		subscriptions: SubscriptionData[];
+		pendingInvites: InviteData[];
 	};
 }
 
@@ -58,7 +83,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 
 	const { stats, subscriptions, pendingInvites } = data;
 	const allSubscriptions = subscriptions || [];
-	const hasLowCredits = allSubscriptions.some((s: any) => s.credits < 2);
+	const hasLowCredits = allSubscriptions.some((s) => s.credits < 2);
 
 	return (
 		<div className="@container/main flex flex-1 flex-col gap-2">
@@ -112,7 +137,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 							</div>
 						) : (
 							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-								{allSubscriptions.map((sub: any) => {
+								{allSubscriptions.map((sub) => {
 									const isPurchased =
 										purchasedProductId && sub.product.id === purchasedProductId;
 									return (

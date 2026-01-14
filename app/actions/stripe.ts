@@ -11,15 +11,18 @@ import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
 import { getStripe } from "@/lib/stripe";
 
 export async function createCheckoutSession(productId: string) {
-	const session = await auth.api.getSession({ headers: await headers() });
+	// Start independent operations early for faster checkout initiation
+	const sessionPromise = auth.api.getSession({ headers: await headers() });
+	const productPromise = db.query.products.findFirst({
+		where: eq(products.id, productId),
+	});
+
+	const session = await sessionPromise;
 	if (!session?.user) {
 		return { error: "Unauthorized" };
 	}
 
-	const product = await db.query.products.findFirst({
-		where: eq(products.id, productId),
-	});
-
+	const product = await productPromise;
 	if (!product) {
 		return { error: "Product not found" };
 	}

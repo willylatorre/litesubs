@@ -100,28 +100,33 @@ export async function getDashboardData() {
 
 export async function getCreatorStats() {
 	return authenticatedAction(async (session) => {
-		const [revenueResult] = await db
-			.select({ value: sum(transactions.amountMoney) })
-			.from(transactions)
-			.where(
-				and(
-					eq(transactions.creatorId, session.user.id),
-					eq(transactions.type, "purchase"),
-					eq(transactions.status, "completed"),
-				),
-			);
-
-		const [productsResult] = await db
-			.select({ count: count() })
-			.from(products)
-			.where(
-				and(eq(products.creatorId, session.user.id), eq(products.active, true)),
-			);
-
-		const [customersResult] = await db
-			.select({ count: countDistinct(liteSubscriptions.userId) })
-			.from(liteSubscriptions)
-			.where(eq(liteSubscriptions.creatorId, session.user.id));
+		// Run all independent queries in parallel for ~3x faster response
+		const [[revenueResult], [productsResult], [customersResult]] =
+			await Promise.all([
+				db
+					.select({ value: sum(transactions.amountMoney) })
+					.from(transactions)
+					.where(
+						and(
+							eq(transactions.creatorId, session.user.id),
+							eq(transactions.type, "purchase"),
+							eq(transactions.status, "completed"),
+						),
+					),
+				db
+					.select({ count: count() })
+					.from(products)
+					.where(
+						and(
+							eq(products.creatorId, session.user.id),
+							eq(products.active, true),
+						),
+					),
+				db
+					.select({ count: countDistinct(liteSubscriptions.userId) })
+					.from(liteSubscriptions)
+					.where(eq(liteSubscriptions.creatorId, session.user.id)),
+			]);
 
 		return {
 			success: true,
