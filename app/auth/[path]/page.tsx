@@ -1,5 +1,6 @@
 import { AuthView } from "@daveyplate/better-auth-ui";
 import { authViewPaths } from "@daveyplate/better-auth-ui/server";
+import { AnimatedLogo } from "@/components/animated-logo";
 
 export const dynamicParams = false;
 
@@ -15,8 +16,11 @@ export default async function AuthPage({
 	const { path } = await params;
 
 	return (
-		<main className="container flex grow flex-col items-center justify-center self-center p-4 md:p-6">
-			<AuthView path={path} />
+		<main className="container flex grow flex-col items-center justify-center self-center p-4 md:p-6 gap-8">
+			<AnimatedLogo />
+			<div className="w-full max-w-md">
+				<AuthView path={path} />
+			</div>
 		</main>
 	);
 }
