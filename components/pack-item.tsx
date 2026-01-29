@@ -14,6 +14,7 @@ export interface PackItemProduct {
 	description?: string | null;
 	badge?: string | null;
 	currency?: string;
+	eventTypeName?: string | null;
 }
 
 interface PackItemProps {
@@ -50,6 +51,7 @@ export function PackItem({
 	isLoading = false,
 }: PackItemProps) {
 	const { name, credits, description, badge, currency = "usd" } = product;
+	const eventTypeName = product.eventTypeName;
 	const finalPrice = price !== undefined ? price : product.price;
 
 	const handleCreditsEnter = () => withEvents && onCreditsHover?.(true);
@@ -129,6 +131,11 @@ export function PackItem({
 					)}
 					{description && (
 						<p className="text-sm text-muted-foreground mt-1">{description}</p>
+					)}
+					{eventTypeName && (
+						<p className="text-xs text-muted-foreground mt-1">
+							Cal.com · {eventTypeName}
+						</p>
 					)}
 				</div>
 			</div>

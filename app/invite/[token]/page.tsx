@@ -224,6 +224,8 @@ export default async function InvitePage({
 							description: invite.product.description,
 							badge: `Offered by ${invite.creator.name}`,
 							currency: invite.product.currency,
+							eventTypeName:
+								invite.product.integration?.calcomIntegration?.eventTypeName,
 						}}
 						productId={invite.product.id}
 						creditsSuffix=" credits"

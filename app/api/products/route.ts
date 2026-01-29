@@ -18,6 +18,13 @@ export async function GET() {
 	const userProducts = await db.query.products.findMany({
 		where: eq(products.creatorId, session.user.id),
 		orderBy: (products, { desc }) => [desc(products.createdAt)],
+		with: {
+			integration: {
+				with: {
+					calcomIntegration: true,
+				},
+			},
+		},
 	});
 
 	return NextResponse.json(userProducts);

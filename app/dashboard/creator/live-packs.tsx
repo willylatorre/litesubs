@@ -63,6 +63,7 @@ export function LivePacks() {
 									description: pack.description,
 									badge: "Active",
 									currency: pack.currency,
+									eventTypeName: pack.integration?.calcomIntegration?.eventTypeName,
 								}}
 								action={
 									<Button asChild variant="outline" size="sm">

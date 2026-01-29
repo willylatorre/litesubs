@@ -29,8 +29,58 @@ export const transactionTypeEnum = pgEnum("transaction_type", TRANSACTION_TYPES)
 export const transactionStatusEnum = pgEnum("transaction_status", TRANSACTION_STATUSES);
 export const inviteStatusEnum = pgEnum("invite_status", INVITE_STATUSES);
 export const currencyEnum = pgEnum("currency", CURRENCIES);
+export const integrationTypeEnum = pgEnum("integration_type", ["calcom"]);
 
 // Tables
+
+export const calcomIntegrations = pgTable(
+	"calcom_integrations",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		eventTypeId: integer("event_type_id"),
+		eventTypeSlug: text("event_type_slug"),
+		eventTypeName: text("event_type_name"),
+		eventTypeUrl: text("event_type_url"),
+		connectedAt: timestamp("connected_at"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("calcom_event_type_id_idx").on(table.eventTypeId),
+		index("calcom_event_type_slug_idx").on(table.eventTypeSlug),
+	],
+);
+
+export const integrations = pgTable(
+	"integrations",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		type: integrationTypeEnum("type").notNull(),
+		calcomIntegrationId: text("calcom_integration_id").references(
+			() => calcomIntegrations.id,
+			{ onDelete: "cascade" },
+		),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("integrations_user_idx").on(table.userId),
+		index("integrations_type_idx").on(table.type),
+	],
+);
 
 export const products = pgTable(
 	"products",
@@ -48,6 +98,9 @@ export const products = pgTable(
 		credits: integer("credits").notNull(), // amount of credits granted
 		type: productTypeEnum("type").default("one_time").notNull(),
 		active: boolean("active").default(true).notNull(),
+		integrationId: text("integration_id").references(() => integrations.id, {
+			onDelete: "set null",
+		}),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -153,12 +206,40 @@ export const invites = pgTable(
 	],
 );
 
+export const calComAccounts = pgTable(
+	"cal_com_accounts",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		accessToken: text("access_token").notNull(),
+		refreshToken: text("refresh_token"),
+		expiresAt: timestamp("expires_at"),
+		scope: text("scope"),
+		calUserId: text("cal_user_id"),
+		calUsername: text("cal_username"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [unique("cal_com_accounts_user_id_unique").on(table.userId)],
+);
+
 // Relations
 
 export const productsRelations = relations(products, ({ one, many }) => ({
 	creator: one(user, {
 		fields: [products.creatorId],
 		references: [user.id],
+	}),
+	integration: one(integrations, {
+		fields: [products.integrationId],
+		references: [integrations.id],
 	}),
 	transactions: many(transactions),
 }));
@@ -209,6 +290,35 @@ export const invitesRelations = relations(invites, ({ one }) => ({
 
 	}),
 
+}));
+
+export const calComAccountsRelations = relations(calComAccounts, ({ one }) => ({
+	user: one(user, {
+		fields: [calComAccounts.userId],
+		references: [user.id],
+	}),
+}));
+
+export const calcomIntegrationsRelations = relations(
+	calcomIntegrations,
+	({ one }) => ({
+		integration: one(integrations, {
+			fields: [calcomIntegrations.id],
+			references: [integrations.calcomIntegrationId],
+		}),
+	}),
+);
+
+export const integrationsRelations = relations(integrations, ({ one, many }) => ({
+	user: one(user, {
+		fields: [integrations.userId],
+		references: [user.id],
+	}),
+	calcomIntegration: one(calcomIntegrations, {
+		fields: [integrations.calcomIntegrationId],
+		references: [calcomIntegrations.id],
+	}),
+	products: many(products),
 }));
 
 
@@ -320,7 +430,4 @@ export const liteSubscriptionsRelations = relations(
 	}),
 
 );
-
-
-
 

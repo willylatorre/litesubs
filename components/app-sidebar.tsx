@@ -6,6 +6,7 @@ import {
 	IconDashboard,
 	IconHelpCircle,
 	IconPackage,
+	IconPlug,
 	IconUsers,
 	IconWallet,
 } from "@tabler/icons-react";
@@ -53,6 +54,11 @@ const data = {
 			title: "Payouts",
 			url: "/dashboard/payouts",
 			icon: IconWallet,
+		},
+		{
+			title: "Integrations",
+			url: "/dashboard/integrations",
+			icon: IconPlug,
 		},
 		{
 			title: "Customers",
