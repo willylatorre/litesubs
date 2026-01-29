@@ -49,6 +49,13 @@ export async function getCreatorProducts() {
 		const data = await db.query.products.findMany({
 			where: eq(products.creatorId, session.user.id),
 			orderBy: [desc(products.createdAt)],
+			with: {
+				integration: {
+					with: {
+						calcomIntegration: true,
+					},
+				},
+			},
 		});
 		return { success: true, data };
 	}).then((res) => res.data || []);
@@ -82,6 +89,13 @@ export async function getPackDetails(packId: string) {
 				eq(products.id, packId),
 				eq(products.creatorId, session.user.id),
 			),
+			with: {
+				integration: {
+					with: {
+						calcomIntegration: true,
+					},
+				},
+			},
 		});
 
 		if (!product) {

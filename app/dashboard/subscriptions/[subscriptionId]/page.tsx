@@ -30,6 +30,9 @@ export default async function SubscriptionDetailPage({
 	const sub = detailsRes.data;
 	const transactionsRes = await getUserTransactions(sub.productId);
 	const transactions = transactionsRes.success ? transactionsRes.data : [];
+	const calEventTypeUrl = sub.product.integration?.calcomIntegration?.eventTypeUrl;
+	const canBook = Boolean(calEventTypeUrl);
+	const hasCredits = sub.credits > 0;
 
 	return (
 		<div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
@@ -47,15 +50,29 @@ export default async function SubscriptionDetailPage({
 						</p>
 					</div>
 				</div>
-				<BuyButton
-					disabled={!sub.productId}
-					productId={sub.productId}
-					price={sub.product.price}
-					currency={sub.product.currency}
-					productName={sub.product.name}
-					label="Top up Credits"
-					fullWidth={false}
-				/>
+				<div className="flex items-center gap-2">
+					{canBook &&
+						(hasCredits ? (
+							<Button size="lg" asChild>
+								<Link href={calEventTypeUrl} target="_blank">
+									Book
+								</Link>
+							</Button>
+						) : (
+							<Button size="lg" disabled>
+								Book
+							</Button>
+						))}
+					<BuyButton
+						disabled={!sub.productId}
+						productId={sub.productId}
+						price={sub.product.price}
+						currency={sub.product.currency}
+						productName={sub.product.name}
+						label="Top up Credits"
+						fullWidth={false}
+					/>
+				</div>
 			</div>
 
 			<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

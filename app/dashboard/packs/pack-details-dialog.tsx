@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getPackDetails } from "@/app/actions/products";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -27,6 +27,15 @@ import { InviteUserDialog } from "../creator/invite-user-dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { Label } from "@/components/ui/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { useCalEventTypes, useUpdateProductCalEventType } from "@/hooks/use-cal";
 
 export function PackDetailsDialog({
 	packId,
@@ -37,6 +46,11 @@ export function PackDetailsDialog({
 }) {
 	const [open, setOpen] = useState(false);
 	const [inviteOpen, setInviteOpen] = useState(false);
+	const [selectedEventTypeId, setSelectedEventTypeId] = useState("none");
+	const { data: calEventTypesData, isLoading: calLoading } =
+		useCalEventTypes();
+	const { mutate: updateEventType, isPending: isUpdating } =
+		useUpdateProductCalEventType();
 
 	// Use React Query for automatic caching and deduplication
 	const { data: details, isLoading: loading } = useQuery({
@@ -54,6 +68,21 @@ export function PackDetailsDialog({
 
 	const displayedSubscribers = details?.subscribers?.slice(0, 5) || [];
 	const hasMoreSubscribers = (details?.subscribers?.length || 0) > 5;
+	const selectedEventType =
+		calEventTypesData?.eventTypes.find(
+			(eventType) => String(eventType.id) === selectedEventTypeId,
+		) ?? null;
+
+	useEffect(() => {
+		if (!details?.product) return;
+		const eventTypeId =
+			details.product.integration?.calcomIntegration?.eventTypeId;
+		if (eventTypeId) {
+			setSelectedEventTypeId(String(eventTypeId));
+		} else {
+			setSelectedEventTypeId("none");
+		}
+	}, [details?.product]);
 
 	return (
 		<>
@@ -121,6 +150,74 @@ export function PackDetailsDialog({
 										Credits
 									</span>
 									<span className="font-mono">{details.product.credits}</span>
+								</div>
+							</div>
+
+							<div className="flex flex-col gap-3 border-t pt-4">
+								<h3 className="font-semibold">Cal.com booking</h3>
+								<div className="grid gap-2">
+									<Label htmlFor="pack-cal-event-type">Event type</Label>
+									<Select
+										value={selectedEventTypeId}
+										onValueChange={setSelectedEventTypeId}
+										disabled={!calEventTypesData?.connected || calLoading}
+									>
+										<SelectTrigger id="pack-cal-event-type">
+											<SelectValue
+												placeholder={
+													calLoading
+														? "Loading event types..."
+														: "Select an event type"
+												}
+											/>
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="none">No event type</SelectItem>
+											{calEventTypesData?.eventTypes.map((eventType) => (
+												<SelectItem
+													key={eventType.id}
+													value={String(eventType.id)}
+												>
+													{eventType.name || eventType.slug}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									{!calEventTypesData?.connected && !calLoading && (
+										<p className="text-xs text-muted-foreground">
+											Connect Cal.com in{" "}
+											<Link
+												href="/dashboard/integrations"
+												className="underline underline-offset-4"
+											>
+												Integrations
+											</Link>{" "}
+											to attach an event type.
+										</p>
+									)}
+									<Button
+										variant="outline"
+										size="sm"
+										className="w-fit"
+										disabled={
+											isUpdating ||
+											(!selectedEventType &&
+												!details.product.integration?.calcomIntegration
+													?.eventTypeId) ||
+											(selectedEventType &&
+												selectedEventType.id ===
+													details.product.integration?.calcomIntegration
+														?.eventTypeId)
+										}
+										onClick={() =>
+											updateEventType({
+												productId: details.product.id,
+												eventType: selectedEventType,
+											})
+										}
+									>
+										{isUpdating ? "Saving..." : "Save event type"}
+									</Button>
 								</div>
 							</div>
 

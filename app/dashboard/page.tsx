@@ -49,6 +49,8 @@ async function DashboardContent() {
 				price: sub.product.price,
 				description: sub.product.description,
 				currency: sub.product.currency,
+				calEventTypeName:
+					sub.product.integration?.calcomIntegration?.eventTypeName,
 			},
 			creator: sub.creator ? { name: sub.creator.name } : null,
 		})),
@@ -61,6 +63,8 @@ async function DashboardContent() {
 						price: invite.product.price,
 						description: invite.product.description,
 						currency: invite.product.currency,
+						calEventTypeName:
+							invite.product.integration?.calcomIntegration?.eventTypeName,
 					}
 				: null,
 			creator: { name: invite.creator.name },

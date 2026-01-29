@@ -5,7 +5,11 @@
 CREATE TYPE "public"."stripe_connect_status" AS ENUM('pending', 'active', 'restricted', 'disabled');--> statement-breakpoint
 
 -- Enum for payout method preference
-CREATE TYPE "public"."payout_method" AS ENUM('stripe_connect', 'platform_payouts');--> statement-breakpoint
+DO $$ BEGIN
+	CREATE TYPE "public"."payout_method" AS ENUM('stripe_connect', 'platform_payouts');
+EXCEPTION
+	WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
 
 -- Table for Stripe Connect account information
 CREATE TABLE "stripe_connect_accounts" (
