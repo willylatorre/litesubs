@@ -22,6 +22,7 @@ interface SubscriptionData {
 		price: number;
 		description: string | null;
 		currency: string;
+		calEventTypeName?: string | null;
 	};
 	creator: { name: string } | null;
 }
@@ -34,6 +35,7 @@ interface InviteData {
 		price: number;
 		description: string | null;
 		currency: string;
+		calEventTypeName?: string | null;
 	} | null;
 	creator: { name: string };
 }
@@ -150,6 +152,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 												price: sub.product.price,
 												description: sub.product.description,
 												currency: sub.product.currency,
+												eventTypeName: sub.product.calEventTypeName,
 											}}
 											creditsSuffix=" credits left"
 											creatorName={sub.creator?.name}

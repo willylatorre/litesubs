@@ -12,6 +12,18 @@ export type Product = {
 	createdAt: Date;
 	updatedAt: Date;
 	currency: string;
+	integrationId?: string | null;
+	integration?: {
+		id: string;
+		type: "calcom";
+		calcomIntegration?: {
+			id: string;
+			eventTypeId?: number | null;
+			eventTypeSlug?: string | null;
+			eventTypeName?: string | null;
+			eventTypeUrl?: string | null;
+		} | null;
+	} | null;
 };
 
 async function fetchProducts() {

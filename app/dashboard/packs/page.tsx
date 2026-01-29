@@ -81,7 +81,12 @@ export default function PacksPage() {
 									<TableCell className="font-medium">
 										<PackDetailsDialog packId={pack.id}>
 											<div className="flex flex-col cursor-pointer hover:underline">
-												<span>{pack.name}</span>
+												<div className="flex items-center gap-2">
+													<span>{pack.name}</span>
+													{pack.integration?.calcomIntegration?.eventTypeId && (
+														<Badge variant="outline">cal.com</Badge>
+													)}
+												</div>
 												{pack.description && (
 													<span className="text-xs text-muted-foreground">
 														{pack.description}

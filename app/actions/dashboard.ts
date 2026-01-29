@@ -19,7 +19,15 @@ export async function getUserSubscriptionDetails(subscriptionId: string) {
 			),
 			with: {
 				creator: true,
-				product: true,
+				product: {
+					with: {
+						integration: {
+							with: {
+								calcomIntegration: true,
+							},
+						},
+					},
+				},
 			},
 		});
 
@@ -63,7 +71,15 @@ export async function getDashboardData() {
 				where: eq(liteSubscriptions.userId, session.user.id),
 				with: {
 					creator: true,
-					product: true,
+					product: {
+						with: {
+							integration: {
+								with: {
+									calcomIntegration: true,
+								},
+							},
+						},
+					},
 				},
 			}),
 
@@ -75,7 +91,15 @@ export async function getDashboardData() {
 				),
 				with: {
 					creator: true,
-					product: true,
+					product: {
+						with: {
+							integration: {
+								with: {
+									calcomIntegration: true,
+								},
+							},
+						},
+					},
 				},
 			}),
 		]);
@@ -186,7 +210,15 @@ export async function getUserSubscriptions() {
 			where: eq(liteSubscriptions.userId, session.user.id),
 			with: {
 				creator: true,
-				product: true,
+				product: {
+					with: {
+						integration: {
+							with: {
+								calcomIntegration: true,
+							},
+						},
+					},
+				},
 			},
 		});
 

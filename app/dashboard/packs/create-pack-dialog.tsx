@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2, Plus } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,14 +23,23 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useCalEventTypes, useUpdateProductCalEventType } from "@/hooks/use-cal";
 import { useCreateProduct } from "@/hooks/use-products";
 import { CURRENCIES } from "@/lib/constants";
 
 export function CreatePackDialog() {
 	const [open, setOpen] = useState(false);
-	const { mutate, isPending: isMutatePending } = useCreateProduct();
+	const { mutateAsync, isPending: isMutatePending } = useCreateProduct();
+	const { mutateAsync: updateEventType } = useUpdateProductCalEventType();
+	const { data: calEventTypesData, isLoading: calLoading } =
+		useCalEventTypes();
+	const [selectedEventTypeId, setSelectedEventTypeId] = useState("none");
 
 	const isPending = isMutatePending;
+	const selectedEventType =
+		calEventTypesData?.eventTypes.find(
+			(eventType) => String(eventType.id) === selectedEventTypeId,
+		) ?? null;
 
 	function onSubmit(e: React.FormEvent<HTMLFormElement>) {
 		e.preventDefault();
@@ -43,12 +53,17 @@ export function CreatePackDialog() {
 			currency: (formData.get("currency") as any) || "usd",
 		};
 
-		mutate(
-			data,
-			{
-				onSuccess: () => setOpen(false),
-			},
-		);
+		mutateAsync(data)
+			.then(async (createdProduct) => {
+				if (selectedEventType && createdProduct?.id) {
+					await updateEventType({
+						productId: createdProduct.id,
+						eventType: selectedEventType,
+					});
+				}
+				setOpen(false);
+			})
+			.catch(() => undefined);
 	}
 
 	return (
@@ -84,6 +99,47 @@ export function CreatePackDialog() {
 								name="description"
 								placeholder="Optional description..."
 							/>
+						</div>
+						<div className="grid gap-2">
+							<Label htmlFor="cal-event-type">Cal.com event type</Label>
+							<Select
+								value={selectedEventTypeId}
+								onValueChange={setSelectedEventTypeId}
+								disabled={!calEventTypesData?.connected || calLoading}
+							>
+								<SelectTrigger id="cal-event-type">
+									<SelectValue
+										placeholder={
+											calLoading
+												? "Loading event types..."
+												: "Select an event type (optional)"
+										}
+									/>
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="none">No event type</SelectItem>
+									{calEventTypesData?.eventTypes.map((eventType) => (
+										<SelectItem
+											key={eventType.id}
+											value={String(eventType.id)}
+										>
+											{eventType.name || eventType.slug}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							{!calEventTypesData?.connected && !calLoading && (
+								<p className="text-xs text-muted-foreground">
+									Connect Cal.com in{" "}
+									<Link
+										href="/dashboard/integrations"
+										className="underline underline-offset-4"
+									>
+										Integrations
+									</Link>{" "}
+									to attach an event type.
+								</p>
+							)}
 						</div>
 						<div className="grid grid-cols-2 gap-4">
 							<div className="grid gap-2">

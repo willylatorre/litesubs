@@ -36,7 +36,8 @@ export function InviteItem({ invite }: { invite: any }) {
         price: invite.product.price,
         description: invite.product.description,
         badge: "Invite",
-        currency: invite.product.currency
+        currency: invite.product.currency,
+        eventTypeName: invite.product.calEventTypeName
     } : {
         name: "Connection Invite",
         credits: 0,
