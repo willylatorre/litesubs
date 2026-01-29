@@ -1,5 +1,13 @@
-CREATE TYPE "public"."payout_method" AS ENUM('stripe_connect', 'platform_payouts');--> statement-breakpoint
-CREATE TYPE "public"."stripe_connect_status" AS ENUM('pending', 'active', 'restricted', 'disabled');--> statement-breakpoint
+DO $$ BEGIN
+	CREATE TYPE "public"."payout_method" AS ENUM('stripe_connect', 'platform_payouts');
+EXCEPTION
+	WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+	CREATE TYPE "public"."stripe_connect_status" AS ENUM('pending', 'active', 'restricted', 'disabled');
+EXCEPTION
+	WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
 CREATE TABLE "stripe_connect_accounts" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
