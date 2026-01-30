@@ -13,6 +13,8 @@ import {
 import { PayoutView } from "@/components/payouts/payout-view";
 import { ConnectPayoutsView } from "@/components/stripe-connect/connect-payouts-view";
 
+export const dynamic = "force-dynamic";
+
 export default async function PayoutsPage({
 	searchParams,
 }: {
