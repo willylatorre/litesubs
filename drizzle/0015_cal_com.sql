@@ -1,9 +1,9 @@
 ALTER TABLE "products"
-	ADD COLUMN "cal_event_type_id" integer,
-	ADD COLUMN "cal_event_type_slug" text,
-	ADD COLUMN "cal_event_type_name" text,
-	ADD COLUMN "cal_event_type_url" text,
-	ADD COLUMN "cal_connected_at" timestamp;
+	ADD COLUMN IF NOT EXISTS "cal_event_type_id" integer,
+	ADD COLUMN IF NOT EXISTS "cal_event_type_slug" text,
+	ADD COLUMN IF NOT EXISTS "cal_event_type_name" text,
+	ADD COLUMN IF NOT EXISTS "cal_event_type_url" text,
+	ADD COLUMN IF NOT EXISTS "cal_connected_at" timestamp;
 
 CREATE TABLE IF NOT EXISTS "cal_com_accounts" (
 	"id" text PRIMARY KEY NOT NULL,

@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS "integrations" (
 );
 
 ALTER TABLE "products"
-	ADD COLUMN "integration_id" text REFERENCES "integrations"("id") ON DELETE set null;
+	ADD COLUMN IF NOT EXISTS "integration_id" text REFERENCES "integrations"("id") ON DELETE set null;
 
 CREATE INDEX IF NOT EXISTS "calcom_event_type_id_idx" ON "calcom_integrations" ("event_type_id");
 CREATE INDEX IF NOT EXISTS "calcom_event_type_slug_idx" ON "calcom_integrations" ("event_type_slug");
