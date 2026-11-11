@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
 	boolean,
 	index,
@@ -193,6 +193,9 @@ export const invites = pgTable(
 		productId: text("product_id").references(() => products.id, {
 			onDelete: "set null",
 		}),
+		// Invite links used to be valid forever, so a shared or leaked URL stayed
+		// claimable indefinitely.
+		expiresAt: timestamp("expires_at").notNull().default(sql`now() + interval '14 days'`),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()

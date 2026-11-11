@@ -115,20 +115,14 @@ function InviteExpiredState() {
 function GenericInviteCard({
 	creatorName,
 	token,
-	email,
 	session,
 }: {
 	creatorName: string;
 	token: string;
-	email: string | null;
 	session: any;
 }) {
-	const loginUrl = `/auth/sign-in?callbackURL=/invite/${token}${
-		email ? `&email=${encodeURIComponent(email)}` : ""
-	}`;
-	const signUpUrl = `/auth/sign-up?callbackURL=/invite/${token}${
-		email ? `&email=${encodeURIComponent(email)}` : ""
-	}`;
+	const loginUrl = `/auth/sign-in?callbackURL=/invite/${token}`;
+	const signUpUrl = `/auth/sign-up?callbackURL=/invite/${token}`;
 
 	return (
 		<Card className="shadow-xl border-0">
@@ -198,6 +192,12 @@ export default async function InvitePage({
 
 	const isProductInvite = !!invite.product;
 
+	// The invite email is personal data: only reveal it to the signed-in user it
+	// was addressed to, never to anyone holding the link.
+	const canSeeInviteEmail = Boolean(
+		invite.email && session?.user?.email === invite.email,
+	);
+
 	return (
 		<div className="min-h-screen flex flex-col items-center justify-center p-6 gap-8 bg-muted/30">
 			{/* Header Section */}
@@ -216,7 +216,7 @@ export default async function InvitePage({
 						<span className="font-semibold">{invite.creator.name}</span> has
 						invited you to {isProductInvite ? "buy their plan" : "connect"}.
 					</p>
-					{invite.email && (
+					{canSeeInviteEmail && invite.email && (
 						<p className="text-sm text-muted-foreground">
 							Invitation for <span className="font-medium">{invite.email}</span>
 						</p>
@@ -238,9 +238,7 @@ export default async function InvitePage({
 						productId={invite.product.id}
 						creditsSuffix=" credits"
 						session={session}
-						loginUrl={`/auth/sign-up?callbackURL=/invite/${token}${
-							invite.email ? `&email=${encodeURIComponent(invite.email)}` : ""
-						}`}
+						loginUrl={`/auth/sign-up?callbackURL=/invite/${token}`}
 						action={
 							session?.user ? (
 								<AcceptInviteButton
@@ -255,7 +253,6 @@ export default async function InvitePage({
 					<GenericInviteCard
 						creatorName={invite.creator.name}
 						token={token}
-						email={invite.email}
 						session={session}
 					/>
 				)}

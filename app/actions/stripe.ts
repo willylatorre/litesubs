@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/app/db";
 import { products, transactions } from "@/app/db/schema";
 import { getCreatorConnectAccount } from "@/app/actions/stripe-connect";
+import { getAppUrl } from "@/lib/app-url";
 import { auth } from "@/lib/auth";
 import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
 import { getStripe } from "@/lib/stripe";
@@ -27,7 +28,12 @@ export async function createCheckoutSession(productId: string) {
 		return { error: "Product not found" };
 	}
 
-	const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+	// Deactivated plans must not be purchasable by ID.
+	if (!product.active) {
+		return { error: "This plan is no longer available" };
+	}
+
+	const appUrl = getAppUrl();
 
 	// Use customer ID if available, otherwise email
 	// Note: session.user might not have stripeCustomerId explicitly typed in all generic contexts
@@ -132,7 +138,7 @@ export async function createCustomerPortalSession() {
 		return { error: "No billing account found" };
 	}
 
-	const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://litesubs.com";
+	const appUrl = getAppUrl();
 
 	let portalSession;
 	try {
@@ -172,7 +178,7 @@ export async function createPaymentLink(
 		return { success: false, error: "Unauthorized" };
 	}
 
-	const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+	const appUrl = getAppUrl();
 
 	// Check if creator has Stripe Connect enabled
 	const connectAccount = await getCreatorConnectAccount(product.creatorId);

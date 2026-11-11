@@ -8,6 +8,7 @@ import {
 	stripeConnectAccounts,
 } from "@/app/db/stripe-connect-schema";
 import { getStripe } from "@/lib/stripe";
+import { mapOutboundPaymentEvent } from "@/lib/payouts";
 import type { Stripe } from "stripe";
 
 /**
@@ -193,92 +194,107 @@ async function handleCheckoutExpired(
 }
 
 /**
- * Process payout.paid event
- * Marks payout as completed
+ * Process v2 outbound payment events.
+ *
+ * Payouts are dispatched through the v2 API
+ * (`v2.moneyManagement.outboundPayments.create`) and stored with the
+ * OutboundPayment ID. Stripe emits `v2.money_management.outbound_payment.*`
+ * thin events for them, which reference the object via `related_object.id`.
+ * The previous v1 `payout.*` handlers matched on `payout.id` and could never
+ * resolve the row, so payouts stayed `processing` and failed payouts never
+ * restored the creator's balance.
  */
-async function handlePayoutPaid(
-	payout: Stripe.Payout,
-	eventId: string
+type OutboundPaymentEvent = {
+	type: string;
+	related_object?: { id?: string | null } | null;
+	fetchRelatedObject?: () => Promise<unknown>;
+};
+
+async function handleOutboundPaymentEvent(
+	event: OutboundPaymentEvent,
+	eventId: string,
 ): Promise<Response> {
+	// Status mapping lives in lib/payouts so it is unit-tested.
+	const targetStatus = mapOutboundPaymentEvent(event.type);
+	if (!targetStatus) {
+		return new Response(null, { status: 200 });
+	}
+
+	const outboundPaymentId = event.related_object?.id;
+	if (!outboundPaymentId) {
+		console.error("Outbound payment event without related_object", {
+			eventId,
+			eventType: event.type,
+		});
+		return new Response("Missing related object", { status: 400 });
+	}
+
 	try {
-		// Idempotency: Check current status before updating
 		const existingPayout = await db.query.payouts.findFirst({
-			where: eq(payouts.stripePayoutId, payout.id),
+			where: eq(payouts.stripePayoutId, outboundPaymentId),
 		});
 
-		// Skip if already completed
-		if (existingPayout?.status === "completed") {
-			console.log("Payout already marked as completed", {
+		if (!existingPayout) {
+			console.log("Outbound payment not found for event", {
 				eventId,
-				payoutId: payout.id,
+				outboundPaymentId,
 			});
-			return new Response("Event already processed", { status: 200 });
+			return new Response(null, { status: 200 });
 		}
 
-		if (existingPayout) {
-			await db
+		// Idempotency: success and terminal failure states are sticky.
+		if (existingPayout.status === targetStatus) {
+			return new Response("Event already processed", { status: 200 });
+		}
+		if (
+			existingPayout.status === "completed" ||
+			existingPayout.status === "cancelled"
+		) {
+			return new Response("Payout already finalised", { status: 200 });
+		}
+
+		// Fetch the object only for failure details; the status is authoritative
+		// from the event type itself.
+		let failureCode: string | null = null;
+		let failureMessage: string | null = null;
+		if (targetStatus === "failed") {
+			try {
+				const payment = await event.fetchRelatedObject?.();
+				const details = (
+					payment as {
+						status_details?: {
+							code?: string;
+							reason?: { code?: string; reason?: string };
+						};
+					}
+				)?.status_details;
+				failureCode = details?.reason?.code ?? details?.code ?? null;
+				failureMessage = details?.reason?.reason ?? null;
+			} catch (error) {
+				console.error("Failed to fetch outbound payment details", {
+					eventId,
+					outboundPaymentId,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		}
+
+		await db.transaction(async (tx) => {
+			await tx
 				.update(payouts)
 				.set({
-					status: "completed",
-					completedAt: new Date(),
+					status: targetStatus,
+					...(targetStatus === "completed"
+						? { completedAt: new Date() }
+						: {
+								failureCode,
+								failureMessage,
+							}),
 				})
-				.where(eq(payouts.stripePayoutId, payout.id));
+				.where(eq(payouts.id, existingPayout.id));
 
-			console.log("Payout marked as completed", {
-				eventId,
-				payoutId: payout.id,
-			});
-		}
-
-		return new Response(null, { status: 200 });
-	} catch (error: any) {
-		console.error("Failed to process payout.paid:", {
-			eventId,
-			payoutId: payout.id,
-			error: error.message,
-		});
-		return new Response(`Webhook Error: ${error.message}`, { status: 500 });
-	}
-}
-
-/**
- * Process payout.failed or payout.canceled events
- * Marks payout as failed/cancelled and restores balance
- */
-async function handlePayoutFailedOrCanceled(
-	payout: Stripe.Payout,
-	eventType: "payout.failed" | "payout.canceled",
-	eventId: string
-): Promise<Response> {
-	const targetStatus = eventType === "payout.failed" ? "failed" : "cancelled";
-
-	try {
-		const existingPayout = await db.query.payouts.findFirst({
-			where: eq(payouts.stripePayoutId, payout.id),
-		});
-
-		// Idempotency: Skip if already in target status
-		if (existingPayout?.status === targetStatus) {
-			console.log(`Payout already marked as ${targetStatus}`, {
-				eventId,
-				payoutId: payout.id,
-			});
-			return new Response("Event already processed", { status: 200 });
-		}
-
-		if (existingPayout && existingPayout.status !== targetStatus) {
-			await db.transaction(async (tx) => {
-				// Update payout status
-				await tx
-					.update(payouts)
-					.set({
-						status: targetStatus,
-						failureCode: payout.failure_code,
-						failureMessage: payout.failure_message,
-					})
-					.where(eq(payouts.stripePayoutId, payout.id));
-
-				// Check if balance restoration already exists
+			// A payout that never posted must give the reserved funds back.
+			if (targetStatus !== "completed") {
 				const existingRestoration = await tx.query.earningsLedger.findFirst({
 					where: and(
 						eq(earningsLedger.userId, existingPayout.userId),
@@ -287,7 +303,6 @@ async function handlePayoutFailedOrCanceled(
 					),
 				});
 
-				// Only restore balance if not already done
 				if (!existingRestoration) {
 					await tx.insert(earningsLedger).values({
 						userId: existingPayout.userId,
@@ -297,19 +312,21 @@ async function handlePayoutFailedOrCanceled(
 						description: `Restored balance due to ${targetStatus} payout ${existingPayout.id}`,
 					});
 				}
-			});
+			}
+		});
 
-			console.log(`Payout marked as ${targetStatus} and balance restored`, {
-				eventId,
-				payoutId: payout.id,
-			});
-		}
+		console.log(`Payout marked as ${targetStatus}`, {
+			eventId,
+			outboundPaymentId,
+			payoutId: existingPayout.id,
+			restoredBalance: targetStatus !== "completed",
+		});
 
 		return new Response(null, { status: 200 });
 	} catch (error: any) {
-		console.error(`Failed to process ${eventType}:`, {
+		console.error("Failed to process outbound payment event:", {
 			eventId,
-			payoutId: payout.id,
+			outboundPaymentId,
 			error: error.message,
 		});
 		return new Response(`Webhook Error: ${error.message}`, { status: 500 });
@@ -406,13 +423,22 @@ export async function POST(req: Request) {
 		return new Response(`Webhook Error: ${error.message}`, { status: 400 });
 	}
 
-	const session = event.data.object;
+	const session = (event as { data?: { object: unknown } }).data?.object;
 	const eventId = event.id;
 
 	console.log("Processing Stripe webhook", {
 		eventId,
 		eventType: event.type,
 	});
+
+	// v2 thin events reference their object instead of embedding it, so they
+	// have no `data.object` and must be dispatched separately.
+	if (event.type.startsWith("v2.")) {
+		return handleOutboundPaymentEvent(
+			event as unknown as OutboundPaymentEvent,
+			eventId,
+		);
+	}
 
 	switch (event.type) {
 		case "checkout.session.completed":
@@ -424,17 +450,6 @@ export async function POST(req: Request) {
 		case "checkout.session.expired":
 			return handleCheckoutExpired(
 				session as Stripe.Checkout.Session,
-				eventId
-			);
-
-		case "payout.paid":
-			return handlePayoutPaid(session as Stripe.Payout, eventId);
-
-		case "payout.failed":
-		case "payout.canceled":
-			return handlePayoutFailedOrCanceled(
-				session as Stripe.Payout,
-				event.type,
 				eventId
 			);
 

@@ -130,6 +130,17 @@ export async function updateSubscriptionCredits(
 					throw new Error("Subscription not found or unauthorized");
 				}
 
+				// Clamp at zero: the client hides the button below 0, but the action
+				// is directly callable, so a negative balance must be rejected here.
+				if (!Number.isInteger(amount) || amount === 0) {
+					throw new Error("Adjustment must be a non-zero whole number");
+				}
+				if (subscription.credits + amount < 0) {
+					throw new Error(
+						`Cannot reduce below 0 credits (current balance: ${subscription.credits})`,
+					);
+				}
+
 				await tx
 					.update(liteSubscriptions)
 					.set({
@@ -187,6 +198,16 @@ export async function updateCustomerCredits(
 
 				// Apply to the most recently updated subscription
 				const subToUpdate = userSubscriptions[0];
+
+				// Clamp at zero server-side; the UI guard alone is bypassable.
+				if (!Number.isInteger(amount) || amount === 0) {
+					throw new Error("Adjustment must be a non-zero whole number");
+				}
+				if (subToUpdate.credits + amount < 0) {
+					throw new Error(
+						`Cannot reduce below 0 credits (current balance: ${subToUpdate.credits})`,
+					);
+				}
 
 				await tx
 					.update(liteSubscriptions)

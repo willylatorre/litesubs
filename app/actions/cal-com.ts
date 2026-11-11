@@ -12,7 +12,23 @@ export async function getCalAccountStatus() {
 			where: eq(calComAccounts.userId, session.user.id),
 		});
 
-		return { success: true, data: account };
+		if (!account) {
+			return { success: true, data: null };
+		}
+
+		// This is an exported server action, so anything returned here is
+		// serialized to the client. Never include accessToken/refreshToken.
+		return {
+			success: true,
+			data: {
+				connected: true,
+				calUserId: account.calUserId,
+				calUsername: account.calUsername,
+				scope: account.scope,
+				expiresAt: account.expiresAt,
+				connectedAt: account.createdAt,
+			},
+		};
 	});
 }
 

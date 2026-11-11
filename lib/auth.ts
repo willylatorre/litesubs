@@ -9,6 +9,13 @@ import { getStripe } from "@/lib/stripe";
 const buildPhases = new Set(["phase-production-build", "phase-export"]);
 const isBuildTime = buildPhases.has(process.env.NEXT_PHASE ?? "");
 
+// Developer-only origins are trusted only outside production.
+const devOrigins = [
+	"http://localhost:3000",
+	"https://legendary-palm-tree-4qx6j57x66hg56-3000.app.github.dev",
+	"https://3000-firebase-litesubs-1766156519822.cluster-kizalrzg35hz6u4i7pguwgt6ss.cloudworkstations.dev",
+];
+
 const betterAuthSecret =
 	process.env.BETTER_AUTH_SECRET ??
 	((isBuildTime || process.env.NODE_ENV !== "production")
@@ -38,12 +45,10 @@ export const auth = betterAuth({
 			clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
 		},
 	},
-	trustedOrigins: [
-		"https://litesubs.com",
-		"https://legendary-palm-tree-4qx6j57x66hg56-3000.app.github.dev",
-		"https://3000-firebase-litesubs-1766156519822.cluster-kizalrzg35hz6u4i7pguwgt6ss.cloudworkstations.dev",
-		"http://localhost:3000",
-	],
+	trustedOrigins:
+		process.env.NODE_ENV === "production"
+			? ["https://litesubs.com", "https://www.litesubs.com"]
+			: ["https://litesubs.com", "https://www.litesubs.com", ...devOrigins],
 
 	plugins: [
 		...(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET

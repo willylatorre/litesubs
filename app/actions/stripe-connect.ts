@@ -8,6 +8,7 @@ import {
 	stripeConnectAccounts,
 } from "@/app/db/stripe-connect-schema";
 import { STRIPE_CONNECT_ACCOUNT_TYPE } from "@/lib/constants";
+import { appUrl } from "@/lib/app-url";
 import { authenticatedAction } from "@/lib/safe-action";
 import { getStripe } from "@/lib/stripe";
 
@@ -276,12 +277,10 @@ export async function disconnectConnectAccount() {
 // Helper functions
 
 async function createAccountLink(stripe: ReturnType<typeof getStripe>, accountId: string) {
-	const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-
 	return stripe.accountLinks.create({
 		account: accountId,
-		refresh_url: `${appUrl}/dashboard/payouts?connect=refresh`,
-		return_url: `${appUrl}/dashboard/payouts?connect=complete`,
+		refresh_url: appUrl("/dashboard/payouts?connect=refresh"),
+		return_url: appUrl("/dashboard/payouts?connect=complete"),
 		type: "account_onboarding",
 	});
 }

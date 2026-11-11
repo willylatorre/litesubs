@@ -84,6 +84,11 @@ export async function claimInvite(token: string) {
 
 		if (!invite) return { error: "Invite not found" };
 
+		// Expired invites are treated as gone, not merely unavailable.
+		if (invite.expiresAt.getTime() < Date.now()) {
+			return { error: "This invite has expired" };
+		}
+
 		// If invite has email, check if it matches
 		if (invite.email && invite.email !== session.user.email) {
 			return { error: "This invite is for another user" };
@@ -132,6 +137,10 @@ export async function respondToInvite(inviteId: string, accept: boolean) {
 
 		if (!invite) {
 			return { error: "Invite not found or invalid" };
+		}
+
+		if (invite.expiresAt.getTime() < Date.now()) {
+			return { error: "This invite has expired" };
 		}
 
 		await db.transaction(async (tx) => {
