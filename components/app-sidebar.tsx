@@ -70,6 +70,11 @@ const data = {
 			url: "/dashboard/developers",
 			icon: IconCode,
 		},
+		{
+			title: "API Tokens",
+			url: "/dashboard/developers/api-keys",
+			icon: IconCode,
+		},
 	],
 	navSecondary: [
 		{

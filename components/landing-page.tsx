@@ -1,19 +1,20 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, Check, ChevronDown, Copy, UserPlus } from "lucide-react";
+import { ArrowLeft, Check, Copy, UserPlus } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AnimatedLogo } from "@/components/animated-logo";
+import {
+	CreatePackDialogDemo,
+	type DemoPackData,
+} from "@/components/landing/create-pack-dialog-demo";
 import { PackItem } from "@/components/pack-item";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { CustomersTableDemo } from "./landing/customers-table-demo";
-import {
-	CreatePackDialogDemo,
-	type DemoPackData,
-} from "@/components/landing/create-pack-dialog-demo";
 
 export function LandingPage() {
 	const defaultText =
@@ -58,9 +59,10 @@ export function LandingPage() {
 
 					{/* Description */}
 					<p className="text-base md:text-lg text-muted-foreground">
-					Simple credit plans instead of heavy subscriptions.
+						Simple credit plans instead of heavy subscriptions.
 						<br />
-						Sell one-time credit bundles or set up auto-refill credits, both in one simple system.
+						Sell one-time credit bundles or set up auto-refill credits, both in
+						one simple system.
 					</p>
 				</div>
 
@@ -134,6 +136,30 @@ export function LandingPage() {
 				</motion.div>
 			</motion.div>
 
+			<section
+				className="w-full max-w-3xl space-y-5 text-center"
+				aria-labelledby="mcp-heading"
+			>
+				<h2 id="mcp-heading" className="text-2xl font-bold tracking-tight">
+					Your credit plans, connected to your AI assistant
+				</h2>
+				<p className="mx-auto max-w-xl text-muted-foreground">
+					Create plans, enroll students, and grant credits through our remote
+					MCP server. Use the REST API to consume credits from your own app.
+				</p>
+				<p className="text-sm">
+					“Create an Algebra plan with 10 credits for $100.”
+				</p>
+				<div className="flex flex-wrap justify-center gap-3">
+					<Button asChild variant="secondary">
+						<Link href="/docs#mcp">Connect with MCP</Link>
+					</Button>
+					<Button asChild variant="outline">
+						<Link href="/docs#api">Explore the API</Link>
+					</Button>
+				</div>
+			</section>
+
 			{/* How it Works Section */}
 			<motion.section
 				initial={{ opacity: 0, y: 20 }}
@@ -150,7 +176,7 @@ export function LandingPage() {
 				</div>
 
 				<div className="w-full grid gap-8 relative">
-                    {/* Vertical Line */}
+					{/* Vertical Line */}
 					<div className="absolute left-[19px] top-4 bottom-4 w-0.5 bg-border hidden md:block" />
 
 					{/* Step 1 */}
@@ -162,10 +188,11 @@ export function LandingPage() {
 									step >= 1
 										? "border-primary text-primary"
 										: "border-muted text-muted-foreground",
-                                        step > 1 && "bg-primary text-primary-foreground border-primary"
+									step > 1 &&
+										"bg-primary text-primary-foreground border-primary",
 								)}
 							>
-                                {step > 1 ? <Check className="w-5 h-5" /> : "1"}
+								{step > 1 ? <Check className="w-5 h-5" /> : "1"}
 							</div>
 						</div>
 						<div className="flex flex-col gap-4 pt-1 w-full">
@@ -183,7 +210,7 @@ export function LandingPage() {
 												price: demoPack.price * 100, // PackItem expects cents
 												description: demoPack.description,
 												currency: demoPack.currency,
-                                                badge: "Created"
+												badge: "Created",
 											}}
 											readOnly
 										/>
@@ -196,7 +223,14 @@ export function LandingPage() {
 					</div>
 
 					{/* Step 2 */}
-					<div className={cn("relative flex gap-6 md:gap-10 transition-opacity duration-500", step < 2 ? "opacity-50 grayscale pointer-events-none" : "opacity-100")}>
+					<div
+						className={cn(
+							"relative flex gap-6 md:gap-10 transition-opacity duration-500",
+							step < 2
+								? "opacity-50 grayscale pointer-events-none"
+								: "opacity-100",
+						)}
+					>
 						<div className="relative z-10 flex flex-col items-center">
 							<div
 								className={cn(
@@ -204,7 +238,8 @@ export function LandingPage() {
 									step >= 2
 										? "border-primary text-primary"
 										: "border-muted text-muted-foreground",
-                                        step > 2 && "bg-primary text-primary-foreground border-primary"
+									step > 2 &&
+										"bg-primary text-primary-foreground border-primary",
 								)}
 							>
 								{step > 2 ? <Check className="w-5 h-5" /> : "2"}
@@ -234,7 +269,11 @@ export function LandingPage() {
 										</Button>
 									</div>
 									{step === 2 && (
-										<Button onClick={handleSimulatePurchase} className="w-full" variant="secondary">
+										<Button
+											onClick={handleSimulatePurchase}
+											className="w-full"
+											variant="secondary"
+										>
 											<UserPlus className="mr-2 size-4" />
 											Simulate Client Purchase
 										</Button>
@@ -245,7 +284,14 @@ export function LandingPage() {
 					</div>
 
 					{/* Step 3 */}
-					<div className={cn("relative flex gap-6 md:gap-10 transition-opacity duration-500", step < 3 ? "opacity-50 grayscale pointer-events-none" : "opacity-100")}>
+					<div
+						className={cn(
+							"relative flex gap-6 md:gap-10 transition-opacity duration-500",
+							step < 3
+								? "opacity-50 grayscale pointer-events-none"
+								: "opacity-100",
+						)}
+					>
 						<div className="relative z-10 flex flex-col items-center">
 							<div
 								className={cn(
@@ -288,13 +334,19 @@ export function LandingPage() {
 							Ready to simplify your credit system?
 						</h2>
 						<p className="text-muted-foreground text-lg max-w-xl">
-							Join our early access and start selling credit plans to your customers in minutes.
+							Join our early access and start selling credit plans to your
+							customers in minutes.
 						</p>
 						<div className="flex flex-col sm:flex-row gap-4 mt-2">
 							<Button size="lg" className="px-12 h-12 text-base" asChild>
 								<a href="/auth/sign-up">Get Started for Free</a>
 							</Button>
-							<Button size="lg" variant="outline" className="px-12 h-12 text-base" asChild>
+							<Button
+								size="lg"
+								variant="outline"
+								className="px-12 h-12 text-base"
+								asChild
+							>
 								<a href="/dashboard">Go to Dashboard</a>
 							</Button>
 						</div>
@@ -302,7 +354,7 @@ export function LandingPage() {
 							No credit card required during early access.
 						</p>
 					</div>
-					
+
 					{/* Decorative elements */}
 					<div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/4 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
 					<div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/4 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />

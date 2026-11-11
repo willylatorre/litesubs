@@ -1,6 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
 	boolean,
+	check,
 	index,
 	integer,
 	pgEnum,
@@ -8,25 +9,33 @@ import {
 	text,
 	timestamp,
 	unique,
+	uniqueIndex,
 } from "drizzle-orm/pg-core";
 import {
 	CURRENCIES,
 	INVITE_STATUSES,
 	PRODUCT_TYPES,
-	TRANSACTION_TYPES,
 	TRANSACTION_STATUSES,
+	TRANSACTION_TYPES,
 } from "@/lib/constants";
 import { user } from "./auth-schema";
 
 // Re-export auth schema
 export * from "./auth-schema";
+export * from "./mcp-auth-schema";
 export * from "./payouts-schema";
 export * from "./stripe-connect-schema";
 
 // Enums
 export const productTypeEnum = pgEnum("product_type", PRODUCT_TYPES);
-export const transactionTypeEnum = pgEnum("transaction_type", TRANSACTION_TYPES);
-export const transactionStatusEnum = pgEnum("transaction_status", TRANSACTION_STATUSES);
+export const transactionTypeEnum = pgEnum(
+	"transaction_type",
+	TRANSACTION_TYPES,
+);
+export const transactionStatusEnum = pgEnum(
+	"transaction_status",
+	TRANSACTION_STATUSES,
+);
 export const inviteStatusEnum = pgEnum("invite_status", INVITE_STATUSES);
 export const currencyEnum = pgEnum("currency", CURRENCIES);
 export const integrationTypeEnum = pgEnum("integration_type", ["calcom"]);
@@ -114,31 +123,6 @@ export const products = pgTable(
 	],
 );
 
-export const userBalances = pgTable(
-	"user_balances",
-	{
-		id: text("id")
-			.primaryKey()
-			.$defaultFn(() => crypto.randomUUID()),
-		userId: text("user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }), // The customer
-		creatorId: text("creator_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }), // The owner of the credits context
-		credits: integer("credits").default(0).notNull(),
-		updatedAt: timestamp("updated_at")
-			.defaultNow()
-			.$onUpdate(() => new Date())
-			.notNull(),
-	},
-	(table) => [
-		unique("user_creator_balance_idx").on(table.userId, table.creatorId),
-		index("balance_user_idx").on(table.userId),
-		index("balance_creator_idx").on(table.creatorId),
-	],
-);
-
 export const transactions = pgTable(
 	"transactions",
 	{
@@ -165,6 +149,11 @@ export const transactions = pgTable(
 		usesStripeConnect: boolean("uses_stripe_connect").default(false),
 		stripeApplicationFee: integer("stripe_application_fee"), // Platform fee in cents
 		stripeConnectAccountId: text("stripe_connect_account_id"), // Connected account ID
+		// Caller-supplied key that makes credit writes retry-safe. Nullable so
+		// purchase/Stripe rows are unaffected; only `usage` writes require it.
+		idempotencyKey: text("idempotency_key"),
+		balanceBefore: integer("balance_before"),
+		balanceAfter: integer("balance_after"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
@@ -175,6 +164,10 @@ export const transactions = pgTable(
 		index("tx_user_type_idx").on(table.userId, table.type),
 		index("tx_creator_type_idx").on(table.creatorId, table.type),
 		index("tx_uses_connect_idx").on(table.usesStripeConnect),
+		// Scoped to the creator so two creators can use the same key.
+		uniqueIndex("tx_creator_idempotency_idx")
+			.on(table.creatorId, table.idempotencyKey)
+			.where(sql`${table.idempotencyKey} is not null`),
 	],
 );
 
@@ -189,13 +182,18 @@ export const invites = pgTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		email: text("email"),
 		status: inviteStatusEnum("status").default("pending").notNull(),
+		// Comp grants are snapshotted when invited and applied once on claim.
+		compCredits: integer("comp_credits").notNull().default(0),
+		compReason: text("comp_reason"),
 		token: text("token").notNull().unique(), // unique string for the link
 		productId: text("product_id").references(() => products.id, {
 			onDelete: "set null",
 		}),
 		// Invite links used to be valid forever, so a shared or leaked URL stayed
 		// claimable indefinitely.
-		expiresAt: timestamp("expires_at").notNull().default(sql`now() + interval '14 days'`),
+		expiresAt: timestamp("expires_at")
+			.notNull()
+			.default(sql`now() + interval '14 days'`),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -247,19 +245,6 @@ export const productsRelations = relations(products, ({ one, many }) => ({
 	transactions: many(transactions),
 }));
 
-export const userBalancesRelations = relations(userBalances, ({ one }) => ({
-	user: one(user, {
-		fields: [userBalances.userId],
-		references: [user.id],
-		relationName: "customerBalance",
-	}),
-	creator: one(user, {
-		fields: [userBalances.creatorId],
-		references: [user.id],
-		relationName: "creatorManagedBalance",
-	}),
-}));
-
 export const transactionsRelations = relations(transactions, ({ one }) => ({
 	user: one(user, {
 		fields: [transactions.userId],
@@ -276,23 +261,17 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
 }));
 
 export const invitesRelations = relations(invites, ({ one }) => ({
-
 	creator: one(user, {
-
 		fields: [invites.creatorId],
 
 		references: [user.id],
-
 	}),
 
 	product: one(products, {
-
 		fields: [invites.productId],
 
 		references: [products.id],
-
 	}),
-
 }));
 
 export const calComAccountsRelations = relations(calComAccounts, ({ one }) => ({
@@ -312,125 +291,72 @@ export const calcomIntegrationsRelations = relations(
 	}),
 );
 
-export const integrationsRelations = relations(integrations, ({ one, many }) => ({
-	user: one(user, {
-		fields: [integrations.userId],
-		references: [user.id],
+export const integrationsRelations = relations(
+	integrations,
+	({ one, many }) => ({
+		user: one(user, {
+			fields: [integrations.userId],
+			references: [user.id],
+		}),
+		calcomIntegration: one(calcomIntegrations, {
+			fields: [integrations.calcomIntegrationId],
+			references: [calcomIntegrations.id],
+		}),
+		products: many(products),
 	}),
-	calcomIntegration: one(calcomIntegrations, {
-		fields: [integrations.calcomIntegrationId],
-		references: [calcomIntegrations.id],
-	}),
-	products: many(products),
-}));
-
-
+);
 
 export const liteSubscriptions = pgTable(
-
 	"lite_subscriptions",
-
 	{
-
 		id: text("id")
-
 			.primaryKey()
-
 			.$defaultFn(() => crypto.randomUUID()),
-
 		userId: text("user_id")
-
 			.notNull()
-
 			.references(() => user.id, { onDelete: "cascade" }),
-
 		productId: text("product_id")
-
 			.notNull()
-
 			.references(() => products.id, { onDelete: "cascade" }),
-
 		creatorId: text("creator_id")
-
 			.notNull()
-
 			.references(() => user.id, { onDelete: "cascade" }),
-
 		credits: integer("credits").notNull().default(0),
-
 		createdAt: timestamp("created_at", { withTimezone: true })
-
 			.notNull()
-
 			.defaultNow(),
-
 		updatedAt: timestamp("updated_at", { withTimezone: true })
-
 			.notNull()
-
 			.defaultNow()
-
 			.$onUpdate(() => new Date()),
-
 	},
-
-	(table) => {
-
-		return {
-
-			userIdx: index("lite_subscriptions_user_idx").on(table.userId),
-
-			productIdx: index("lite_subscriptions_product_idx").on(table.productId),
-
-			creatorIdx: index("lite_subscriptions_creator_idx").on(table.creatorId),
-
-			userProductUnique: unique("user_product_unique").on(
-
-				table.userId,
-
-				table.productId,
-
-			),
-
-		};
-
-	},
-
+	(table) => [
+		index("lite_subscriptions_user_idx").on(table.userId),
+		index("lite_subscriptions_product_idx").on(table.productId),
+		index("lite_subscriptions_creator_idx").on(table.creatorId),
+		unique("user_product_unique").on(table.userId, table.productId),
+		// Backstop for the credit write funnel: balances can never go negative.
+		check(
+			"lite_subscriptions_credits_non_negative",
+			sql`${table.credits} >= 0`,
+		),
+	],
 );
-
-
 
 export const liteSubscriptionsRelations = relations(
-
 	liteSubscriptions,
-
 	({ one }) => ({
-
 		user: one(user, {
-
 			fields: [liteSubscriptions.userId],
-
 			references: [user.id],
-
 		}),
-
 		product: one(products, {
-
 			fields: [liteSubscriptions.productId],
-
 			references: [products.id],
-
 		}),
-
 		creator: one(user, {
-
 			fields: [liteSubscriptions.creatorId],
-
 			references: [user.id],
-
 		}),
-
 	}),
-
 );
-

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+	ApiKeysCard,
 	ChangePasswordCard,
 	DeleteAccountCard,
 	SessionsCard,
@@ -42,6 +43,7 @@ export default function AccountPage() {
 				<div className="space-y-6">
 					<UpdateNameCard />
 					<ChangePasswordCard />
+					<ApiKeysCard />
 				</div>
 				<div className="space-y-6">
 					<Card>

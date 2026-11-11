@@ -11,13 +11,13 @@ export type Invite = {
 };
 
 async function fetchInvites() {
-	const res = await fetch("/api/invites");
+	const res = await fetch("/api/v1/invites");
 	if (!res.ok) throw new Error("Failed to fetch invites");
 	return res.json() as Promise<Invite[]>;
 }
 
 async function createInvite(data: { email?: string; productId?: string }) {
-	const res = await fetch("/api/invites", {
+	const res = await fetch("/api/v1/invites", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(data),

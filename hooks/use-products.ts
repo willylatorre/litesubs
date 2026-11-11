@@ -27,7 +27,7 @@ export type Product = {
 };
 
 async function fetchProducts() {
-	const res = await fetch("/api/products");
+	const res = await fetch("/api/v1/plans");
 	if (!res.ok) throw new Error("Failed to fetch products");
 	return res.json() as Promise<Product[]>;
 }
@@ -39,7 +39,7 @@ async function createProduct(data: {
 	credits: number;
 	currency: "usd" | "eur";
 }) {
-	const res = await fetch("/api/products", {
+	const res = await fetch("/api/v1/plans", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(data),
@@ -60,7 +60,7 @@ async function updateProductStatus({
 	id: string;
 	active: boolean;
 }) {
-	const res = await fetch(`/api/products/${id}`, {
+	const res = await fetch(`/api/v1/plans/${id}`, {
 		method: "PATCH",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ active }),

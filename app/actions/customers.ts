@@ -1,111 +1,51 @@
 "use server";
 
-import { and, eq, sql, sum } from "drizzle-orm";
+import { and, eq, sum } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/app/db";
-import { liteSubscriptions, transactions, user } from "@/app/db/schema";
+import { liteSubscriptions, transactions } from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
+import { adjustCredits } from "@/lib/services/credits";
+import {
+	getCustomer,
+	listCustomers,
+	listTransactions,
+} from "@/lib/services/customers";
+import { ServiceError, sessionPrincipal } from "@/lib/services/principal";
 
 export async function getCreatorCustomers() {
-	return authenticatedAction(async (session) => {
-		const subs = await db.query.liteSubscriptions.findMany({
-			where: eq(liteSubscriptions.creatorId, session.user.id),
-			with: {
-				user: true,
-				product: true,
-			},
-		});
-
-		// Group by user
-		const subsByUser = subs.reduce(
-			(acc, sub) => {
-				if (!acc[sub.userId]) {
-					acc[sub.userId] = {
-						user: sub.user,
-						subscriptions: [],
-						totalCredits: 0,
-					};
-				}
-				acc[sub.userId].subscriptions.push(sub);
-				acc[sub.userId].totalCredits += sub.credits;
-				return acc;
-			},
-			{} as Record<
-				string,
-				{ user: any; subscriptions: any[]; totalCredits: number }
-			>,
-		);
-
-		const data = Object.values(subsByUser).map((group) => ({
-			id: group.user.id, // for the key in React
-			userId: group.user.id,
-			user: group.user,
-			credits: group.totalCredits,
-			activePacks: group.subscriptions.map((s) => ({
-				id: s.product.id,
-				name: s.product.name,
-				subscriptionId: s.id,
-				credits: s.credits,
-			})),
-			updatedAt: group.subscriptions
-				.reduce(
-					(latest, s) => (s.updatedAt > latest ? s.updatedAt : latest),
-					new Date(0),
-				)
-				.toISOString(),
-		}));
-
-		return { success: true, data };
-	}).then((res) => res.data || []);
+	return authenticatedAction(async (session) => ({
+		success: true,
+		data: await listCustomers(sessionPrincipal(session.user.id), {
+			limit: 100,
+		}),
+	})).then((res) => res.data ?? []);
 }
 
 export async function getCustomerDetails(customerId: string) {
 	return authenticatedAction(async (session) => {
-		// Run all independent queries in parallel for ~4x faster response
-		const [customer, subscriptions, [spentResult], customerTransactions] =
-			await Promise.all([
-				db.query.user.findFirst({
-					where: eq(user.id, customerId),
-				}),
-				db.query.liteSubscriptions.findMany({
-					where: and(
-						eq(liteSubscriptions.userId, customerId),
-						eq(liteSubscriptions.creatorId, session.user.id),
-					),
-					with: {
-						product: true,
-					},
-				}),
-				db
-					.select({ value: sum(transactions.amountMoney) })
-					.from(transactions)
-					.where(
-						and(
-							eq(transactions.userId, customerId),
-							eq(transactions.creatorId, session.user.id),
-							eq(transactions.type, "purchase"),
-						),
-					),
-				db.query.transactions.findMany({
-					where: and(
-						eq(transactions.userId, customerId),
+		const principal = sessionPrincipal(session.user.id);
+		const details = await getCustomer(principal, customerId);
+		const [ledger, [spent]] = await Promise.all([
+			listTransactions(principal, { customer: customerId, limit: 100 }),
+			db
+				.select({ value: sum(transactions.amountMoney) })
+				.from(transactions)
+				.where(
+					and(
 						eq(transactions.creatorId, session.user.id),
+						eq(transactions.userId, details.customer.id),
+						eq(transactions.type, "purchase"),
+						eq(transactions.status, "completed"),
 					),
-					orderBy: (transactions, { desc }) => [desc(transactions.createdAt)],
-				}),
-			]);
-
-		if (!customer) {
-			return { success: false, error: "Customer not found" };
-		}
-
+				),
+		]);
 		return {
 			success: true,
 			data: {
-				customer,
-				subscriptions,
-				totalSpent: Number(spentResult?.value || 0),
-				transactions: customerTransactions,
+				...details,
+				transactions: ledger,
+				totalSpent: Number(spent?.value ?? 0),
 			},
 		};
 	});
@@ -117,58 +57,22 @@ export async function updateSubscriptionCredits(
 	description: string,
 ) {
 	return authenticatedAction(async (session) => {
-		try {
-			await db.transaction(async (tx) => {
-				const subscription = await tx.query.liteSubscriptions.findFirst({
-					where: and(
-						eq(liteSubscriptions.id, subscriptionId),
-						eq(liteSubscriptions.creatorId, session.user.id),
-					),
-				});
-
-				if (!subscription) {
-					throw new Error("Subscription not found or unauthorized");
-				}
-
-				// Clamp at zero: the client hides the button below 0, but the action
-				// is directly callable, so a negative balance must be rejected here.
-				if (!Number.isInteger(amount) || amount === 0) {
-					throw new Error("Adjustment must be a non-zero whole number");
-				}
-				if (subscription.credits + amount < 0) {
-					throw new Error(
-						`Cannot reduce below 0 credits (current balance: ${subscription.credits})`,
-					);
-				}
-
-				await tx
-					.update(liteSubscriptions)
-					.set({
-						credits: sql`${liteSubscriptions.credits} + ${amount}`,
-					})
-					.where(eq(liteSubscriptions.id, subscriptionId));
-
-				await tx.insert(transactions).values({
-					userId: subscription.userId,
-					creatorId: session.user.id,
-					productId: subscription.productId,
-					amount,
-					type: "manual_adjustment",
-					description: description || "Manual adjustment",
-				});
-			});
-
-			revalidatePath("/dashboard/customers");
-			// We might need to revalidate the specific customer page too
-			// revalidatePath(`/dashboard/customers/${subscription.userId}`); // We don't have userId handy without fetching again or passing it. 
-			// But revalidating the parent path usually clears cache for subpaths in Next.js? No, usually specific.
-			// Let's just return success and let client handle or use a tag if we had one.
-			
-			return { success: true };
-		} catch (error: any) {
-			console.error("Failed to update credits:", error);
-			return { error: error.message || "Failed to update credits" };
-		}
+		const sub = await db.query.liteSubscriptions.findFirst({
+			where: and(
+				eq(liteSubscriptions.id, subscriptionId),
+				eq(liteSubscriptions.creatorId, session.user.id),
+			),
+		});
+		if (!sub) throw new ServiceError("NOT_FOUND", "Enrollment not found", 404);
+		await adjustCredits(sessionPrincipal(session.user.id), {
+			customerId: sub.userId,
+			planId: sub.productId,
+			delta: amount,
+			type: "manual_adjustment",
+			reason: description || "Manual adjustment",
+		});
+		revalidatePath("/dashboard/customers");
+		return { success: true };
 	});
 }
 
@@ -178,59 +82,27 @@ export async function updateCustomerCredits(
 	description: string,
 ) {
 	return authenticatedAction(async (session) => {
-		try {
-			await db.transaction(async (tx) => {
-				const userSubscriptions = await tx.query.liteSubscriptions.findMany({
-					where: and(
-						eq(liteSubscriptions.userId, userId),
-						eq(liteSubscriptions.creatorId, session.user.id),
-					),
-					orderBy: (liteSubscriptions, { desc }) => [
-						desc(liteSubscriptions.updatedAt),
-					],
-				});
-
-				if (userSubscriptions.length === 0) {
-					throw new Error(
-						"Cannot manually adjust credits for a user with no subscription.",
-					);
-				}
-
-				// Apply to the most recently updated subscription
-				const subToUpdate = userSubscriptions[0];
-
-				// Clamp at zero server-side; the UI guard alone is bypassable.
-				if (!Number.isInteger(amount) || amount === 0) {
-					throw new Error("Adjustment must be a non-zero whole number");
-				}
-				if (subToUpdate.credits + amount < 0) {
-					throw new Error(
-						`Cannot reduce below 0 credits (current balance: ${subToUpdate.credits})`,
-					);
-				}
-
-				await tx
-					.update(liteSubscriptions)
-					.set({
-						credits: sql`${liteSubscriptions.credits} + ${amount}`,
-					})
-					.where(eq(liteSubscriptions.id, subToUpdate.id));
-
-				await tx.insert(transactions).values({
-					userId,
-					creatorId: session.user.id,
-					productId: subToUpdate.productId,
-					amount,
-					type: "manual_adjustment",
-					description: description || "Manual adjustment",
-				});
-			});
-
-			revalidatePath("/dashboard/customers");
-			return { success: true };
-		} catch (error: any) {
-			console.error("Failed to update credits:", error);
-			return { error: error.message || "Failed to update credits" };
-		}
+		const subs = await db.query.liteSubscriptions.findMany({
+			where: and(
+				eq(liteSubscriptions.userId, userId),
+				eq(liteSubscriptions.creatorId, session.user.id),
+			),
+			limit: 2,
+		});
+		if (subs.length !== 1)
+			throw new ServiceError(
+				"AMBIGUOUS",
+				"Choose a specific enrollment before adjusting credits",
+				409,
+			);
+		await adjustCredits(sessionPrincipal(session.user.id), {
+			customerId: userId,
+			planId: subs[0].productId,
+			delta: amount,
+			type: "manual_adjustment",
+			reason: description || "Manual adjustment",
+		});
+		revalidatePath("/dashboard/customers");
+		return { success: true };
 	});
 }

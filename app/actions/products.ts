@@ -5,83 +5,37 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/app/db";
 import { liteSubscriptions, products } from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
-import { createProductSchema } from "@/lib/schemas";
+import { createPlan, listPlans, updatePlan } from "@/lib/services/plans";
+import { sessionPrincipal } from "@/lib/services/principal";
 
-export async function createProduct(prevState: any, formData: FormData) {
+export async function createProduct(_prevState: unknown, formData: FormData) {
 	return authenticatedAction(async (session) => {
-		const rawData = {
+		await createPlan(sessionPrincipal(session.user.id), {
 			name: formData.get("name"),
-			description: formData.get("description"),
-			price: formData.get("price"),
-			credits: formData.get("credits"),
-			currency: formData.get("currency"),
-		};
-
-		const validated = createProductSchema.safeParse(rawData);
-
-		if (!validated.success) {
-			return {
-				error: "Validation failed",
-				fieldErrors: validated.error.flatten().fieldErrors,
-			};
-		}
-
-		const { name, description, price, credits, currency } = validated.data;
-
-		await db.insert(products).values({
-			creatorId: session.user.id,
-			name,
-			description: description || "",
-			price: Math.round(price * 100), // Convert to cents
-			credits,
-			currency,
-			type: "one_time",
-			active: true,
+			description: formData.get("description") || undefined,
+			price: Number(formData.get("price")),
+			credits: Number(formData.get("credits")),
+			currency: formData.get("currency") || "usd",
 		});
-
 		revalidatePath("/dashboard/packs");
 		return { success: true };
 	});
 }
-
 export async function getCreatorProducts() {
-	return authenticatedAction(async (session) => {
-		const data = await db.query.products.findMany({
-			where: eq(products.creatorId, session.user.id),
-			orderBy: [desc(products.createdAt)],
-			with: {
-				integration: {
-					with: {
-						calcomIntegration: true,
-					},
-				},
-			},
-		});
-		return { success: true, data };
-	}).then((res) => res.data || []);
+	return authenticatedAction(async (session) => ({
+		success: true,
+		data: await listPlans(sessionPrincipal(session.user.id), { limit: 100 }),
+	})).then((res) => res.data ?? []);
 }
-
 export async function toggleProductStatus(id: string, currentStatus: boolean) {
 	return authenticatedAction(async (session) => {
-		// Verify ownership
-		const product = await db.query.products.findFirst({
-			where: eq(products.id, id),
+		await updatePlan(sessionPrincipal(session.user.id), id, {
+			active: !currentStatus,
 		});
-
-		if (!product || product.creatorId !== session.user.id) {
-			return { error: "Unauthorized" };
-		}
-
-		await db
-			.update(products)
-			.set({ active: !currentStatus })
-			.where(eq(products.id, id));
-
 		revalidatePath("/dashboard/packs");
 		return { success: true };
 	});
 }
-
 export async function getPackDetails(packId: string) {
 	return authenticatedAction(async (session) => {
 		const product = await db.query.products.findFirst({
@@ -89,27 +43,19 @@ export async function getPackDetails(packId: string) {
 				eq(products.id, packId),
 				eq(products.creatorId, session.user.id),
 			),
-			with: {
-				integration: {
-					with: {
-						calcomIntegration: true,
-					},
-				},
-			},
+			with: { integration: { with: { calcomIntegration: true } } },
 		});
-
-		if (!product) {
-			return { success: false, error: "Plan not found" };
-		}
-
+		if (!product) return { success: false, error: "Plan not found" };
 		const subscribers = await db.query.liteSubscriptions.findMany({
-			where: eq(liteSubscriptions.productId, packId),
+			where: and(
+				eq(liteSubscriptions.productId, packId),
+				eq(liteSubscriptions.creatorId, session.user.id),
+			),
 			with: {
-				user: true,
+				user: { columns: { id: true, name: true, email: true, image: true } },
 			},
 			orderBy: [desc(liteSubscriptions.updatedAt)],
 		});
-
 		return { success: true, data: { product, subscribers } };
 	});
 }
