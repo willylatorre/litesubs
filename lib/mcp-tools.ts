@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { logUnexpectedError } from "@/lib/api-response";
 import { changeCredits, creditInput } from "@/lib/services/credits";
 import {
 	getCustomer,
@@ -61,7 +62,7 @@ export function createServer(principal: Principal) {
 						!(error instanceof ServiceError) &&
 						!(error instanceof z.ZodError)
 					)
-						console.error("MCP tool failed", name, error);
+						logUnexpectedError(`MCP tool failed: ${name}`, error);
 					return {
 						isError: true,
 						content: [{ type: "text", text: JSON.stringify(details) }],

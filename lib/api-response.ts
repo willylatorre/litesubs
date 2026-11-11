@@ -21,9 +21,17 @@ export function errorResponse(error: unknown) {
 			{ error: "Invalid JSON", code: "INVALID_INPUT" },
 			{ status: 400 },
 		);
-	console.error("API request failed", error);
+	logUnexpectedError("API request failed", error);
 	return Response.json(
 		{ error: "Request failed", code: "INTERNAL_ERROR" },
 		{ status: 500 },
 	);
+}
+
+// Provider errors can echo API keys in their message/raw response. Log the
+// category, not the whole object, so credentials never enter application logs.
+export function logUnexpectedError(context: string, error: unknown) {
+	console.error(context, {
+		type: error instanceof Error ? error.name : "UnknownError",
+	});
 }

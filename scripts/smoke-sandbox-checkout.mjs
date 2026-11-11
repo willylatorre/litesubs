@@ -38,11 +38,11 @@ try {
 	const result = await stripe.checkout.sessions.expire(sessionId);
 	assert.equal(result.status, "expired");
 	expired = true;
-} catch (error) { failure = error; }
+} catch (error) { failure = new Error(safeMessage(error)); }
 finally {
 	try {
 		if (sessionId && !expired) {
-			try { await stripe.checkout.sessions.expire(sessionId); } catch (error) { cleanupErrors.push(error.message); }
+			try { await stripe.checkout.sessions.expire(sessionId); } catch (error) { cleanupErrors.push(safeMessage(error)); }
 		}
 		// Only these two exact, cryptographically random fixture emails are
 		// eligible for cleanup. No existing users or customers are selected.
@@ -50,7 +50,7 @@ finally {
 			try {
 				const customers = await stripe.customers.list({ email, limit: 100 });
 				for (const customer of customers.data) await stripe.customers.del(customer.id);
-			} catch (error) { cleanupErrors.push(error.message); }
+			} catch (error) { cleanupErrors.push(safeMessage(error)); }
 		}
 		await client.query('DELETE FROM public."user" WHERE email = ANY($1)', [emails]);
 		const { rows: [remaining] } = await client.query('SELECT count(*)::int AS count FROM public."user" WHERE email = ANY($1)', [emails]);
@@ -81,4 +81,8 @@ async function request(path, cookie, body) {
 	const data = await response.json();
 	if (!response.ok) throw new Error(`Sandbox app request ${path} failed (${response.status}): ${data.error ?? "request rejected"}`);
 	return data;
+}
+
+function safeMessage(error) {
+	return String(error?.message ?? "Unknown sandbox error").replace(/\b(?:sk|rk|pk)_(?:test|live)_[A-Za-z0-9_*]+/g, "[REDACTED Stripe key]");
 }
