@@ -1,20 +1,21 @@
 # Litesubs
 
 ## Overview
-Litesubs is a streamlined platform designed for creators and individuals to generate and manage simple, non-renewing credit packs. Unlike traditional recurring subscriptions, Litesubs focuses on "packs" of credits that users can purchase and consume over time.
+Litesubs is a streamlined platform for creators to sell credit plans. A plan is either a one-time pack or a monthly allowance. Creators prepare a plan as a draft, publish immutable terms on their own Stripe account, and customers consume credits over time.
 
 This model establishes a direct relationship between the creator and the buyer, allowing creators to monetize their services or content flexibly without the complexity of managing recurring billing cycles initially.
 
 ## Core Features
 
-### 1. Pack Management (Creator)
-- **Create Packs:** Creators can define a pack with:
-  - **Title/Name**
-  - **Price** (integration with Stripe)
-  - **Credit Amount** (the value the user gets)
-  - **Expiration Date** (optional)
-- **Manage Packs:** Enable/Disable packs to control availability.
-- **Share:** Generate unique links to share packs with potential customers.
+### 1. Plan Management (Creator)
+- **Create Plans:** A plan starts as a local draft with:
+  - **Title/Name** and description
+  - **Billing mode:** one-time pack or monthly plan
+  - **Price and currency** (stored in minor units)
+  - **Credit amount** granted per purchase or period
+- **Drafts are not sellable:** publishing a version on the creator's Stripe account is the next slice; nothing is purchasable before that.
+- **Replace terms safely:** service details stay editable while published commercial terms stay frozen for existing customers.
+- **Share:** Generate invite links to published plans.
 
 ### 2. Customer & Credit Management (Creator)
 - **Customer List:** A dashboard view displaying all users who have purchased a pack.

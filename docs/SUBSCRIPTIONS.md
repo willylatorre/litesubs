@@ -1,6 +1,12 @@
 # Creator-owned payments and subscriptions
 
-Status: agreed architecture and implementation scope; not implemented.
+Status: agreed architecture and implementation scope.
+
+Implemented slices:
+
+- S01 — draft plans with immutable version records; `plans`, `plan_versions`,
+  and `enrollments` are the live domain names. See
+  `drizzle/0001_plans_enrollments.sql` for the additive migration.
 
 ## Purpose
 
@@ -237,17 +243,17 @@ creator REST endpoints, and creator MCP tools.
 
 #### Acceptance criteria
 
-- [ ] A creator without Stripe can create, list, inspect, and edit a draft through
+- [x] A creator without Stripe can create, list, inspect, and edit a draft through
       the UI and authorized plan APIs/tools.
-- [ ] Draft terms include billing mode, currency, price, credits, and interval;
+- [x] Draft terms include billing mode, currency, price, credits, and interval;
       monthly is the only recurring interval offered. Invalid input fails clearly.
-- [ ] Drafts show a Draft badge and an explanation that publishing requires Stripe.
+- [x] Drafts show a Draft badge and an explanation that publishing requires Stripe.
       Invitations and direct checkout calls cannot bypass unpublished status.
-- [ ] UI/schema/service names distinguish plans and enrollments from subscriptions.
+- [x] UI/schema/service names distinguish plans and enrollments from subscriptions.
       New code no longer calls a credit balance a billing subscription.
-- [ ] Plan resolution remains creator-scoped; another creator cannot read or edit
+- [x] Plan resolution remains creator-scoped; another creator cannot read or edit
       the draft by guessing its ID. Sample mode is not broken by the rename.
-- [ ] No draft operation invokes Stripe or creates a platform Customer.
+- [x] No draft operation invokes Stripe or creates a platform Customer.
 
 #### Implementation notes and relevant files
 
