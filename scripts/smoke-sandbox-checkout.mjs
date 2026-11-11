@@ -8,7 +8,7 @@ const key = process.env.STRIPE_SECRET_KEY ?? "";
 if (!/^(sk|rk)_test_/.test(key)) throw new Error("Refusing checkout test without a Stripe sandbox key.");
 if (!process.env.DATABASE_URL || !process.env.BETTER_AUTH_URL) throw new Error("Run this inside the configured app container.");
 const base = new URL(process.env.BETTER_AUTH_URL).origin;
-const stripe = new Stripe(key, { apiVersion: "2026-10-28.endive" });
+const stripe = new Stripe(key, { apiVersion: "2026-10-28.endive", timeout:20000, maxNetworkRetries:0 });
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis:10000, query_timeout:10000 });
 const emails = [];
 let sessionId;
@@ -67,7 +67,7 @@ async function signup(kind) {
 	const { rows } = await client.query('SELECT id FROM public."user" WHERE email = $1', [email]);
 	assert.equal(rows.length, 0);
 	emails.push(email);
-	const response = await fetch(`${base}/api/auth/sign-up/email`, { method: "POST", headers: { "content-type": "application/json", origin: base }, body: JSON.stringify({ name: `Disposable MCP smoke ${kind}`, email, password: randomBytes(24).toString("base64url") }) });
+	const response = await fetch(`${base}/api/auth/sign-up/email`, { method: "POST", signal:AbortSignal.timeout(30000), headers: { "content-type": "application/json", origin: base }, body: JSON.stringify({ name: `Disposable MCP smoke ${kind}`, email, password: randomBytes(24).toString("base64url") }) });
 	const data = await response.json();
 	if (!response.ok) throw new Error(`Sandbox signup failed (${response.status}): ${data.error ?? data.message ?? "request rejected"}`);
 	const cookie = response.headers.getSetCookie().map(value => value.split(";")[0]).join("; ");
@@ -77,7 +77,7 @@ async function signup(kind) {
 }
 
 async function request(path, cookie, body) {
-	const response = await fetch(`${base}${path}`, { method: body ? "POST" : "GET", headers: { cookie, origin: base, "content-type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
+	const response = await fetch(`${base}${path}`, { method: body ? "POST" : "GET", signal:AbortSignal.timeout(30000), headers: { cookie, origin: base, "content-type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
 	const data = await response.json();
 	if (!response.ok) throw new Error(`Sandbox app request ${path} failed (${response.status}): ${data.error ?? "request rejected"}`);
 	return data;
