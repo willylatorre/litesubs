@@ -209,9 +209,17 @@ DATABASE_URL=<test DB> MCP_TEST_DATABASE_URL=<same test DB> \
 
 Tests cover concurrent retry receipts, overdraft prevention, dry-run persistence,
 tenant and credential boundaries, once-only comp claims, HTTP API-key auth,
-restricted MCP discovery, REST scope denial, and public OAuth metadata. Full
-browser OAuth consent/token exchange and live Stripe checkout still require
-deployment/sandbox validation.
+restricted MCP discovery, REST scope denial, and public OAuth metadata. An
+HTTP integration test also covers signed consent (including tampering rejection),
+PKCE code exchange, rotating refresh tokens, and an authenticated MCP call plus
+read-token write denial. Browser UI/client compatibility and live Stripe
+checkout still require deployment/sandbox validation.
+
+For an explicitly approved deployed checkout check, run
+`node scripts/smoke-sandbox-checkout.mjs --sandbox-only` inside the app container.
+It refuses live Stripe keys, creates two disposable accounts and a $1 plan,
+validates an unpaid invoice checkout and its metadata, expires it, and removes
+the app fixtures and Stripe test customers. It never submits a payment.
 
 ## Final product tasks
 

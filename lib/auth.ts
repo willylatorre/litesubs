@@ -53,6 +53,13 @@ if (
 export const MCP_SCOPES = CREATOR_SCOPES;
 
 export type McpScope = (typeof MCP_SCOPES)[number];
+const oauthScopes = [
+	"openid",
+	"profile",
+	"email",
+	"offline_access",
+	...MCP_SCOPES,
+];
 
 /**
  * Protected resource identifier carried as the access token `aud`.
@@ -97,9 +104,9 @@ export const auth = betterAuth({
 			consentPage: "/oauth/consent",
 			resource: mcpResource,
 			// Validated scopes...
-			scopes: ["openid", "profile", "email", "offline_access", ...MCP_SCOPES],
+			scopes: oauthScopes,
 			// ...and the same list advertised to clients in discovery.
-			advertisedMetadata: { scopes_supported: [...MCP_SCOPES] },
+			advertisedMetadata: { scopes_supported: oauthScopes },
 			refreshTokenReuseInterval: 0,
 			grantTypes: ["authorization_code", "refresh_token"],
 			clientPrivileges: () => false,
