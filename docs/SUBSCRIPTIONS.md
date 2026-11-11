@@ -388,6 +388,12 @@ prepare replacement commercial terms, publish a new version, and unpublish the
 offer. Initial availability can be restricted to one-time plans until S07 adds
 the full monthly purchase path.
 
+The publication lifecycle ships on every transport in the same slice, including
+two creator MCP tools: `publish_plan` and `unpublish_plan`. Do not land this as a
+dashboard-only action; `enroll_customer` already rejects drafts with
+`PLAN_NOT_PUBLISHED`, so an MCP-only creator is otherwise stuck at a dead end
+with no way to publish and no tool to explain why.
+
 #### Acceptance criteria
 
 - [ ] Publishing requires current merchant readiness and positive purchasable terms
@@ -405,6 +411,12 @@ the full monthly purchase path.
       grants, purchased versions, or their history.
 - [ ] UI, REST, and creator MCP expose the same publication lifecycle and errors;
       other creators cannot publish/edit this plan.
+- [ ] `publish_plan` and `unpublish_plan` exist as MCP tools under `plans:write`,
+      with the same readiness, idempotency, and provisioning errors as the UI.
+      An ambiguous plan name returns candidates instead of guessing, as the other
+      plan tools do.
+- [ ] Unpublishing over MCP requires an explicit confirmation input, matching the
+      confirmation the UI asks for, so a model cannot stop sales by accident.
 
 #### Implementation notes and relevant files
 
