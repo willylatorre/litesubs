@@ -17,6 +17,13 @@ reset it. `drizzle/0000_init.sql` contains the entire schema, including existing
 payout/Connect/integration features, invite expiration, and new auth tables.
 Historical migration files were squashed; several were absent from the journal.
 
+An explicitly approved app-only production reset can be run with
+`node scripts/reset-app-db.mjs --confirm-reset`. This snapshots old app rows as
+JSON in a private `litesubs_backup_*` schema, replaces only the explicit app
+tables/enums and Drizzle history in one transaction, and refuses external
+dependencies rather than using CASCADE. Supabase-managed schemas are untouched.
+Repeating it after the baseline is recorded is a no-op, not another reset.
+
 1. Provision/select a **fresh, empty** PostgreSQL database.
 2. Set `DATABASE_URL` to that database in local/CI/Coolify environments.
 3. Run `npm run db:migrate`.
@@ -24,7 +31,10 @@ Historical migration files were squashed; several were absent from the journal.
 
 `db:migrate` refuses to run against a pre-baseline database with an existing
 `user` table. It never drops tables or resets a database. The GitHub migration
-job uses this same guarded command. Subsequent migrations work normally.
+job uses this same guarded command when dispatched manually. Production uses
+`npm run db:migrate && npm run start` inside Coolify's Docker network; a
+GitHub-hosted runner cannot connect to the private database hostname. Subsequent
+migrations work normally.
 
 Required configuration:
 

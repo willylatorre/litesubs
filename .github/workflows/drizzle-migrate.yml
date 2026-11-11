@@ -1,9 +1,10 @@
 name: Drizzle Migrate
 
 on:
-  push:
-    branches:
-      - main
+  # Production PostgreSQL is on Coolify's private Docker network. Production
+  # migrations run inside the application container before server startup;
+  # GitHub-hosted runners cannot reach that host. Manual runs remain available
+  # for an explicitly configured externally reachable database.
   workflow_dispatch: {}
 
 permissions:
@@ -46,4 +47,3 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm run db:migrate
-
