@@ -8,7 +8,9 @@ interface UseTransactionCheckProps {
 	onSuccess?: () => void;
 }
 
-export function useTransactionCheck({ onSuccess }: UseTransactionCheckProps = {}) {
+export function useTransactionCheck({
+	onSuccess,
+}: UseTransactionCheckProps = {}) {
 	const pollingRef = useRef<NodeJS.Timeout | null>(null);
 	// Use ref for onSuccess to avoid effect re-runs when callback changes
 	const onSuccessRef = useRef(onSuccess);
@@ -18,19 +20,21 @@ export function useTransactionCheck({ onSuccess }: UseTransactionCheckProps = {}
 		// Read params on-demand inside effect to avoid subscribing to all URL changes
 		const params = new URLSearchParams(window.location.search);
 		const success = params.get("success");
-		const purchasedProductId = params.get("productId");
+		const purchasedPlanId = params.get("planId");
 
-		if (success && purchasedProductId) {
+		if (success && purchasedPlanId) {
 			toast.info("Purchase successful! Your credits are being updated...");
 
 			// Clear URL params
 			params.delete("success");
-			params.delete("productId");
+			params.delete("planId");
 			const newQueryString = params.toString();
 			window.history.replaceState(
 				null,
 				"",
-				newQueryString ? `${window.location.pathname}?${newQueryString}` : window.location.pathname,
+				newQueryString
+					? `${window.location.pathname}?${newQueryString}`
+					: window.location.pathname,
 			);
 
 			const pollForUpdates = async () => {
@@ -39,7 +43,7 @@ export function useTransactionCheck({ onSuccess }: UseTransactionCheckProps = {}
 
 				const checkCondition = async () => {
 					attempts++;
-					const result = await checkTransactionStatus(purchasedProductId);
+					const result = await checkTransactionStatus(purchasedPlanId);
 
 					if (result?.status === "completed") {
 						// Use startTransition for non-urgent updates to maintain UI responsiveness

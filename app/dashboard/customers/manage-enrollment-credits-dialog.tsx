@@ -3,7 +3,7 @@
 import { IconPlus } from "@tabler/icons-react";
 import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { updateSubscriptionCredits } from "@/app/actions/customers";
+import { updateEnrollmentCredits } from "@/app/actions/customers";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -16,22 +16,22 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
-export function ManageSubscriptionCreditsDialog({
-	subscriptionId,
+export function ManageEnrollmentCreditsDialog({
+	enrollmentId,
 	planName,
 	currentCredits,
 	onSuccess,
 	compact = false,
 }: {
-	subscriptionId: string;
+	enrollmentId: string;
 	planName: string;
 	currentCredits: number;
 	onSuccess?: () => void;
@@ -53,7 +53,7 @@ export function ManageSubscriptionCreditsDialog({
 		}
 
 		startTransition(async () => {
-			const res = await updateSubscriptionCredits(subscriptionId, val, description);
+			const res = await updateEnrollmentCredits(enrollmentId, val, description);
 			if (res.success) {
 				toast.success("Credits updated");
 				setOpen(false);
@@ -66,7 +66,9 @@ export function ManageSubscriptionCreditsDialog({
 		});
 	};
 
-	const previewCredits = amount ? currentCredits + Number.parseInt(amount, 10) || currentCredits : currentCredits;
+	const previewCredits = amount
+		? currentCredits + Number.parseInt(amount, 10) || currentCredits
+		: currentCredits;
 
 	const trigger = compact ? (
 		<TooltipProvider>
@@ -94,31 +96,44 @@ export function ManageSubscriptionCreditsDialog({
 			<DialogContent className="sm:max-w-md">
 				<form onSubmit={handleSubmit}>
 					<DialogHeader>
-						<DialogTitle className="text-lg font-bold">Adjust Credits</DialogTitle>
+						<DialogTitle className="text-lg font-bold">
+							Adjust Credits
+						</DialogTitle>
 						<DialogDescription className="text-sm">
 							{planName}
 						</DialogDescription>
 					</DialogHeader>
-					
+
 					<div className="py-6">
 						{/* Credits Preview */}
 						<div className="flex items-center justify-center gap-4 mb-6">
 							<div className="text-center">
-								<p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Current</p>
-								<p className="text-2xl font-bold tabular-nums">{currentCredits}</p>
+								<p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+									Current
+								</p>
+								<p className="text-2xl font-bold tabular-nums">
+									{currentCredits}
+								</p>
 							</div>
 							<div className="text-muted-foreground">→</div>
 							<div className="text-center">
-								<p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">After</p>
-								<p className={cn(
-									"text-2xl font-bold tabular-nums",
-									previewCredits !== currentCredits && (previewCredits > currentCredits ? "text-green-600" : "text-red-600")
-								)}>
+								<p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+									After
+								</p>
+								<p
+									className={cn(
+										"text-2xl font-bold tabular-nums",
+										previewCredits !== currentCredits &&
+											(previewCredits > currentCredits
+												? "text-green-600"
+												: "text-red-600"),
+									)}
+								>
 									{previewCredits}
 								</p>
 							</div>
 						</div>
-						
+
 						{/* Quick Actions */}
 						<div className="flex items-center justify-center gap-2 mb-6">
 							{[-10, -5, -1].map((val) => (
@@ -147,7 +162,7 @@ export function ManageSubscriptionCreditsDialog({
 								</Button>
 							))}
 						</div>
-						
+
 						<div className="grid gap-4">
 							<div className="grid gap-2">
 								<Label htmlFor={amountId} className="text-xs font-medium">
@@ -164,7 +179,8 @@ export function ManageSubscriptionCreditsDialog({
 							</div>
 							<div className="grid gap-2">
 								<Label htmlFor={descriptionId} className="text-xs font-medium">
-									Reason <span className="text-muted-foreground">(optional)</span>
+									Reason{" "}
+									<span className="text-muted-foreground">(optional)</span>
 								</Label>
 								<Input
 									id={descriptionId}
@@ -176,7 +192,7 @@ export function ManageSubscriptionCreditsDialog({
 							</div>
 						</div>
 					</div>
-					
+
 					<DialogFooter>
 						<Button
 							type="button"
@@ -187,8 +203,10 @@ export function ManageSubscriptionCreditsDialog({
 							Cancel
 						</Button>
 						<Button
-							type="submit" 
-							disabled={isPending || !amount || Number.parseInt(amount, 10) === 0}
+							type="submit"
+							disabled={
+								isPending || !amount || Number.parseInt(amount, 10) === 0
+							}
 							className="text-sm"
 						>
 							{isPending ? "Saving..." : "Apply Changes"}

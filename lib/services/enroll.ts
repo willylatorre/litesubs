@@ -2,9 +2,8 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/app/db";
 import {
+	enrollments,
 	invites,
-	liteSubscriptions,
-	products,
 	stripeConnectAccounts,
 	transactions,
 	user,
@@ -13,7 +12,7 @@ import { appUrl } from "@/lib/app-url";
 import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
 import { getStripe } from "@/lib/stripe";
 import { resolveCustomer } from "./customers";
-import { pageInput, resolvePlan } from "./plans";
+import { pageInput, resolvePublishedPlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
 
 export const enrollmentInput = z.object({
@@ -31,9 +30,12 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 			"INVALID_INPUT",
 			"A reason is required for a complimentary enrollment",
 		);
-	const plan = await resolvePlan(principal, data.plan);
-	if (!plan.active)
-		throw new ServiceError("INACTIVE_PLAN", "This plan is unavailable", 409);
+	// Both invitation and payment paths need sellable terms, so a draft can
+	// never be smuggled into an enrollment by ID.
+	const { plan, terms } = await resolvePublishedPlan(
+		principal.creatorId,
+		data.plan,
+	);
 	const email = data.customer.toLowerCase();
 	// New enrollment is the only operation allowed to resolve an account that
 	// is not yet this creator's customer. Do not expose the account profile.
@@ -74,12 +76,12 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 				where: and(
 					eq(invites.creatorId, principal.creatorId),
 					eq(invites.email, email),
-					eq(invites.productId, plan.id),
+					eq(invites.planId, plan.id),
 					eq(invites.status, "pending"),
 					gt(invites.expiresAt, new Date()),
 				),
 			});
-			const compCredits = data.mode === "comp" ? plan.credits : 0;
+			const compCredits = data.mode === "comp" ? terms.credits : 0;
 			if (
 				existing &&
 				(existing.compCredits !== compCredits ||
@@ -98,7 +100,7 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 						.values({
 							creatorId: principal.creatorId,
 							email,
-							productId: plan.id,
+							planId: plan.id,
 							token: crypto.randomUUID(),
 							compCredits,
 							compReason: data.reason,
@@ -115,17 +117,17 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 	}
 	if (data.mode === "comp") {
 		return db.transaction(async (tx) => {
-			const [sub] = await tx
-				.insert(liteSubscriptions)
+			const [enrollment] = await tx
+				.insert(enrollments)
 				.values({
 					creatorId: principal.creatorId,
 					userId: customer.id,
-					productId: plan.id,
-					credits: plan.credits,
+					planId: plan.id,
+					credits: terms.credits,
 				})
 				.onConflictDoNothing()
 				.returning();
-			if (!sub)
+			if (!enrollment)
 				throw new ServiceError(
 					"ALREADY_ENROLLED",
 					"Already enrolled; use grant_credits for additional credits",
@@ -134,26 +136,26 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 			await tx.insert(transactions).values({
 				creatorId: principal.creatorId,
 				userId: customer.id,
-				productId: plan.id,
-				amount: plan.credits,
+				planId: plan.id,
+				amount: terms.credits,
 				type: "manual_adjustment",
 				status: "completed",
 				description: data.reason,
 				balanceBefore: 0,
-				balanceAfter: plan.credits,
+				balanceAfter: terms.credits,
 			});
-			return { status: "enrolled", enrollment: sub };
+			return { status: "enrolled", enrollment };
 		});
 	}
 	// Create the checkout before the enrollment. Stripe failures must not leave
 	// an enrollment that the caller believes is payable but has no URL.
 	const paymentUrl = await checkoutUrl(principal, customer.id, plan.id);
 	await db
-		.insert(liteSubscriptions)
+		.insert(enrollments)
 		.values({
 			creatorId: principal.creatorId,
 			userId: customer.id,
-			productId: plan.id,
+			planId: plan.id,
 		})
 		.onConflictDoNothing();
 	return {
@@ -170,9 +172,10 @@ export async function checkoutUrl(
 	planId: string,
 ) {
 	requireScope(principal, "customers:write");
-	const plan = await resolvePlan(principal, planId);
-	if (!plan.active)
-		throw new ServiceError("INACTIVE_PLAN", "This plan is unavailable", 409);
+	const { plan, terms } = await resolvePublishedPlan(
+		principal.creatorId,
+		planId,
+	);
 	const [customer, connect] = await Promise.all([
 		db.query.user.findFirst({ where: eq(user.id, customerId) }),
 		db.query.stripeConnectAccounts.findFirst({
@@ -182,43 +185,46 @@ export async function checkoutUrl(
 	if (!customer) throw new ServiceError("NOT_FOUND", "Customer not found", 404);
 	const connected =
 		connect?.chargesEnabled && connect.status === "active" ? connect : null;
-	const fee = connected
-		? Math.round(plan.price * PLATFORM_FEE_PERCENT)
-		: undefined;
+	// Direct charges only: without a payment-ready creator account there is no
+	// sale. Falling back to the platform account is explicitly not supported.
+	if (!connected)
+		throw new ServiceError(
+			"PAYMENTS_NOT_READY",
+			"This creator cannot accept payments yet",
+			409,
+		);
+	const fee = Math.round(terms.price * PLATFORM_FEE_PERCENT);
 	const session = await getStripe().checkout.sessions.create({
 		mode: "payment",
 		integration_identifier: `litesubs_mcp_${Array.from(crypto.getRandomValues(new Uint8Array(8)), (n) => String.fromCharCode(97 + (n % 26))).join("")}`,
 		line_items: [
 			{
 				price_data: {
-					currency: plan.currency,
+					currency: terms.currency,
 					product_data: { name: plan.name },
-					unit_amount: plan.price,
+					unit_amount: terms.price,
 				},
 				quantity: 1,
 			},
 		],
 		customer_email: customer.email,
-		success_url: appUrl(`/dashboard?success=true&productId=${plan.id}`),
+		success_url: appUrl(`/dashboard?success=true&planId=${plan.id}`),
 		cancel_url: appUrl("/dashboard?canceled=true"),
 		metadata: {
 			userId: customerId,
-			productId: plan.id,
+			planId: plan.id,
+			planVersionId: terms.id,
 			creatorId: principal.creatorId,
-			credits: String(plan.credits),
+			credits: String(terms.credits),
 			type: "credit_purchase",
-			usesStripeConnect: String(!!connected),
-			stripeConnectAccountId: connected?.stripeAccountId ?? "",
-			applicationFeeAmount: fee?.toString() ?? "",
+			usesStripeConnect: "true",
+			stripeConnectAccountId: connected.stripeAccountId,
+			applicationFeeAmount: String(fee),
 		},
-		...(connected
-			? {
-					payment_intent_data: {
-						application_fee_amount: fee,
-						transfer_data: { destination: connected.stripeAccountId },
-					},
-				}
-			: {}),
+		payment_intent_data: {
+			application_fee_amount: fee,
+			transfer_data: { destination: connected.stripeAccountId },
+		},
 	});
 	if (!session.url)
 		throw new ServiceError(
@@ -235,7 +241,7 @@ export async function listInvites(principal: Principal, input: unknown = {}) {
 		where: eq(invites.creatorId, principal.creatorId),
 		...pageInput.parse(input),
 		orderBy: (table, { desc }) => [desc(table.createdAt)],
-		with: { product: true },
+		with: { plan: true },
 	});
 }
 
@@ -244,10 +250,10 @@ export async function createInvite(principal: Principal, input: unknown) {
 	const data = z
 		.object({
 			email: z.email().or(z.literal("")).optional(),
-			productId: z.string().optional(),
+			planId: z.string().optional(),
 		})
 		.parse(input);
-	if (data.productId) await resolvePlan(principal, data.productId);
+	if (data.planId) await resolvePublishedPlan(principal.creatorId, data.planId);
 	if (data.email) {
 		const existing = await db.query.invites.findFirst({
 			where: and(
@@ -266,7 +272,7 @@ export async function createInvite(principal: Principal, input: unknown) {
 			.values({
 				creatorId: principal.creatorId,
 				email: data.email?.toLowerCase() || null,
-				productId: data.productId,
+				planId: data.planId,
 				token: crypto.randomUUID(),
 			})
 			.returning()
@@ -290,31 +296,28 @@ export async function claimEnrollmentInvite(
 			(invite.email && invite.email.toLowerCase() !== email.toLowerCase())
 		)
 			throw new ServiceError("NOT_FOUND", "Invite unavailable or expired", 404);
-		if (invite.productId) {
-			const plan = await tx.query.products.findFirst({
-				where: and(
-					eq(products.id, invite.productId),
-					eq(products.creatorId, invite.creatorId),
-					eq(products.active, true),
-				),
-			});
-			if (!plan)
-				throw new ServiceError("NOT_FOUND", "Invited plan is unavailable", 404);
-			const [sub] = await tx
-				.insert(liteSubscriptions)
+		if (invite.planId) {
+			// An old invite must not resurrect a draft or unpublished offer.
+			const { plan } = await resolvePublishedPlan(
+				invite.creatorId,
+				invite.planId,
+				tx,
+			);
+			const [enrollment] = await tx
+				.insert(enrollments)
 				.values({
 					creatorId: invite.creatorId,
 					userId,
-					productId: invite.productId,
+					planId: plan.id,
 					credits: invite.compCredits,
 				})
 				.onConflictDoNothing()
 				.returning();
-			if (sub && invite.compCredits > 0)
+			if (enrollment && invite.compCredits > 0)
 				await tx.insert(transactions).values({
 					creatorId: invite.creatorId,
 					userId,
-					productId: invite.productId,
+					planId: plan.id,
 					amount: invite.compCredits,
 					type: "manual_adjustment",
 					status: "completed",

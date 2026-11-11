@@ -1,9 +1,9 @@
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/app/db";
-import { liteSubscriptions, transactions } from "@/app/db/schema";
+import { enrollments, transactions } from "@/app/db/schema";
 import { resolveCustomer } from "./customers";
-import { resolvePlan } from "./plans";
+import { resolvePublishedPlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
 
 export const creditInput = z.object({
@@ -32,12 +32,14 @@ export async function changeCredits(
 		);
 	const [customer, plan] = await Promise.all([
 		resolveCustomer(principal, data.customer),
-		resolvePlan(principal, data.plan),
+		// Credit mutations target an enrollment, so they need sellable terms:
+		// a draft plan has nothing to enroll against yet.
+		resolvePublishedPlan(principal.creatorId, data.plan),
 	]);
 	const delta = type === "usage" ? -data.amount : data.amount;
 	return adjustCredits(principal, {
 		customerId: customer.id,
-		planId: plan.id,
+		planId: plan.plan.id,
 		delta,
 		type,
 		reason: data.reason,
@@ -95,7 +97,7 @@ export async function adjustCredits(
 			if (original) {
 				if (
 					original.userId !== data.customerId ||
-					original.productId !== data.planId ||
+					original.planId !== data.planId ||
 					original.amount !== data.delta ||
 					original.type !== data.type ||
 					original.description !== data.reason
@@ -114,25 +116,26 @@ export async function adjustCredits(
 				};
 			}
 		}
-		const [sub] = await tx
+		const [enrollment] = await tx
 			.select()
-			.from(liteSubscriptions)
+			.from(enrollments)
 			.where(
 				and(
-					eq(liteSubscriptions.creatorId, principal.creatorId),
-					eq(liteSubscriptions.userId, data.customerId),
-					eq(liteSubscriptions.productId, data.planId),
+					eq(enrollments.creatorId, principal.creatorId),
+					eq(enrollments.userId, data.customerId),
+					eq(enrollments.planId, data.planId),
 				),
 			)
 			.for("update");
-		if (!sub) throw new ServiceError("NOT_FOUND", "Enrollment not found", 404);
-		const after = sub.credits + data.delta;
+		if (!enrollment)
+			throw new ServiceError("NOT_FOUND", "Enrollment not found", 404);
+		const after = enrollment.credits + data.delta;
 		if (after < 0)
 			throw new ServiceError(
 				"INSUFFICIENT_CREDITS",
 				"Not enough credits",
 				409,
-				{ balance: sub.credits },
+				{ balance: enrollment.credits },
 			);
 		if (after > 2147483647)
 			throw new ServiceError(
@@ -142,33 +145,33 @@ export async function adjustCredits(
 		if (data.dryRun)
 			return {
 				transactionId: null,
-				before: sub.credits,
+				before: enrollment.credits,
 				after,
 				dryRun: true,
 				replayed: false,
 			};
 		await tx
-			.update(liteSubscriptions)
+			.update(enrollments)
 			.set({ credits: after })
-			.where(eq(liteSubscriptions.id, sub.id));
+			.where(eq(enrollments.id, enrollment.id));
 		const [entry] = await tx
 			.insert(transactions)
 			.values({
-				userId: sub.userId,
-				productId: sub.productId,
+				userId: enrollment.userId,
+				planId: enrollment.planId,
 				creatorId: principal.creatorId,
 				amount: data.delta,
 				type: data.type,
 				status: "completed",
 				description: data.reason,
 				idempotencyKey: data.key,
-				balanceBefore: sub.credits,
+				balanceBefore: enrollment.credits,
 				balanceAfter: after,
 			})
 			.returning({ id: transactions.id });
 		return {
 			transactionId: entry.id,
-			before: sub.credits,
+			before: enrollment.credits,
 			after,
 			dryRun: false,
 			replayed: false,

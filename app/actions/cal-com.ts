@@ -1,9 +1,9 @@
 "use server";
 
 import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { db } from "@/app/db";
 import { calComAccounts } from "@/app/db/schema";
-import { revalidatePath } from "next/cache";
 import { authenticatedAction } from "@/lib/safe-action";
 
 export async function getCalAccountStatus() {

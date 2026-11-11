@@ -25,6 +25,7 @@ export function sampleIds(creatorId: string) {
 	const slug = emailSafe(creatorId);
 	return {
 		plan: `sample-plan-${creatorId}`,
+		planVersion: `sample-plan-version-${creatorId}`,
 		customer: `sample-customer-${creatorId}`,
 		customerEmail: `ana.rivera+${slug}@example.com`,
 		enrollment: `sample-enrollment-${creatorId}`,

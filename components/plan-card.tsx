@@ -7,18 +7,20 @@ import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { BuyButton } from "./buy-button";
 
-export interface PackItemProduct {
+export interface PlanCardProduct {
 	name: string;
 	credits: number;
 	price: number;
 	description?: string | null;
 	badge?: string | null;
 	currency?: string;
+	billingMode?: "one_time" | "recurring";
+	interval?: "month" | null;
 	eventTypeName?: string | null;
 }
 
-interface PackItemProps {
-	product: PackItemProduct;
+interface PlanCardProps {
+	product: PlanCardProduct;
 	productId?: string;
 	price?: number;
 	className?: string;
@@ -34,7 +36,7 @@ interface PackItemProps {
 	isLoading?: boolean;
 }
 
-export function PackItem({
+export function PlanCard({
 	product,
 	productId,
 	price,
@@ -49,10 +51,11 @@ export function PackItem({
 	withEvents = false,
 	readOnly = false,
 	isLoading = false,
-}: PackItemProps) {
+}: PlanCardProps) {
 	const { name, credits, description, badge, currency = "usd" } = product;
 	const eventTypeName = product.eventTypeName;
 	const finalPrice = price !== undefined ? price : product.price;
+	const recurring = product.billingMode === "recurring";
 
 	const handleCreditsEnter = () => withEvents && onCreditsHover?.(true);
 	const handleCreditsLeave = () => withEvents && onCreditsHover?.(false);
@@ -83,10 +86,13 @@ export function PackItem({
 			);
 		}
 
+		// Monthly plans are subscription-only in v1: no paid top-ups.
+		if (recurring) return null;
+
 		return (
 			<BuyButton
 				disabled={!productId}
-				productId={productId ?? ""}
+				planId={productId ?? ""}
 				price={finalPrice}
 				currency={currency}
 				productName={name}
@@ -137,6 +143,11 @@ export function PackItem({
 							Cal.com · {eventTypeName}
 						</p>
 					)}
+					{recurring && (
+						<p className="text-xs text-muted-foreground mt-1">
+							Renews monthly. Credits do not roll over.
+						</p>
+					)}
 				</div>
 			</div>
 
@@ -152,7 +163,7 @@ export function PackItem({
 						? {
 								onMouseEnter: handleCreditsEnter,
 								onMouseLeave: handleCreditsLeave,
-						  }
+							}
 						: {})}
 				>
 					{credits}
@@ -165,7 +176,7 @@ export function PackItem({
 						? {
 								onMouseEnter: handlePriceEnter,
 								onMouseLeave: handlePriceLeave,
-						  }
+							}
 						: {})}
 				>
 					{renderAction()}

@@ -11,14 +11,21 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { useProducts } from "@/hooks/use-products";
+import { usePlans } from "@/hooks/use-plans";
 import { isSamplePlanId } from "@/lib/sample-data";
-import { CreatePackDialog } from "./create-pack-dialog";
-import { PackActions } from "./pack-actions";
-import { PackDetailsDialog } from "./pack-details-dialog";
+import { CreatePlanDialog } from "./create-plan-dialog";
+import { PlanActions } from "./plan-actions";
+import { PlanDetailsDialog } from "./plan-details-dialog";
 
-export default function PacksPage() {
-	const { data: packs, isLoading, isError } = useProducts();
+function formatMoney(amount: number, currency: string) {
+	return new Intl.NumberFormat("en-US", {
+		style: "currency",
+		currency: currency.toUpperCase(),
+	}).format(amount / 100);
+}
+
+export default function PlansPage() {
+	const { data: plans, isLoading, isError } = usePlans();
 
 	if (isError) {
 		return <div className="p-6 text-red-500">Failed to load plans.</div>;
@@ -28,12 +35,13 @@ export default function PacksPage() {
 		<div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
 			<div className="flex items-center justify-between">
 				<div>
-					<h1 className="text-2xl font-bold tracking-tight">Credit Plans</h1>
+					<h1 className="text-2xl font-bold tracking-tight">Plans</h1>
 					<p className="text-muted-foreground text-sm">
-						Manage the credit plans you offer to your customers.
+						Prepare offers here. Published plans sell credits; drafts stay
+						visible to you only.
 					</p>
 				</div>
-				<CreatePackDialog />
+				<CreatePlanDialog />
 			</div>
 
 			<div className="rounded-md border bg-card">
@@ -41,7 +49,7 @@ export default function PacksPage() {
 					<TableHeader>
 						<TableRow>
 							<TableHead>Name</TableHead>
-							<TableHead>Price</TableHead>
+							<TableHead>Terms</TableHead>
 							<TableHead>Credits</TableHead>
 							<TableHead>Status</TableHead>
 							<TableHead className="text-right">Actions</TableHead>
@@ -55,7 +63,7 @@ export default function PacksPage() {
 										<Skeleton className="h-4 w-[100px]" />
 									</TableCell>
 									<TableCell>
-										<Skeleton className="h-4 w-[50px]" />
+										<Skeleton className="h-4 w-[80px]" />
 									</TableCell>
 									<TableCell>
 										<Skeleton className="h-4 w-[50px]" />
@@ -68,7 +76,7 @@ export default function PacksPage() {
 									</TableCell>
 								</TableRow>
 							))
-						) : packs?.length === 0 ? (
+						) : plans?.length === 0 ? (
 							<TableRow>
 								<TableCell colSpan={5} className="h-32 text-center">
 									<div className="flex flex-col items-center gap-3">
@@ -94,44 +102,50 @@ export default function PacksPage() {
 								</TableCell>
 							</TableRow>
 						) : (
-							packs?.map((pack) => (
-								<TableRow key={pack.id}>
+							plans?.map((plan) => (
+								<TableRow key={plan.id}>
 									<TableCell className="font-medium">
-										<PackDetailsDialog packId={pack.id}>
+										<PlanDetailsDialog planId={plan.id}>
 											<div className="flex flex-col cursor-pointer hover:underline">
 												<div className="flex items-center gap-2">
-													<span>{pack.name}</span>
-													{isSamplePlanId(pack.id) && (
+													<span>{plan.name}</span>
+													{isSamplePlanId(plan.id) && (
 														<Badge variant="outline">Sample</Badge>
 													)}
-													{pack.integration?.calcomIntegration?.eventTypeId && (
+													{plan.integration?.calcomIntegration?.eventTypeId && (
 														<Badge variant="outline">cal.com</Badge>
 													)}
 												</div>
-												{pack.description && (
+												{plan.description && (
 													<span className="text-xs text-muted-foreground">
-														{pack.description}
+														{plan.description}
 													</span>
 												)}
 											</div>
-										</PackDetailsDialog>
+										</PlanDetailsDialog>
 									</TableCell>
 									<TableCell>
-										{new Intl.NumberFormat("en-US", {
-											style: "currency",
-											currency: pack.currency
-												? pack.currency.toUpperCase()
-												: "USD",
-										}).format(pack.price / 100)}
+										{plan.terms ? (
+											<span className="text-sm">
+												{formatMoney(plan.terms.price, plan.terms.currency)}
+												{plan.terms.billingMode === "recurring" ? (
+													<span className="text-muted-foreground">/mo</span>
+												) : null}
+											</span>
+										) : (
+											<span className="text-sm text-muted-foreground">—</span>
+										)}
 									</TableCell>
-									<TableCell>{pack.credits}</TableCell>
+									<TableCell>{plan.terms?.credits ?? "—"}</TableCell>
 									<TableCell>
-										<Badge variant={pack.active ? "default" : "secondary"}>
-											{pack.active ? "Active" : "Disabled"}
-										</Badge>
+										{plan.isDraft ? (
+											<Badge variant="secondary">Draft</Badge>
+										) : (
+											<Badge variant="default">Published</Badge>
+										)}
 									</TableCell>
 									<TableCell className="text-right">
-										<PackActions packId={pack.id} />
+										<PlanActions planId={plan.id} isDraft={plan.isDraft} />
 									</TableCell>
 								</TableRow>
 							))
@@ -139,6 +153,10 @@ export default function PacksPage() {
 					</TableBody>
 				</Table>
 			</div>
+			<p className="text-xs text-muted-foreground">
+				Draft plans cannot be purchased or invited to. Publishing requires a
+				connected Stripe account, which the next step adds.
+			</p>
 		</div>
 	);
 }

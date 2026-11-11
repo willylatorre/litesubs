@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { MIN_PAYOUT_AMOUNT, PLATFORM_FEE_PERCENT } from "@/lib/constants";
 import {
 	computeBalance,
+	type LedgerTotalsRow,
 	mapOutboundPaymentEvent,
 	requestPayoutSchema,
-	type LedgerTotalsRow,
 } from "@/lib/payouts";
-import { MIN_PAYOUT_AMOUNT, PLATFORM_FEE_PERCENT } from "@/lib/constants";
 
 describe("requestPayoutSchema", () => {
 	const valid = (amount: unknown) => requestPayoutSchema.safeParse({ amount });
@@ -54,15 +54,15 @@ describe("computeBalance", () => {
 		assert.equal(b.availableBalance, 0);
 	});
 
-	it("deducts the platform fee from sales", () => {
+	it("deducts the configured platform fee from sales", () => {
 		const b = computeBalance(
 			rows([{ type: "sale", total: "100.00" }]),
 			0,
 			PLATFORM_FEE_PERCENT,
 		);
 		assert.equal(b.totalEarnings, 100);
-		assert.equal(b.platformFees, 10);
-		assert.equal(b.availableBalance, 90);
+		assert.equal(b.platformFees, 100 * PLATFORM_FEE_PERCENT);
+		assert.equal(b.availableBalance, 100 * (1 - PLATFORM_FEE_PERCENT));
 	});
 
 	it("subtracts completed payouts via the ledger", () => {
@@ -75,7 +75,7 @@ describe("computeBalance", () => {
 			PLATFORM_FEE_PERCENT,
 		);
 		assert.equal(b.totalPaidOut, 40);
-		assert.equal(b.availableBalance, 50);
+		assert.equal(b.availableBalance, 100 * (1 - PLATFORM_FEE_PERCENT) - 40);
 	});
 
 	it("deducts pending payouts so the same funds cannot be requested twice", () => {
@@ -85,7 +85,7 @@ describe("computeBalance", () => {
 			PLATFORM_FEE_PERCENT,
 		);
 		assert.equal(b.pendingPayouts, 30);
-		assert.equal(b.availableBalance, 60);
+		assert.equal(b.availableBalance, 100 * (1 - PLATFORM_FEE_PERCENT) - 30);
 	});
 
 	it("applies adjustments, including restored balances", () => {
@@ -98,7 +98,10 @@ describe("computeBalance", () => {
 			0,
 			PLATFORM_FEE_PERCENT,
 		);
-		assert.equal(b.availableBalance, 90);
+		assert.equal(
+			b.availableBalance,
+			100 * (1 - PLATFORM_FEE_PERCENT) - 40 + 40,
+		);
 	});
 
 	it("can report a negative balance when refunds exceed earnings", () => {

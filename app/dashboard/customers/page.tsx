@@ -77,7 +77,7 @@ export default async function CustomersPage() {
 												email: record.user.email,
 												image: record.user.image,
 											}}
-											initialSubscriptions={record.activePacks}
+											initialEnrollments={record.enrollments}
 										>
 											<div className="flex items-center gap-3 cursor-pointer hover:underline">
 												<Avatar className="h-8 w-8">
@@ -105,14 +105,14 @@ export default async function CustomersPage() {
 									</TableCell>
 									<TableCell>
 										<div className="flex flex-wrap gap-1">
-											{record.activePacks.length > 0 ? (
-												record.activePacks.map((pack) => (
+											{record.enrollments.length > 0 ? (
+												record.enrollments.map((plan) => (
 													<Badge
-														key={pack.id}
+														key={plan.id}
 														variant="secondary"
 														className="text-xs"
 													>
-														{pack.name}
+														{plan.name}
 													</Badge>
 												))
 											) : (
@@ -128,10 +128,10 @@ export default async function CustomersPage() {
 									</TableCell>
 									<TableCell className="text-right">
 										<div className="flex items-center justify-end gap-2">
-											{record.activePacks.length === 1 && (
+											{record.enrollments.length === 1 && (
 												<DecreaseCreditButton
-													subscriptionId={record.activePacks[0].subscriptionId}
-													currentCredits={record.activePacks[0].credits}
+													enrollmentId={record.enrollments[0].enrollmentId}
+													currentCredits={record.enrollments[0].credits}
 													variant="outline"
 													size="sm"
 												/>
@@ -143,7 +143,7 @@ export default async function CustomersPage() {
 													email: record.user.email,
 													image: record.user.image,
 												}}
-												initialSubscriptions={record.activePacks}
+												initialEnrollments={record.enrollments}
 											>
 												<Button variant="ghost" size="sm">
 													Details

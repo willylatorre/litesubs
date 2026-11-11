@@ -1,21 +1,21 @@
 "use client";
 
+import { IconMinus } from "@tabler/icons-react";
 import { useTransition } from "react";
 import { toast } from "sonner";
-import { updateSubscriptionCredits } from "@/app/actions/customers";
+import { updateEnrollmentCredits } from "@/app/actions/customers";
 import { Button } from "@/components/ui/button";
-import { IconMinus } from "@tabler/icons-react";
 import { Spinner } from "@/components/ui/spinner";
-import { cn } from "@/lib/utils";
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 export function DecreaseCreditButton({
-	subscriptionId,
+	enrollmentId,
 	currentCredits,
 	variant = "ghost",
 	size = "sm",
@@ -23,9 +23,15 @@ export function DecreaseCreditButton({
 	onSuccess,
 	showLabel = true,
 }: {
-	subscriptionId: string;
+	enrollmentId: string;
 	currentCredits: number;
-	variant?: "outline" | "ghost" | "default" | "secondary" | "destructive" | "link";
+	variant?:
+		| "outline"
+		| "ghost"
+		| "default"
+		| "secondary"
+		| "destructive"
+		| "link";
 	size?: "default" | "sm" | "lg" | "icon";
 	className?: string;
 	onSuccess?: () => void;
@@ -41,10 +47,10 @@ export function DecreaseCreditButton({
 		}
 
 		startTransition(async () => {
-			const res = await updateSubscriptionCredits(
-				subscriptionId,
+			const res = await updateEnrollmentCredits(
+				enrollmentId,
 				-1,
-				"Quick decrement"
+				"Quick decrement",
 			);
 			if (res.success) {
 				toast.success("Decreased 1 credit");
@@ -64,7 +70,7 @@ export function DecreaseCreditButton({
 			className={cn(
 				"transition-all duration-200",
 				showLabel ? "gap-1.5" : "h-8 w-8",
-				className
+				className,
 			)}
 		>
 			{isPending ? (

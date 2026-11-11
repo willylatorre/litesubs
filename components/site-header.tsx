@@ -11,7 +11,8 @@ export function SiteHeader() {
 		if (path === "/dashboard") return "Active Credit Plans";
 		if (path.startsWith("/dashboard/creator")) return "Creator Dashboard";
 		if (path.startsWith("/dashboard/customers")) return "Customers";
-		if (path.startsWith("/dashboard/packs")) return "Credit Plans";
+		if (path.startsWith("/dashboard/plans")) return "Plans";
+		if (path.startsWith("/dashboard/enrollments")) return "Plan details";
 		if (path.startsWith("/dashboard/developers/api-keys")) return "API Tokens";
 		if (path.startsWith("/dashboard/developers")) return "API & MCP";
 		if (path.startsWith("/dashboard/integrations")) return "Integrations";

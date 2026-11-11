@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 interface Props {
 	initialSample: SampleWorkspaceState;
 	isEmpty: boolean;
-	activeProducts: number;
+	totalPlans: number;
 	totalCustomers: number;
 }
 
@@ -40,7 +40,7 @@ interface Props {
 export function GettingStarted({
 	initialSample,
 	isEmpty,
-	activeProducts,
+	totalPlans,
 	totalCustomers,
 }: Props) {
 	const [sample, setSample] = useState(initialSample);
@@ -98,8 +98,8 @@ export function GettingStarted({
 						{
 							n: 1,
 							label: "Create a plan",
-							done: sample.loaded || activeProducts > 0,
-							href: "/dashboard/packs",
+							done: sample.loaded || totalPlans > 0,
+							href: "/dashboard/plans",
 						},
 						{
 							n: 2,
@@ -152,7 +152,7 @@ export function GettingStarted({
 								</Link>
 							</Button>
 							<Button asChild variant="outline" size="sm">
-								<Link href="/dashboard/packs">
+								<Link href="/dashboard/plans">
 									<IconCoin className="size-4" />
 									See the sample plan
 								</Link>

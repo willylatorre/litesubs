@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/app/db";
-import { liteSubscriptions, transactions, user } from "@/app/db/schema";
+import { enrollments, transactions, user } from "@/app/db/schema";
 import { pageInput, resolvePlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
 
@@ -12,10 +12,10 @@ export async function resolveCustomer(
 	const matches = await db
 		.selectDistinct({ id: user.id, name: user.name, email: user.email })
 		.from(user)
-		.innerJoin(liteSubscriptions, eq(liteSubscriptions.userId, user.id))
+		.innerJoin(enrollments, eq(enrollments.userId, user.id))
 		.where(
 			and(
-				eq(liteSubscriptions.creatorId, principal.creatorId),
+				eq(enrollments.creatorId, principal.creatorId),
 				or(
 					eq(user.id, identifier),
 					sql`lower(${user.email}) = ${identifier.trim().toLowerCase()}`,
@@ -50,37 +50,37 @@ export async function listCustomers(principal: Principal, input: unknown = {}) {
 			image: user.image,
 		})
 		.from(user)
-		.innerJoin(liteSubscriptions, eq(liteSubscriptions.userId, user.id))
-		.where(eq(liteSubscriptions.creatorId, principal.creatorId))
+		.innerJoin(enrollments, eq(enrollments.userId, user.id))
+		.where(eq(enrollments.creatorId, principal.creatorId))
 		.orderBy(user.id)
 		.limit(page.limit)
 		.offset(page.offset);
 	if (!customers.length) return [];
-	const subscriptions = await db.query.liteSubscriptions.findMany({
+	const rows = await db.query.enrollments.findMany({
 		where: and(
-			eq(liteSubscriptions.creatorId, principal.creatorId),
+			eq(enrollments.creatorId, principal.creatorId),
 			inArray(
-				liteSubscriptions.userId,
+				enrollments.userId,
 				customers.map((c) => c.id),
 			),
 		),
-		with: { product: true },
+		with: { plan: true },
 	});
 	return customers.map((customer) => {
-		const enrollments = subscriptions.filter((s) => s.userId === customer.id);
+		const owned = rows.filter((row) => row.userId === customer.id);
 		return {
 			id: customer.id,
 			userId: customer.id,
 			user: customer,
-			credits: enrollments.reduce((sum, s) => sum + s.credits, 0),
-			activePacks: enrollments.map((s) => ({
-				id: s.productId,
-				name: s.product.name,
-				subscriptionId: s.id,
-				credits: s.credits,
+			credits: owned.reduce((sum, row) => sum + row.credits, 0),
+			enrollments: owned.map((row) => ({
+				id: row.planId,
+				name: row.plan.name,
+				enrollmentId: row.id,
+				credits: row.credits,
 			})),
 			updatedAt: new Date(
-				Math.max(...enrollments.map((s) => s.updatedAt.getTime())),
+				Math.max(...owned.map((row) => row.updatedAt.getTime())),
 			).toISOString(),
 		};
 	});
@@ -89,14 +89,14 @@ export async function listCustomers(principal: Principal, input: unknown = {}) {
 export async function getCustomer(principal: Principal, identifier: string) {
 	requireScope(principal, "customers:read");
 	const customer = await resolveCustomer(principal, identifier);
-	const subscriptions = await db.query.liteSubscriptions.findMany({
+	const rows = await db.query.enrollments.findMany({
 		where: and(
-			eq(liteSubscriptions.creatorId, principal.creatorId),
-			eq(liteSubscriptions.userId, customer.id),
+			eq(enrollments.creatorId, principal.creatorId),
+			eq(enrollments.userId, customer.id),
 		),
-		with: { product: true },
+		with: { plan: true },
 	});
-	return { customer, subscriptions };
+	return { customer, enrollments: rows };
 }
 
 export async function listTransactions(
@@ -117,13 +117,13 @@ export async function listTransactions(
 		);
 	if (page.plan)
 		conditions.push(
-			eq(transactions.productId, (await resolvePlan(principal, page.plan)).id),
+			eq(transactions.planId, (await resolvePlan(principal, page.plan)).id),
 		);
 	return db.query.transactions.findMany({
 		where: and(...conditions),
 		orderBy: [desc(transactions.createdAt), desc(transactions.id)],
 		limit: page.limit,
 		offset: page.offset,
-		with: { product: true },
+		with: { plan: true },
 	});
 }

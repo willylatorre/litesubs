@@ -18,10 +18,10 @@ export async function createInvite(_prevState: unknown, formData: FormData) {
 			sessionPrincipal(session.user.id),
 			{
 				email: formData.get("email") || undefined,
-				productId:
-					formData.get("productId") === "undefined"
+				planId:
+					formData.get("planId") === "undefined"
 						? undefined
-						: formData.get("productId") || undefined,
+						: formData.get("planId") || undefined,
 			},
 		);
 		revalidatePath("/dashboard/creator");
@@ -45,7 +45,7 @@ export async function getUserPendingInvites() {
 				eq(invites.status, "pending"),
 				gt(invites.expiresAt, new Date()),
 			),
-			with: { creator: true, product: true },
+			with: { creator: true, plan: true },
 		}),
 	})).then((res) => res.data ?? []);
 }

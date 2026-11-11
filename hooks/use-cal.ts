@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { setPlanCalEventType } from "@/app/actions/plan-integration";
 
 export type CalEventType = {
 	id: number;
@@ -21,32 +22,6 @@ async function fetchCalEventTypes() {
 	return (await res.json()) as CalEventTypeResponse;
 }
 
-async function updateProductCalEventType({
-	productId,
-	eventType,
-}: {
-	productId: string;
-	eventType: CalEventType | null;
-}) {
-	const res = await fetch(`/api/products/${productId}/cal-event-type`, {
-		method: "PATCH",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			calEventTypeId: eventType?.id ?? null,
-			calEventTypeSlug: eventType?.slug ?? null,
-			calEventTypeName: eventType?.name ?? null,
-			calEventTypeUrl: eventType?.url || null,
-		}),
-	});
-
-	const json = await res.json();
-	if (!res.ok) {
-		throw new Error(json.error || "Failed to update Cal.com event type");
-	}
-
-	return json;
-}
-
 export function useCalEventTypes() {
 	return useQuery({
 		queryKey: ["cal-event-types"],
@@ -54,17 +29,23 @@ export function useCalEventTypes() {
 	});
 }
 
-export function useUpdateProductCalEventType() {
+export function useUpdatePlanCalEventType() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: updateProductCalEventType,
+		mutationFn: ({
+			planId,
+			eventType,
+		}: {
+			planId: string;
+			eventType: CalEventType | null;
+		}) => setPlanCalEventType(planId, eventType),
 		onSuccess: () => {
 			toast.success("Cal.com event type updated");
-			queryClient.invalidateQueries({ queryKey: ["products"] });
-			queryClient.invalidateQueries({ queryKey: ["pack-details"] });
+			queryClient.invalidateQueries({ queryKey: ["plans"] });
+			queryClient.invalidateQueries({ queryKey: ["plan-details"] });
 		},
-		onError: (error) => {
+		onError: (error: Error) => {
 			toast.error(error.message);
 		},
 	});

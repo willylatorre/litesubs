@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 interface SectionCardsProps {
 	totalRevenue: number;
-	activeProducts: number;
+	totalPlans: number;
 	totalCustomers: number;
 	/** True when the figures include the removable sample workspace rows. */
 	includesSample?: boolean;
@@ -16,7 +16,7 @@ interface SectionCardsProps {
 
 export function SectionCards({
 	totalRevenue,
-	activeProducts,
+	totalPlans,
 	totalCustomers,
 	includesSample = false,
 }: SectionCardsProps) {
@@ -37,9 +37,9 @@ export function SectionCards({
 			</Card>
 			<Card className="stat-card @container/card">
 				<CardHeader>
-					<CardDescription>Active Plans</CardDescription>
+					<CardDescription>Plans</CardDescription>
 					<CardTitle className="stat-card-value @[250px]/card:text-3xl">
-						{activeProducts}
+						{totalPlans}
 					</CardTitle>
 				</CardHeader>
 			</Card>
@@ -66,7 +66,7 @@ export function SectionCardsSkeleton() {
 			</Card>
 			<Card className="stat-card @container/card">
 				<CardHeader>
-					<CardDescription>Active Plans</CardDescription>
+					<CardDescription>Plans</CardDescription>
 					<Skeleton className="h-8 w-16 mt-1" />
 				</CardHeader>
 			</Card>

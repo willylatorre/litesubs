@@ -38,7 +38,8 @@ From the user’s point of view, it’s always just **credits**.
 Not really — and that’s the point.
 
 LiteSubs replaces heavy subscriptions with **lighter, more flexible credits**.
-Recurring payments are optional and simply refill credits automatically.
+A monthly plan is optional: it grants a fresh allowance each paid month, and
+unused monthly credits do not roll over.
 
 ---
 
@@ -55,9 +56,9 @@ When credits reach zero, usage stops.
 
 You can:
 
-* let customers buy more credits
-* enable auto-refill
-* manually top them up
+* let customers buy another one-time pack
+* grant additional credits manually
+* offer a monthly plan
 
 You stay in control.
 
@@ -102,10 +103,10 @@ No credit card is required to get started right now.
 
 ### **Can I switch from credits to subscriptions later?**
 
-You don’t need to.
+Plans are separate offers: a one-time pack or a monthly plan.
 
-With LiteSubs, subscriptions are just **auto-refilling credits**.
-You can evolve your pricing without changing your product model.
+You can add new plans or publish new terms without changing how existing
+customers use the credits they already bought.
 
 ---
 

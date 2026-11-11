@@ -7,59 +7,28 @@ import { getDashboardData } from "@/app/actions/dashboard";
 import { BuyButton } from "@/components/buy-button";
 import { ConsumerStatsCards } from "@/components/consumer-stats-cards";
 import { InviteItem } from "@/components/invite-item";
-import { PackItem } from "@/components/pack-item";
+import { PlanCard } from "@/components/plan-card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useTransactionCheck } from "@/hooks/use-transaction-check";
-
-// Minimized types for RSC boundary serialization
-interface SubscriptionData {
-	id: string;
-	credits: number;
-	product: {
-		id: string;
-		name: string;
-		price: number;
-		description: string | null;
-		currency: string;
-		calEventTypeName?: string | null;
-	};
-	creator: { name: string } | null;
-}
-
-interface InviteData {
-	id: string;
-	product: {
-		name: string;
-		credits: number;
-		price: number;
-		description: string | null;
-		currency: string;
-		calEventTypeName?: string | null;
-	} | null;
-	creator: { name: string };
-}
+import { type DashboardView, toDashboardView } from "@/lib/dashboard-view";
 
 interface DashboardClientProps {
-	initialData: {
-		stats: { totalSpent: number; activeSubscriptionsCount: number };
-		subscriptions: SubscriptionData[];
-		pendingInvites: InviteData[];
-	};
+	initialData: DashboardView;
 }
 
 export function DashboardClient({ initialData }: DashboardClientProps) {
 	const [data, setData] = useState(initialData);
 	const [isRefreshing, setIsRefreshing] = useState(false);
-	// Track purchased product ID locally to avoid re-renders from useSearchParams subscription
-	const [purchasedProductId, setPurchasedProductId] = useState<string | null>(null);
+	// Track purchased plan ID locally to avoid re-renders from useSearchParams.
+	const [purchasedPlanId, setPurchasedPlanId] = useState<string | null>(null);
 
 	// Read params on-demand at mount to avoid subscribing to all URL changes
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search);
-		const productId = params.get("productId");
-		if (productId) {
-			setPurchasedProductId(productId);
+		const planId = params.get("planId");
+		if (planId) {
+			setPurchasedPlanId(planId);
 		}
 	}, []);
 
@@ -67,7 +36,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 		setIsRefreshing(true);
 		try {
 			const dashboardData = await getDashboardData();
-			setData(dashboardData);
+			setData(toDashboardView(dashboardData));
 		} catch (error) {
 			console.error("Failed to fetch dashboard data:", error);
 		} finally {
@@ -75,17 +44,19 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 		}
 	}, []);
 
-	// Use the custom hook for transaction checking
+	// The success page only observes fulfillment; the webhook grants credits.
 	useTransactionCheck({
 		onSuccess: async () => {
 			await fetchData();
-			setPurchasedProductId(null); // Clear purchased product state after success
+			setPurchasedPlanId(null);
 		},
 	});
 
-	const { stats, subscriptions, pendingInvites } = data;
-	const allSubscriptions = subscriptions || [];
-	const hasLowCredits = allSubscriptions.some((s) => s.credits < 2);
+	const { stats, enrollments, pendingInvites } = data;
+	const allEnrollments = enrollments || [];
+	const hasLowCredits = allEnrollments.some(
+		(enrollment) => enrollment.credits < 2,
+	);
 
 	return (
 		<div className="@container/main flex flex-1 flex-col gap-2">
@@ -96,11 +67,10 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 
 				<ConsumerStatsCards
 					totalSpent={stats.totalSpent}
-					activeSubscriptionsCount={stats.activeSubscriptionsCount}
+					enrollmentCount={stats.enrollmentCount}
 				/>
 
 				<div className="flex flex-col gap-4 px-4 lg:px-6">
-					{/* Invites */}
 					{pendingInvites.length > 0 && (
 						<div className="space-y-4">
 							<h2 className="text-lg font-semibold">Pending Invites</h2>
@@ -112,9 +82,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 						</div>
 					)}
 
-					<h2 className="text-lg font-semibold mt-4 mb-2">
-						Active Credit Plans
-					</h2>
+					<h2 className="text-lg font-semibold mt-4 mb-2">Active Plans</h2>
 
 					{hasLowCredits && (
 						<Alert
@@ -124,18 +92,18 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 							<IconAlertCircle className="size-4" />
 							<AlertTitle>Low Credits</AlertTitle>
 							<AlertDescription>
-								You have less than 2 credits left on one or more subscriptions.
-								Please buy a plan below to add more credits.
+								You have less than 2 credits left on one or more plans. Please
+								buy a plan below to add more credits.
 							</AlertDescription>
 						</Alert>
 					)}
 
 					<div className="flex flex-col gap-8">
-						{allSubscriptions.length === 0 ? (
+						{allEnrollments.length === 0 ? (
 							<div className="col-span-full flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-card p-8 text-center">
 								<p className="text-sm text-muted-foreground">
-									You have no credit plans yet. Plans you buy or are invited to
-									show up here, with the credits left on each.
+									You have no plans yet. Plans you buy or are invited to show up
+									here, with the credits left on each.
 								</p>
 								<div className="flex flex-wrap items-center justify-center gap-3 text-sm">
 									<Link
@@ -151,39 +119,55 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 							</div>
 						) : (
 							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-								{allSubscriptions.map((sub) => {
+								{allEnrollments.map((enrollment) => {
 									const isPurchased =
-										purchasedProductId && sub.product.id === purchasedProductId;
+										purchasedPlanId && enrollment.plan.id === purchasedPlanId;
+									const terms = enrollment.plan.terms;
+									const recurring = terms?.billingMode === "recurring";
 									return (
-										<PackItem
-											key={sub.id}
-											productId={sub.product.id}
+										<PlanCard
+											key={enrollment.id}
+											productId={enrollment.plan.id}
 											product={{
-												name: sub.product.name,
-												credits: sub.credits,
-												price: sub.product.price,
-												description: sub.product.description,
-												currency: sub.product.currency,
-												eventTypeName: sub.product.calEventTypeName,
+												name: enrollment.plan.name,
+												credits: enrollment.credits,
+												price: terms?.price ?? 0,
+												description: enrollment.plan.description,
+												currency: terms?.currency ?? "usd",
+												billingMode: terms?.billingMode ?? "one_time",
+												interval: terms?.interval ?? null,
+												eventTypeName: enrollment.plan.calEventTypeName,
 											}}
 											creditsSuffix=" credits left"
-											creatorName={sub.creator?.name}
+											creatorName={enrollment.creator?.name}
 											isLoading={isPurchased || isRefreshing}
 											action={
 												<div className="flex items-center gap-2 w-full">
-													<Button variant="outline" size="sm" className="flex-1" asChild>
-														<Link href={`/dashboard/subscriptions/${sub.id}`}>Details</Link>
+													<Button
+														variant="outline"
+														size="sm"
+														className="flex-1"
+														asChild
+													>
+														<Link
+															href={`/dashboard/enrollments/${enrollment.id}`}
+														>
+															Details
+														</Link>
 													</Button>
-													<div className="flex-1">
-														<BuyButton
-															disabled={!sub.product.id}
-															productId={sub.product.id}
-															price={sub.product.price}
-															currency={sub.product.currency}
-															productName={sub.product.name}
-															label="Top up"
-														/>
-													</div>
+													{/* Monthly plans have no paid top-ups in v1. */}
+													{!recurring && (
+														<div className="flex-1">
+															<BuyButton
+																disabled={!terms}
+																planId={enrollment.plan.id}
+																price={terms?.price ?? 0}
+																currency={terms?.currency ?? "usd"}
+																productName={enrollment.plan.name}
+																label="Top up"
+															/>
+														</div>
+													)}
 												</div>
 											}
 										/>

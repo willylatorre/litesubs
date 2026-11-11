@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 export type Invite = {
 	id: string;
-	email?: string | null;
+	email: string | null;
 	status: "pending" | "accepted" | "rejected";
-	createdAt: Date;
-	productId?: string;
+	planId: string | null;
+	compCredits: number;
+	createdAt: string | Date;
+	plan?: { id: string; name: string } | null;
 };
 
 async function fetchInvites() {
@@ -16,17 +17,18 @@ async function fetchInvites() {
 	return res.json() as Promise<Invite[]>;
 }
 
-async function createInvite(data: { email?: string; productId?: string }) {
+async function createInvite(data: { email?: string; planId?: string }) {
 	const res = await fetch("/api/v1/invites", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(data),
 	});
 	const json = await res.json();
-	if (!res.ok) {
-		throw new Error(json.error || "Failed to create invite");
-	}
-	return json;
+	if (!res.ok)
+		throw new Error(
+			json.error || json.fieldErrors?.email?.[0] || "Failed to create invite",
+		);
+	return json as Invite & { token: string };
 }
 
 export function useInvites() {
@@ -38,16 +40,13 @@ export function useInvites() {
 
 export function useCreateInvite() {
 	const queryClient = useQueryClient();
-	const router = useRouter();
 
 	return useMutation({
 		mutationFn: createInvite,
 		onSuccess: () => {
-			toast.success("Invite sent!");
 			queryClient.invalidateQueries({ queryKey: ["invites"] });
-			router.refresh();
 		},
-		onError: (error) => {
+		onError: (error: Error) => {
 			toast.error(error.message);
 		},
 	});

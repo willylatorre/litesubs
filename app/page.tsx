@@ -4,11 +4,11 @@ import { LandingPage } from "@/components/landing-page";
 export const metadata: Metadata = {
 	title: "LiteSubs - Simple Credit Plans",
 	description:
-		"Simple credit plans instead of heavy subscriptions. Sell one-time credit plans or set up auto-refill credits, both in one simple system.",
+		"Simple credit plans instead of heavy subscriptions. Sell one-time credit packs or monthly allowances, charged on your own Stripe account.",
 	openGraph: {
 		title: "LiteSubs - Simple Credit Plans",
 		description:
-			"Simple credit plans instead of heavy subscriptions. Sell one-time credit plans or set up auto-refill credits, both in one simple system.",
+			"Simple credit plans instead of heavy subscriptions. Sell one-time credit packs or monthly allowances, charged on your own Stripe account.",
 		url: "https://litesubs.com",
 		siteName: "LiteSubs",
 		images: [
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 		card: "summary_large_image",
 		title: "LiteSubs - Simple Credit Plans",
 		description:
-			"Simple credit plans instead of heavy subscriptions. Sell one-time credit bundles or set up auto-refill credits, both in one simple system.",
+			"Simple credit plans instead of heavy subscriptions. Sell one-time credit packs or monthly allowances, charged on your own Stripe account.",
 		creator: "@litesubs", // Placeholder, adjust if known
 		images: ["/og-image.png"],
 	},
@@ -49,7 +49,7 @@ export default function Home() {
 			description: "Free during early access",
 		},
 		description:
-			"Simple credit plans instead of heavy subscriptions. Sell one-time credit plans or set up auto-refill credits, both in one simple system.",
+			"Simple credit plans instead of heavy subscriptions. Sell one-time credit packs or monthly allowances, charged on your own Stripe account.",
 	};
 
 	return (

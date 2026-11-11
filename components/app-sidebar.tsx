@@ -47,8 +47,8 @@ const data = {
 			icon: IconDashboard,
 		},
 		{
-			title: "Credit Plans",
-			url: "/dashboard/packs",
+			title: "Plans",
+			url: "/dashboard/plans",
 			icon: IconPackage,
 		},
 		{

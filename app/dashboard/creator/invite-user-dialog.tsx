@@ -15,42 +15,42 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { useCreateInvite } from "@/hooks/use-invites";
-import { useProducts } from "@/hooks/use-products";
+import { usePlans } from "@/hooks/use-plans";
 
 interface InviteUserDialogProps {
+	/** Controlled mode: the caller owns the trigger. */
 	open?: boolean;
 	onOpenChange?: (open: boolean) => void;
-	defaultPackId?: string;
+	/** Suppress the built-in button when the caller renders its own menu item. */
+	hideTrigger?: boolean;
+	defaultPlanId?: string;
 	trigger?: React.ReactNode;
 }
 
 export function InviteUserDialog({
 	open: controlledOpen,
 	onOpenChange: controlledOnOpenChange,
-	defaultPackId,
+	hideTrigger = false,
+	defaultPlanId,
 	trigger,
 }: InviteUserDialogProps) {
 	const [internalOpen, setInternalOpen] = useState(false);
 	const isControlled = controlledOpen !== undefined;
 
 	const open = isControlled ? controlledOpen : internalOpen;
-	const setOpen = isControlled ? controlledOnOpenChange! : setInternalOpen;
+	const setOpen = isControlled
+		? (controlledOnOpenChange ?? (() => undefined))
+		: setInternalOpen;
 
 	const [inviteLink, setInviteLink] = useState<string | null>(null);
 	const [copied, setCopied] = useState(false);
 
 	const { mutate, isPending } = useCreateInvite();
-	const { data: packs } = useProducts();
+	const { data: plans } = usePlans();
+	// Invites target published plans only; drafts are not sellable.
+	const sellable = plans?.filter((plan) => !plan.isDraft) ?? [];
 
-	// Reset state when dialog opens/closes
 	const handleOpenChange = (newOpen: boolean) => {
 		setOpen(newOpen);
 		if (!newOpen) {
@@ -64,20 +64,16 @@ export function InviteUserDialog({
 	function onSubmit(e: React.FormEvent<HTMLFormElement>) {
 		e.preventDefault();
 		const formData = new FormData(e.currentTarget);
-		const packId = formData.get("packId") as string;
+		const planId = formData.get("planId") as string;
 
 		mutate(
 			{
 				email: formData.get("email") as string,
-				productId: packId && packId !== "none" ? packId : undefined,
+				planId: planId && planId !== "none" ? planId : undefined,
 			},
 			{
 				onSuccess: (data) => {
-					// Assume data contains the token or full invite object
-					// Adjust based on actual API response type.
-					// The API returns the new invite object which has a token.
-					const link = `${window.location.origin}/invite/${data.token}`;
-					setInviteLink(link);
+					setInviteLink(`${window.location.origin}/invite/${data.token}`);
 					toast.success("Invite link generated!");
 				},
 			},
@@ -85,17 +81,16 @@ export function InviteUserDialog({
 	}
 
 	const copyToClipboard = () => {
-		if (inviteLink) {
-			navigator.clipboard.writeText(inviteLink);
-			setCopied(true);
-			toast.success("Link copied to clipboard");
-			setTimeout(() => setCopied(false), 2000);
-		}
+		if (!inviteLink) return;
+		navigator.clipboard.writeText(inviteLink);
+		setCopied(true);
+		toast.success("Link copied to clipboard");
+		setTimeout(() => setCopied(false), 2000);
 	};
 
 	return (
 		<Dialog open={open} onOpenChange={handleOpenChange}>
-			{!isControlled && (
+			{!isControlled && !hideTrigger && (
 				<DialogTrigger asChild>
 					{trigger || (
 						<Button size="sm">
@@ -110,8 +105,8 @@ export function InviteUserDialog({
 					<DialogTitle>Generate Invite Link</DialogTitle>
 					<DialogDescription>
 						{inviteLink
-							? "Share this link with the user to invite them."
-							: "Create a unique invite link for a user."}
+							? "Share this link with the customer. No email is sent."
+							: "Create a unique invite link for a customer. No email is sent — forward the link yourself."}
 					</DialogDescription>
 				</DialogHeader>
 
@@ -146,37 +141,35 @@ export function InviteUserDialog({
 					</div>
 				) : (
 					<form onSubmit={onSubmit} className="grid gap-4 py-4">
-						<div className="grid grid-cols-4 items-center gap-4">
-							<Label htmlFor="email" className="text-right">
-								Email (Optional)
-							</Label>
+						<div className="grid gap-2">
+							<Label htmlFor="invite-email">Email (optional)</Label>
 							<Input
-								id="email"
+								id="invite-email"
 								name="email"
 								type="email"
-								className="col-span-3"
 								placeholder="user@example.com"
 							/>
 						</div>
-						<div className="grid grid-cols-4 items-center gap-4">
-							<Label htmlFor="packId" className="text-right">
-								Link Plan
-							</Label>
-							<div className="col-span-3">
-								<Select name="packId" defaultValue={defaultPackId || "none"}>
-									<SelectTrigger>
-										<SelectValue placeholder="Select a plan (optional)" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="none">None</SelectItem>
-										{packs?.map((pack) => (
-											<SelectItem key={pack.id} value={pack.id}>
-												{pack.name} ({pack.credits} credits)
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
+						<div className="grid gap-2">
+							<Label htmlFor="invite-plan">Published plan</Label>
+							<select
+								id="invite-plan"
+								name="planId"
+								defaultValue={defaultPlanId || "none"}
+								className="h-9 rounded-md border bg-transparent px-3 text-sm"
+							>
+								<option value="none">No specific plan</option>
+								{sellable.map((plan) => (
+									<option key={plan.id} value={plan.id}>
+										{plan.name} ({plan.terms?.credits ?? 0} credits)
+									</option>
+								))}
+							</select>
+							{sellable.length === 0 && (
+								<p className="text-xs text-muted-foreground">
+									Publish a plan before inviting someone to purchase it.
+								</p>
+							)}
 						</div>
 						<DialogFooter>
 							<Button type="submit" disabled={isPending}>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Callout } from "@/components/docs/callout";
 import { CodeBlock } from "@/components/docs/code-block";
 import { type DocSection, DocsNav } from "@/components/docs/docs-nav";
+import { McpInstall } from "@/components/docs/mcp-install";
 import { Button } from "@/components/ui/button";
 import { getAppUrl } from "@/lib/app-url";
 import { mcpResource } from "@/lib/mcp-config";
@@ -83,8 +84,8 @@ export function IntegrationDocs({ embedded = false }: { embedded?: boolean }) {
 						{[
 							{
 								title: "Create a plan",
-								body: "A plan is a bundle of credits at a price: “Algebra Tutoring, 10 credits, $100”.",
-								href: "/dashboard/packs",
+								body: "A plan is a bundle of credits at a price: “Algebra Tutoring, 10 credits, $100”. It starts as a draft until you connect Stripe and publish.",
+								href: "/dashboard/plans",
 								cta: "Create a plan",
 							},
 							{
@@ -141,33 +142,17 @@ export function IntegrationDocs({ embedded = false }: { embedded?: boolean }) {
 					</p>
 					<CodeBlock language="endpoint" code={mcpResource} />
 
-					<CodeBlock
-						language="json · mcp client config"
-						code={`{
-  "mcpServers": {
-    "litesubs": {
-      "type": "http",
-      "url": "${mcpResource}"
-    }
-  }
-}`}
-					/>
+					<p>
+						Pick your client below. Each one is a few steps, and the browser
+						sign-in is the only part you could call &ldquo;installation&rdquo;:
+						the server is hosted, so nothing runs on your machine.
+					</p>
 
-					<ol className="list-decimal space-y-2 pl-5">
-						<li>
-							Choose a remote HTTP MCP connection in your client and paste the
-							endpoint above.
-						</li>
-						<li>Sign in to Litesubs and review the requested permissions.</li>
-						<li>
-							Approve access, then ask your assistant to create a plan, enroll a
-							student, or grant credits.
-						</li>
-					</ol>
+					<McpInstall />
 
 					<p>
 						Example prompts:{" "}
-						<q>Create an Algebra plan with 10 credits for $100.</q>{" "}
+						<q>Create an Algebra draft plan with 10 credits for $100.</q>{" "}
 						<q>
 							Enroll ana@example.com in Algebra and give me the payment link.
 						</q>
@@ -264,18 +249,27 @@ x-api-key: <machine token>            # consumption only`}
 					<p>
 						Plan creation takes{" "}
 						<code>
-							{'{"name":"Algebra","price":100,"credits":10,"currency":"usd"}'}
+							{
+								'{"name":"Algebra","terms":{"billingMode":"one_time","currency":"usd","price":100,"credits":10}}'
+							}
 						</code>
 						. Input prices are in major units ($100); returned prices are in
-						minor units (10000 cents). Currencies: USD and EUR. Updating a plan
-						does not change existing balances.
+						minor units (10000 cents). Currencies: USD and EUR.
+					</p>
+					<p>
+						A new plan is a <strong>draft</strong>: visible and editable, but
+						not purchasable and not enrollable. Publishing provisions it on the
+						creator&apos;s Stripe account; until then enrollment, invites, and
+						consumption return <code>PLAN_NOT_PUBLISHED</code>. Monthly plans
+						use <code>billingMode: "recurring"</code> with{" "}
+						<code>interval: "month"</code>; yearly offers are not supported yet.
 					</p>
 					<CodeBlock
 						language="curl · create a plan"
 						code={`curl -X POST '${base}/api/v1/plans' \\
   -H 'Authorization: Bearer <oauth token>' \\
   -H 'Content-Type: application/json' \\
-  -d '{"name":"Algebra","price":100,"credits":10,"currency":"usd"}'`}
+  -d '{"name":"Algebra","terms":{"billingMode":"one_time","currency":"usd","price":100,"credits":10}}'`}
 					/>
 					<p>
 						Errors return <code>error</code>, <code>code</code>, and optional{" "}

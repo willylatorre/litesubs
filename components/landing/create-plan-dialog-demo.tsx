@@ -1,7 +1,6 @@
 "use client";
 
 import { Loader2, Plus } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,53 +22,48 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useCalEventTypes, useUpdateProductCalEventType } from "@/hooks/use-cal";
-import { useCreateProduct } from "@/hooks/use-products";
 import { CURRENCIES } from "@/lib/constants";
 
-export function CreatePackDialog() {
-	const [open, setOpen] = useState(false);
-	const { mutateAsync, isPending: isMutatePending } = useCreateProduct();
-	const { mutateAsync: updateEventType } = useUpdateProductCalEventType();
-	const { data: calEventTypesData, isLoading: calLoading } =
-		useCalEventTypes();
-	const [selectedEventTypeId, setSelectedEventTypeId] = useState("none");
+export interface DemoPlanData {
+	name: string;
+	description: string;
+	price: number;
+	credits: number;
+	currency: string;
+}
 
-	const isPending = isMutatePending;
-	const selectedEventType =
-		calEventTypesData?.eventTypes.find(
-			(eventType) => String(eventType.id) === selectedEventTypeId,
-		) ?? null;
+export function CreatePlanDialogDemo({
+	onDemoCreate,
+}: {
+	onDemoCreate: (data: DemoPlanData) => void;
+}) {
+	const [open, setOpen] = useState(false);
+	const [isPending, setIsPending] = useState(false);
 
 	function onSubmit(e: React.FormEvent<HTMLFormElement>) {
 		e.preventDefault();
 		const formData = new FormData(e.currentTarget);
-		
-		const data = {
+
+		const data: DemoPlanData = {
 			name: formData.get("name") as string,
-			description: formData.get("description") as string,
+			description: (formData.get("description") as string) || "",
 			price: Number(formData.get("price")),
 			credits: Number(formData.get("credits")),
-			currency: (formData.get("currency") as any) || "usd",
+			currency: (formData.get("currency") as string) || "usd",
 		};
 
-		mutateAsync(data)
-			.then(async (createdProduct) => {
-				if (selectedEventType && createdProduct?.id) {
-					await updateEventType({
-						productId: createdProduct.id,
-						eventType: selectedEventType,
-					});
-				}
-				setOpen(false);
-			})
-			.catch(() => undefined);
+		setIsPending(true);
+		setTimeout(() => {
+			onDemoCreate(data);
+			setIsPending(false);
+			setOpen(false);
+		}, 600);
 	}
 
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
-				<Button>
+				<Button size="lg">
 					<Plus className="mr-2 h-4 w-4" />
 					Create Plan
 				</Button>
@@ -90,6 +84,7 @@ export function CreatePackDialog() {
 								name="name"
 								placeholder="e.g. Starter Plan"
 								required
+								defaultValue="Starter Plan"
 							/>
 						</div>
 						<div className="grid gap-2">
@@ -98,48 +93,8 @@ export function CreatePackDialog() {
 								id="description"
 								name="description"
 								placeholder="Optional description..."
+								defaultValue="Get 100 credits for your next project."
 							/>
-						</div>
-						<div className="grid gap-2">
-							<Label htmlFor="cal-event-type">Cal.com event type</Label>
-							<Select
-								value={selectedEventTypeId}
-								onValueChange={setSelectedEventTypeId}
-								disabled={!calEventTypesData?.connected || calLoading}
-							>
-								<SelectTrigger id="cal-event-type">
-									<SelectValue
-										placeholder={
-											calLoading
-												? "Loading event types..."
-												: "Select an event type (optional)"
-										}
-									/>
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="none">No event type</SelectItem>
-									{calEventTypesData?.eventTypes.map((eventType) => (
-										<SelectItem
-											key={eventType.id}
-											value={String(eventType.id)}
-										>
-											{eventType.name || eventType.slug}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							{!calEventTypesData?.connected && !calLoading && (
-								<p className="text-xs text-muted-foreground">
-									Connect Cal.com in{" "}
-									<Link
-										href="/dashboard/integrations"
-										className="underline underline-offset-4"
-									>
-										Integrations
-									</Link>{" "}
-									to attach an event type.
-								</p>
-							)}
 						</div>
 						<div className="grid grid-cols-2 gap-4">
 							<div className="grid gap-2">
@@ -167,6 +122,7 @@ export function CreatePackDialog() {
 									step="0.01"
 									placeholder="10.00"
 									required
+									defaultValue="10"
 								/>
 							</div>
 						</div>
@@ -180,6 +136,7 @@ export function CreatePackDialog() {
 								step="1"
 								placeholder="100"
 								required
+								defaultValue="100"
 							/>
 						</div>
 					</div>

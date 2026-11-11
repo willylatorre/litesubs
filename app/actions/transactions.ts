@@ -5,18 +5,18 @@ import { db } from "@/app/db";
 import { transactions } from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
 
-export async function checkTransactionStatus(productId: string) {
+export async function checkTransactionStatus(planId: string) {
 	return authenticatedAction(async (session) => {
-		// Look for a recent transaction for this user and product
-		// We can look for transactions created in the last few minutes
+		// Look for a recent payment for this user and plan. The return page never
+		// grants credits; it only observes what fulfillment already recorded.
 		const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
 		const transaction = await db.query.transactions.findFirst({
 			where: and(
 				eq(transactions.userId, session.user.id),
-				eq(transactions.productId, productId),
+				eq(transactions.planId, planId),
 				eq(transactions.type, "purchase"),
-				gt(transactions.createdAt, fiveMinutesAgo)
+				gt(transactions.createdAt, fiveMinutesAgo),
 			),
 			orderBy: [desc(transactions.createdAt)],
 		});
@@ -31,7 +31,7 @@ export async function checkTransactionStatus(productId: string) {
 
 export async function getCreatorCustomerTransactions(
 	customerId: string,
-	productId?: string,
+	planId?: string,
 ) {
 	return authenticatedAction(async (session) => {
 		const conditions = [
@@ -39,15 +39,15 @@ export async function getCreatorCustomerTransactions(
 			eq(transactions.creatorId, session.user.id),
 		];
 
-		if (productId) {
-			conditions.push(eq(transactions.productId, productId));
+		if (planId) {
+			conditions.push(eq(transactions.planId, planId));
 		}
 
 		const txs = await db.query.transactions.findMany({
 			where: and(...conditions),
 			orderBy: [desc(transactions.createdAt)],
 			with: {
-				product: true,
+				plan: true,
 			},
 		});
 
@@ -55,12 +55,12 @@ export async function getCreatorCustomerTransactions(
 	});
 }
 
-export async function getUserTransactions(productId?: string) {
+export async function getUserTransactions(planId?: string) {
 	return authenticatedAction(async (session) => {
 		const conditions = [eq(transactions.userId, session.user.id)];
 
-		if (productId) {
-			conditions.push(eq(transactions.productId, productId));
+		if (planId) {
+			conditions.push(eq(transactions.planId, planId));
 		}
 
 		const txs = await db.query.transactions.findMany({
@@ -68,7 +68,7 @@ export async function getUserTransactions(productId?: string) {
 			orderBy: [desc(transactions.createdAt)],
 			with: {
 				creator: true,
-				product: true,
+				plan: true,
 			},
 		});
 

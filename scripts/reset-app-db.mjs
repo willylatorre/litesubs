@@ -23,14 +23,21 @@ async function artifact(path) {
 }
 const baseline = await artifact("drizzle/0000_init.sql");
 const journal = JSON.parse(await artifact("drizzle/meta/_journal.json"));
-if (journal.entries.length !== 1 || journal.entries[0].tag !== "0000_init") {
-	throw new Error("Reset only supports the approved single 0000_init baseline.");
+// Reset rebuilds from the approved baseline and then replays every later
+// migration, so the guard still validates the immutable starting point.
+if (journal.entries[0]?.tag !== "0000_init") {
+	throw new Error("Reset only supports the approved 0000_init baseline.");
 }
+const laterMigrations = journal.entries.slice(1).map((entry) => `drizzle/${entry.tag}.sql`);
+const laterSql = await Promise.all(laterMigrations.map((path) => artifact(path)));
 const hash = createHash("sha256").update(baseline).digest("hex");
 const tables = [...baseline.matchAll(/CREATE TABLE "([a-z_]+)"/g)].map(match => match[1]);
 const enums = [...baseline.matchAll(/CREATE TYPE "public"\."([a-z_]+)"/g)].map(match => match[1]);
 if (tables.length !== 25 || !tables.includes("user") || !enums.length) throw new Error("Unexpected baseline; inspect it before resetting.");
-const appTables = [...tables, "user_balances"];
+// Tables from superseded baselines must still be dropped, otherwise their
+// foreign keys keep "user" alive and the reset fails halfway.
+const LEGACY_TABLES = ["products", "lite_subscriptions", "user_balances"];
+const appTables = [...new Set([...tables, ...LEGACY_TABLES])];
 const quote = name => `"${name}"`;
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis:10000 });
 let hasJournal = false;
@@ -72,15 +79,21 @@ async function reset() {
 		await client.query(`DROP TYPE IF EXISTS ${enums.map(name => `public.${quote(name)}`).join(", ")}`);
 		await client.query("DROP TABLE IF EXISTS drizzle.__drizzle_migrations");
 		await client.query(baseline);
+		for (const sql of laterSql) await client.query(sql);
+		// Tables created only by later migrations exist on a prepared database.
+		const { rows: present } = await client.query("select table_name from information_schema.tables where table_schema = 'public'");
+		const grants = present.map((row) => row.table_name).filter((name) => !["user_balances"].includes(name));
 		// These tables are served through Next/Beter Auth, not anonymously
 		// through Supabase PostgREST. Do not inherit broad default table grants.
 		const { rows: roles } = await client.query("select rolname from pg_roles where rolname in ('anon', 'authenticated')");
-		await client.query(`REVOKE ALL ON TABLE ${tables.map(name => `public.${quote(name)}`).join(", ")} FROM PUBLIC${roles.length ? `, ${roles.map(role => quote(role.rolname)).join(", ")}` : ""}`);
+		await client.query(`REVOKE ALL ON TABLE ${grants.map(name => `public.${quote(name)}`).join(", ")} FROM PUBLIC${roles.length ? `, ${roles.map(role => quote(role.rolname)).join(", ")}` : ""}`);
 		await client.query("CREATE SCHEMA IF NOT EXISTS drizzle");
 		await client.query("CREATE TABLE drizzle.__drizzle_migrations (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)");
-		await client.query("INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)", [hash, journal.entries[0].when]);
+		const hashes = [hash, ...laterSql.map((sql) => createHash("sha256").update(sql).digest("hex"))];
+		for (const [index, entry] of journal.entries.entries())
+			await client.query("INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)", [hashes[index], entry.when]);
 		await client.query("COMMIT");
-		console.log(`Applied 0000_init (${tables.length} app tables). Litesubs starts empty.`);
+		console.log(`Applied 0000_init plus ${laterSql.length} later migration(s) (${tables.length} base app tables). Litesubs starts empty.`);
 	} catch (error) {
 		await client.query("ROLLBACK");
 		throw error;

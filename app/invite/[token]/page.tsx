@@ -7,8 +7,8 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import { db } from "@/app/db";
 import { invites } from "@/app/db/schema";
-import { AnimatedLogo } from '@/components/animated-logo'
-import { PackItem } from "@/components/pack-item";
+import { AnimatedLogo } from "@/components/animated-logo";
+import { PlanCard } from "@/components/plan-card";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -27,8 +27,9 @@ const getInvite = cache(async (token: string) => {
 		where: eq(invites.token, token),
 		with: {
 			creator: true,
-			product: {
+			plan: {
 				with: {
+					versions: { orderBy: (version, { desc }) => [desc(version.version)] },
 					integration: {
 						with: {
 							calcomIntegration: true,
@@ -55,12 +56,13 @@ export async function generateMetadata({
 		};
 	}
 
-	if (invite.product) {
+	const published = invite.plan?.versions.find(
+		(version) => version.status === "published",
+	);
+	if (invite.plan && published) {
 		return {
-			title: `${invite.product.name} by ${invite.creator.name} | LiteSubs`,
-			description: `Get ${invite.product.credits} credits for ${
-				invite.product.price / 100
-			} ${invite.product.currency.toUpperCase()}.`,
+			title: `${invite.plan.name} by ${invite.creator.name} | LiteSubs`,
+			description: `Get ${published.credits} credits for ${published.price / 100} ${published.currency.toUpperCase()}.`,
 		};
 	}
 
@@ -182,15 +184,18 @@ export default async function InvitePage({
 
 	// Logic for "Accepted" or "Expired" states
 	if (invite.status === "accepted") {
-		// If logged in and the invite belongs to this user, show "Already Accepted"
 		if (session?.user?.email && invite.email === session.user.email) {
 			return <InviteAcceptedState />;
 		}
-		// Otherwise, it's expired/claimed by someone else
 		return <InviteExpiredState />;
 	}
 
-	const isProductInvite = !!invite.product;
+	// Only published terms are offered. A draft cannot be resurrected by an
+	// invite that was generated earlier.
+	const published = invite.plan?.versions.find(
+		(version) => version.status === "published",
+	);
+	const isProductInvite = Boolean(invite.plan && published);
 
 	// The invite email is personal data: only reveal it to the signed-in user it
 	// was addressed to, never to anyone holding the link.
@@ -202,10 +207,10 @@ export default async function InvitePage({
 		<div className="min-h-screen flex flex-col items-center justify-center p-6 gap-8 bg-muted/30">
 			{/* Header Section */}
 			<div className="flex flex-col items-center gap-4 text-center max-w-xl">
-
 				<AnimatedLogo />
 				<p className="text-base md:text-lg text-muted-foreground">
-				Simple credit plans instead of heavy subscriptions. Sell one-time credit bundles or set up auto-refill credits, both in one simple system.
+					Simple credit plans instead of heavy subscriptions. Creators sell
+					one-time packs or monthly allowances through their own Stripe account.
 				</p>
 			</div>
 
@@ -223,19 +228,21 @@ export default async function InvitePage({
 					)}
 				</div>
 
-				{isProductInvite && invite.product ? (
-					<PackItem
+				{isProductInvite && invite.plan && published ? (
+					<PlanCard
 						product={{
-							name: invite.product.name,
-							credits: invite.product.credits,
-							price: invite.product.price,
-							description: invite.product.description,
+							name: invite.plan.name,
+							credits: published.credits,
+							price: published.price,
+							description: invite.plan.description,
 							badge: `Offered by ${invite.creator.name}`,
-							currency: invite.product.currency,
+							currency: published.currency,
+							billingMode: published.billingMode,
+							interval: published.interval,
 							eventTypeName:
-								invite.product.integration?.calcomIntegration?.eventTypeName,
+								invite.plan.integration?.calcomIntegration?.eventTypeName,
 						}}
-						productId={invite.product.id}
+						productId={invite.plan.id}
 						creditsSuffix=" credits"
 						session={session}
 						loginUrl={`/auth/sign-up?callbackURL=/invite/${token}`}
@@ -260,7 +267,8 @@ export default async function InvitePage({
 				<div className="flex items-center justify-center gap-2 text-muted-foreground/60">
 					<Lock className="size-3" />
 					<span className="text-xs font-medium">
-					All payments are securely processed through Stripe, a trusted and PCI-DSS compliant payment provider. We do not store or process your credit card information. Your payment details are encrypted and handled directly by Stripe.
+						Payments are processed securely through Stripe on the creator's own
+						account. We do not store or process your card details.
 					</span>
 				</div>
 			</div>

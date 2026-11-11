@@ -7,12 +7,12 @@ import {
 
 interface ConsumerStatsCardsProps {
 	totalSpent: number;
-	activeSubscriptionsCount: number;
+	enrollmentCount: number;
 }
 
 export function ConsumerStatsCards({
 	totalSpent,
-	activeSubscriptionsCount,
+	enrollmentCount,
 }: ConsumerStatsCardsProps) {
 	return (
 		<div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2">
@@ -26,9 +26,9 @@ export function ConsumerStatsCards({
 			</Card>
 			<Card className="stat-card @container/card">
 				<CardHeader>
-					<CardDescription>Active Subscriptions</CardDescription>
+					<CardDescription>Active Plans</CardDescription>
 					<CardTitle className="stat-card-value @[250px]/card:text-3xl">
-						{activeSubscriptionsCount}
+						{enrollmentCount}
 					</CardTitle>
 				</CardHeader>
 			</Card>

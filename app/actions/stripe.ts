@@ -3,245 +3,143 @@
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/app/db";
-import { products, transactions } from "@/app/db/schema";
 import { getCreatorConnectAccount } from "@/app/actions/stripe-connect";
+import { db } from "@/app/db";
+import { plans } from "@/app/db/schema";
 import { getAppUrl } from "@/lib/app-url";
 import { auth } from "@/lib/auth";
 import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
+import { resolvePublishedPlan } from "@/lib/services/plans";
 import { getStripe } from "@/lib/stripe";
 
-export async function createCheckoutSession(productId: string) {
-	// Start independent operations early for faster checkout initiation
-	const sessionPromise = auth.api.getSession({ headers: await headers() });
-	const productPromise = db.query.products.findFirst({
-		where: eq(products.id, productId),
-	});
-
-	const session = await sessionPromise;
-	if (!session?.user) {
-		return { error: "Unauthorized" };
-	}
-
-	const product = await productPromise;
-	if (!product) {
-		return { error: "Product not found" };
-	}
-
-	// Deactivated plans must not be purchasable by ID.
-	if (!product.active) {
-		return { error: "This plan is no longer available" };
-	}
-
-	const appUrl = getAppUrl();
-
-	// Use customer ID if available, otherwise email
-	// Note: session.user might not have stripeCustomerId explicitly typed in all generic contexts
-	// but better-auth usually returns the full user object fields.
-	const customerId = (session.user as any).stripeCustomerId;
-
-	// Check if creator has Stripe Connect enabled
-	const connectAccount = await getCreatorConnectAccount(product.creatorId);
-	const usesStripeConnect = !!connectAccount;
-
-	// Calculate application fee for Connect transactions
-	const applicationFeeAmount = usesStripeConnect
-		? Math.round(product.price * PLATFORM_FEE_PERCENT)
-		: undefined;
-
-	const sessionParams: any = {
-		line_items: [
-			{
-				price_data: {
-					currency: product.currency,
-					product_data: {
-						name: product.name,
-						description: product.description || undefined,
-					},
-					unit_amount: product.price, // in cents
-				},
-				quantity: 1,
-			},
-		],
-		mode: "payment",
-		success_url: `${appUrl}/dashboard?success=true&productId=${product.id}`,
-		cancel_url: `${appUrl}/dashboard?canceled=true`,
-		metadata: {
-			userId: session.user.id,
-			productId: product.id,
-			credits: product.credits.toString(),
-			creatorId: product.creatorId,
-			type: "credit_purchase",
-			usesStripeConnect: usesStripeConnect ? "true" : "false",
-			stripeConnectAccountId: connectAccount?.stripeAccountId || "",
-			applicationFeeAmount: applicationFeeAmount?.toString() || "",
-		},
-	};
-
-	if (customerId) {
-		sessionParams.customer = customerId;
-	} else {
-		sessionParams.customer_email = session.user.email;
-	}
-
-	// If creator has Stripe Connect, route payment to their account
-	if (usesStripeConnect && connectAccount) {
-		sessionParams.payment_intent_data = {
-			application_fee_amount: applicationFeeAmount,
-			transfer_data: {
-				destination: connectAccount.stripeAccountId,
-			},
-		};
-	}
-
-	let checkoutSession;
-	try {
-		const stripe = getStripe();
-		checkoutSession = await stripe.checkout.sessions.create(sessionParams);
-	} catch {
-		return { error: "Stripe is not configured" };
-	}
-
-	if (checkoutSession.id) {
-		await db.insert(transactions).values({
-			userId: session.user.id,
-			creatorId: product.creatorId,
-			productId: product.id,
-			amount: product.credits,
-			amountMoney: product.price,
-			currency: product.currency,
-			type: "purchase",
-			description: `Purchase of ${product.credits} credits`,
-			stripeCheckoutId: checkoutSession.id,
-			status: "ongoing",
-			// Stripe Connect fields
-			usesStripeConnect,
-			stripeApplicationFee: applicationFeeAmount,
-			stripeConnectAccountId: connectAccount?.stripeAccountId,
-		});
-	}
-
-	if (checkoutSession.url) {
-		redirect(checkoutSession.url);
-	}
-}
-
-export async function createCustomerPortalSession() {
+/**
+ * Start a direct-charge Checkout for a published plan on the creator's own
+ * Stripe account. The platform never charges on its own account here.
+ */
+export async function createCheckoutSession(planId: string) {
 	const session = await auth.api.getSession({ headers: await headers() });
-	if (!session?.user) {
-		return { error: "Unauthorized" };
-	}
+	if (!session?.user) return { error: "Unauthorized" };
 
-	const customerId = (session.user as any).stripeCustomerId;
-
-	if (!customerId) {
-		return { error: "No billing account found" };
-	}
-
-	const appUrl = getAppUrl();
-
-	let portalSession;
-	try {
-		const stripe = getStripe();
-		portalSession = await stripe.billingPortal.sessions.create({
-			customer: customerId,
-			return_url: `${appUrl}/dashboard/account`,
-		});
-	} catch {
-		return { error: "Stripe is not configured" };
-	}
-
-	if (portalSession.url) {
-		redirect(portalSession.url);
-	}
-}
-
-export async function createPaymentLink(
-	customerId: string,
-	productId: string,
-): Promise<{ success: boolean; url?: string; error?: string }> {
-	const session = await auth.api.getSession({ headers: await headers() });
-	if (!session?.user) {
-		return { success: false, error: "Unauthorized" };
-	}
-
-	// Fetch the product to ensure it belongs to the current creator
-	const product = await db.query.products.findFirst({
-		where: eq(products.id, productId),
+	const plan = await db.query.plans.findFirst({
+		where: eq(plans.id, planId),
+		with: { versions: true },
 	});
+	if (!plan) return { error: "Plan not found" };
+	const published = plan.versions.find((v) => v.status === "published");
+	if (!published)
+		return { error: "This plan is not available for purchase yet" };
 
-	if (!product) {
-		return { success: false, error: "Product not found" };
-	}
+	const connectAccount = await getCreatorConnectAccount(plan.creatorId);
+	if (!connectAccount)
+		return { error: "This creator cannot accept payments yet" };
 
-	if (product.creatorId !== session.user.id) {
-		return { success: false, error: "Unauthorized" };
-	}
-
-	const appUrl = getAppUrl();
-
-	// Check if creator has Stripe Connect enabled
-	const connectAccount = await getCreatorConnectAccount(product.creatorId);
-	const usesStripeConnect = !!connectAccount;
-
-	// Calculate application fee for Connect transactions
-	const applicationFeeAmount = usesStripeConnect
-		? Math.round(product.price * PLATFORM_FEE_PERCENT)
-		: undefined;
-
+	const fee = Math.round(published.price * PLATFORM_FEE_PERCENT);
+	let checkoutSession: Awaited<
+		ReturnType<ReturnType<typeof getStripe>["checkout"]["sessions"]["create"]>
+	>;
 	try {
-		const stripe = getStripe();
-
-		// Create a Stripe Price for this product (needed for payment links)
-		const stripePrice = await stripe.prices.create({
-			currency: product.currency,
-			unit_amount: product.price,
-			product_data: {
-				name: product.name,
-				metadata: {
-					productId: product.id,
-				},
-			},
-		});
-
-		// Build payment link params
-		const paymentLinkParams: any = {
+		checkoutSession = await getStripe().checkout.sessions.create({
+			mode: "payment",
 			line_items: [
 				{
-					price: stripePrice.id,
+					price_data: {
+						currency: published.currency,
+						product_data: {
+							name: plan.name,
+							description: plan.description || undefined,
+						},
+						unit_amount: published.price,
+					},
 					quantity: 1,
 				},
 			],
+			customer_email: session.user.email,
+			success_url: `${getAppUrl()}/dashboard?success=true&planId=${plan.id}`,
+			cancel_url: `${getAppUrl()}/dashboard?canceled=true`,
 			metadata: {
-				userId: customerId,
-				productId: product.id,
-				credits: product.credits.toString(),
-				creatorId: product.creatorId,
+				userId: session.user.id,
+				planId: plan.id,
+				planVersionId: published.id,
+				creatorId: plan.creatorId,
+				credits: String(published.credits),
 				type: "credit_purchase",
-				usesStripeConnect: usesStripeConnect ? "true" : "false",
-				stripeConnectAccountId: connectAccount?.stripeAccountId || "",
-				applicationFeeAmount: applicationFeeAmount?.toString() || "",
 			},
-			after_completion: {
-				type: "redirect",
-				redirect: {
-					url: `${appUrl}/dashboard?success=true&productId=${product.id}`,
-				},
+			payment_intent_data: {
+				application_fee_amount: fee,
+				transfer_data: { destination: connectAccount.stripeAccountId },
 			},
+		});
+	} catch {
+		return { error: "Stripe is not configured" };
+	}
+
+	if (checkoutSession.url) redirect(checkoutSession.url);
+	return { error: "No checkout URL was returned" };
+}
+
+/**
+ * Creator-generated single-use checkout for one customer and one plan. This
+ * replaces reusable Payment Links that carried another user's identity.
+ */
+export async function createCustomerCheckout(
+	planId: string,
+	customerEmail: string,
+) {
+	const session = await auth.api.getSession({ headers: await headers() });
+	if (!session?.user) return { error: "Unauthorized" };
+
+	const plan = await db.query.plans.findFirst({
+		where: eq(plans.id, planId),
+	});
+	if (!plan || plan.creatorId !== session.user.id)
+		return { error: "Plan not found" };
+
+	const connectAccount = await getCreatorConnectAccount(plan.creatorId);
+	if (!connectAccount)
+		return { error: "Connect Stripe payments before requesting payment" };
+
+	let resolved: Awaited<ReturnType<typeof resolvePublishedPlan>>;
+	try {
+		resolved = await resolvePublishedPlan(session.user.id, planId);
+	} catch (error) {
+		return {
+			error: error instanceof Error ? error.message : "Plan unavailable",
 		};
+	}
+	const fee = Math.round(resolved.terms.price * PLATFORM_FEE_PERCENT);
 
-		// If creator has Stripe Connect, route payment to their account
-		if (usesStripeConnect && connectAccount) {
-			paymentLinkParams.application_fee_amount = applicationFeeAmount;
-			paymentLinkParams.transfer_data = {
-				destination: connectAccount.stripeAccountId,
-			};
-		}
-
-		// Create the payment link
-		const paymentLink = await stripe.paymentLinks.create(paymentLinkParams);
-
-		return { success: true, url: paymentLink.url };
+	try {
+		const checkout = await getStripe().checkout.sessions.create({
+			mode: "payment",
+			line_items: [
+				{
+					price_data: {
+						currency: resolved.terms.currency,
+						product_data: {
+							name: plan.name,
+							description: plan.description || undefined,
+						},
+						unit_amount: resolved.terms.price,
+					},
+					quantity: 1,
+				},
+			],
+			customer_email: customerEmail,
+			success_url: `${getAppUrl()}/dashboard?success=true&planId=${plan.id}`,
+			cancel_url: `${getAppUrl()}/dashboard?canceled=true`,
+			metadata: {
+				planId: plan.id,
+				planVersionId: resolved.terms.id,
+				creatorId: plan.creatorId,
+				credits: String(resolved.terms.credits),
+				type: "credit_purchase",
+			},
+			payment_intent_data: {
+				application_fee_amount: fee,
+				transfer_data: { destination: connectAccount.stripeAccountId },
+			},
+		});
+		return { success: true, url: checkout.url };
 	} catch {
 		return { success: false, error: "Stripe is not configured" };
 	}

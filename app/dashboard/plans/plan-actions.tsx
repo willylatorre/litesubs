@@ -1,14 +1,11 @@
 "use client";
 
 import {
-	IconCopy,
 	IconDotsVertical,
-	IconExternalLink,
 	IconMailPlus,
+	IconPencil,
 } from "@tabler/icons-react";
-import Link from "next/link";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -17,16 +14,30 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { InviteUserDialog } from "../creator/invite-user-dialog";
+import { EditPlanDialog } from "./edit-plan-dialog";
 
-export function PackActions({ packId }: { packId: string }) {
+export function PlanActions({
+	planId,
+	isDraft,
+}: {
+	planId: string;
+	isDraft: boolean;
+}) {
 	const [inviteOpen, setInviteOpen] = useState(false);
+	const [editOpen, setEditOpen] = useState(false);
 
 	return (
 		<>
+			<EditPlanDialog
+				planId={planId}
+				open={editOpen}
+				onOpenChange={setEditOpen}
+			/>
 			<InviteUserDialog
 				open={inviteOpen}
 				onOpenChange={setInviteOpen}
-				defaultPackId={packId}
+				defaultPlanId={planId}
+				hideTrigger
 			/>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
@@ -36,10 +47,16 @@ export function PackActions({ packId }: { packId: string }) {
 					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
-					<DropdownMenuItem onSelect={() => setInviteOpen(true)}>
-						<IconMailPlus className="mr-2 h-4 w-4" />
-						Generate Invite Link
+					<DropdownMenuItem onSelect={() => setEditOpen(true)}>
+						<IconPencil className="mr-2 h-4 w-4" />
+						Edit plan
 					</DropdownMenuItem>
+					{!isDraft && (
+						<DropdownMenuItem onSelect={() => setInviteOpen(true)}>
+							<IconMailPlus className="mr-2 h-4 w-4" />
+							Generate Invite Link
+						</DropdownMenuItem>
+					)}
 				</DropdownMenuContent>
 			</DropdownMenu>
 		</>

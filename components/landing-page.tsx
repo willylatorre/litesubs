@@ -7,10 +7,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AnimatedLogo } from "@/components/animated-logo";
 import {
-	CreatePackDialogDemo,
-	type DemoPackData,
-} from "@/components/landing/create-pack-dialog-demo";
-import { PackItem } from "@/components/pack-item";
+	CreatePlanDialogDemo,
+	type DemoPlanData,
+} from "@/components/landing/create-plan-dialog-demo";
+import { PlanCard } from "@/components/plan-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -22,13 +22,13 @@ export function LandingPage() {
 	const [explanation, setExplanation] = useState(defaultText);
 
 	// Demo State
-	const [demoPack, setDemoPack] = useState<DemoPackData | null>(null);
+	const [demoPlan, setDemoPlan] = useState<DemoPlanData | null>(null);
 	const [step, setStep] = useState(1);
 
-	const handleCreatePack = (data: DemoPackData) => {
-		setDemoPack(data);
+	const handleCreatePlan = (data: DemoPlanData) => {
+		setDemoPlan(data);
 		setStep(2);
-		toast.success("Pack created successfully!");
+		toast.success("Draft plan created");
 	};
 
 	const handleCopyLink = () => {
@@ -61,8 +61,8 @@ export function LandingPage() {
 					<p className="text-base md:text-lg text-muted-foreground">
 						Simple credit plans instead of heavy subscriptions.
 						<br />
-						Sell one-time credit bundles or set up auto-refill credits, both in
-						one simple system.
+						Sell one-time credit packs or monthly allowances, each charged on
+						your own Stripe account.
 					</p>
 				</div>
 
@@ -73,11 +73,11 @@ export function LandingPage() {
 					transition={{ delay: 0.2, duration: 0.4 }}
 					className="w-full flex flex-col md:flex-row items-center justify-center gap-8 md:gap-12"
 				>
-					{/* Pack Item Card */}
+					{/* Plan Card */}
 					<div className="w-full max-w-sm relative group">
 						<div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-primary/0 rounded-lg blur opacity-50 group-hover:opacity-100 transition duration-500"></div>
 						<div className="relative bg-background rounded-lg shadow-xl">
-							<PackItem
+							<PlanCard
 								product={{
 									name: "250 Credits Plan",
 									credits: 250,
@@ -204,22 +204,22 @@ export function LandingPage() {
 								Define how many credits you want to sell and at what price.
 							</p>
 							<div className="mt-2">
-								{demoPack ? (
+								{demoPlan ? (
 									<div className="max-w-xs">
-										<PackItem
+										<PlanCard
 											product={{
-												name: demoPack.name,
-												credits: demoPack.credits,
-												price: demoPack.price * 100, // PackItem expects cents
-												description: demoPack.description,
-												currency: demoPack.currency,
+												name: demoPlan.name,
+												credits: demoPlan.credits,
+												price: demoPlan.price * 100, // PlanCard expects minor units
+												description: demoPlan.description,
+												currency: demoPlan.currency,
 												badge: "Created",
 											}}
 											readOnly
 										/>
 									</div>
 								) : (
-									<CreatePackDialogDemo onDemoCreate={handleCreatePack} />
+									<CreatePlanDialogDemo onDemoCreate={handleCreatePlan} />
 								)}
 							</div>
 						</div>
@@ -253,13 +253,13 @@ export function LandingPage() {
 							<p className="text-muted-foreground text-sm max-w-md">
 								Send the unique purchase link to your customers.
 							</p>
-							{step >= 2 && demoPack && (
+							{step >= 2 && demoPlan && (
 								<div className="flex flex-col gap-3 max-w-sm mt-2">
 									<div className="flex gap-2">
 										<Input
 											readOnly
 											value={`https://litesubs.com/invite/${btoa(
-												JSON.stringify(demoPack),
+												JSON.stringify(demoPlan),
 											).substring(0, 12)}...`}
 											className="font-mono text-xs"
 										/>
@@ -313,9 +313,9 @@ export function LandingPage() {
 								View purchases and manage customer credits directly from your
 								dashboard.
 							</p>
-							{step >= 3 && demoPack && (
+							{step >= 3 && demoPlan && (
 								<div className="mt-2 w-full overflow-hidden">
-									<CustomersTableDemo pack={demoPack} />
+									<CustomersTableDemo plan={demoPlan} />
 								</div>
 							)}
 						</div>

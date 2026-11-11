@@ -3,7 +3,6 @@ import { apiKey } from "@better-auth/api-key";
 import { cimd } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { mcp } from "@better-auth/mcp";
-import { stripe as baStripe } from "@better-auth/stripe";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
@@ -11,7 +10,6 @@ import { jwt } from "better-auth/plugins";
 import { db } from "@/app/db"; // your drizzle instance
 import { mcpResource } from "@/lib/mcp-config";
 import { CREATOR_SCOPES } from "@/lib/services/principal";
-import { getStripe } from "@/lib/stripe";
 
 const buildPhases = new Set(["phase-production-build", "phase-export"]);
 const isBuildTime = buildPhases.has(process.env.NEXT_PHASE ?? "");
@@ -126,15 +124,8 @@ export const auth = betterAuth({
 			},
 		}),
 
-		...(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
-			? [
-					baStripe({
-						stripeClient: getStripe(),
-						stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-						createCustomerOnSignUp: true,
-					}),
-				]
-			: []),
+		// No Stripe customer plugin: billing belongs to each creator's connected
+		// account, so the platform never creates or manages a Stripe Customer.
 		nextCookies(),
 	], // make sure this is the last plugin in the array
 });

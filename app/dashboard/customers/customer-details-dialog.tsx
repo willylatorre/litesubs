@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { getCustomerDetails } from "@/app/actions/customers";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -12,10 +13,6 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "@/components/ui/dialog";
-import { ManageSubscriptionCreditsDialog } from "./manage-subscription-credits-dialog";
-import { DecreaseCreditButton } from "./decrease-credit-button";
-import { SubscriptionMoreActions } from "./subscription-more-actions";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
 	Table,
@@ -25,6 +22,9 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { DecreaseCreditButton } from "./decrease-credit-button";
+import { EnrollmentMoreActions } from "./enrollment-more-actions";
+import { ManageEnrollmentCreditsDialog } from "./manage-enrollment-credits-dialog";
 
 interface CustomerDetailsDialogProps {
 	customerId: string;
@@ -33,16 +33,16 @@ interface CustomerDetailsDialogProps {
 		email: string;
 		image?: string | null;
 	};
-	initialSubscriptions: {
-		id: string; // product id
+	initialEnrollments: {
+		id: string; // plan id
 		name: string;
-		subscriptionId: string;
+		enrollmentId: string;
 		credits: number;
 	}[];
 	children?: React.ReactNode;
 	demoData?: {
 		totalSpent: number;
-		subscriptions: any[];
+		enrollments: any[];
 		transactions: any[];
 	};
 }
@@ -50,7 +50,7 @@ interface CustomerDetailsDialogProps {
 export function CustomerDetailsDialog({
 	customerId,
 	customer,
-	initialSubscriptions,
+	initialEnrollments,
 	children,
 	demoData,
 }: CustomerDetailsDialogProps) {
@@ -70,18 +70,20 @@ export function CustomerDetailsDialog({
 	const data = demoData || fetchedData;
 	const isLoading = !demoData && isQueryLoading;
 
-	const subscriptions = isLoading
-		? initialSubscriptions.map((s) => ({
-			id: s.subscriptionId,
-			credits: s.credits,
-			product: { name: s.name },
-			productId: s.id,
-		  }))
-		: data?.subscriptions || [];
+	const enrollments = isLoading
+		? initialEnrollments.map((enrollment) => ({
+				id: enrollment.enrollmentId,
+				credits: enrollment.credits,
+				plan: { name: enrollment.name },
+				planId: enrollment.id,
+			}))
+		: (data?.enrollments ?? []);
 
 	const handleSuccess = () => {
 		if (demoData) return;
-		queryClient.invalidateQueries({ queryKey: ["customer-details", customerId] });
+		queryClient.invalidateQueries({
+			queryKey: ["customer-details", customerId],
+		});
 	};
 
 	return (
@@ -130,34 +132,36 @@ export function CustomerDetailsDialog({
 
 					<div className="flex flex-col gap-3">
 						<span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-							Active Subscriptions
+							Enrollments
 						</span>
 						<div className="flex flex-col">
-							{subscriptions.length === 0 ? (
+							{enrollments.length === 0 ? (
 								<p className="text-muted-foreground text-xs italic">
-									No active subscriptions.
+									No enrollments.
 								</p>
 							) : (
-								subscriptions.map((sub: any, index: number) => (
+								enrollments.map((enrollment: any, index: number) => (
 									<div
-										key={sub.id}
+										key={enrollment.id}
 										className={`flex items-center justify-between py-3 ${
-											index < subscriptions.length - 1
+											index < enrollments.length - 1
 												? "border-b border-border/40"
 												: ""
 										}`}
 									>
 										<div className="flex flex-col">
 											<span className="text-sm font-medium">
-												{sub.product.name}
+												{enrollment.plan.name}
 											</span>
 											<span className="text-[10px] text-muted-foreground font-mono">
-												{sub.productId.substring(0, 8)}
+												{enrollment.planId.substring(0, 8)}
 											</span>
 										</div>
 										<div className="flex items-center gap-4">
 											<div className="flex items-baseline gap-1">
-												<span className="text-sm font-bold">{sub.credits}</span>
+												<span className="text-sm font-bold">
+													{enrollment.credits}
+												</span>
 												<span className="text-[10px] text-muted-foreground uppercase font-bold">
 													cr
 												</span>
@@ -165,22 +169,22 @@ export function CustomerDetailsDialog({
 											{!demoData && (
 												<div className="flex items-center gap-0.5">
 													<DecreaseCreditButton
-														subscriptionId={sub.id}
-														currentCredits={sub.credits}
+														enrollmentId={enrollment.id}
+														currentCredits={enrollment.credits}
 														size="sm"
 														onSuccess={handleSuccess}
 														showLabel={false}
 													/>
-													<ManageSubscriptionCreditsDialog
-														subscriptionId={sub.id}
-														planName={sub.product.name}
-														currentCredits={sub.credits}
+													<ManageEnrollmentCreditsDialog
+														enrollmentId={enrollment.id}
+														planName={enrollment.plan.name}
+														currentCredits={enrollment.credits}
 														onSuccess={handleSuccess}
 														compact
 													/>
-													<SubscriptionMoreActions
-														customerId={customerId}
-														productId={sub.productId}
+													<EnrollmentMoreActions
+														customerEmail={customer.email}
+														planId={enrollment.planId}
 													/>
 												</div>
 											)}
@@ -193,7 +197,7 @@ export function CustomerDetailsDialog({
 
 					<div className="flex flex-col gap-3">
 						<span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-							Recent Transactions
+							Recent Credit Activity
 						</span>
 						{isLoading ? (
 							<div className="space-y-2">
@@ -203,7 +207,7 @@ export function CustomerDetailsDialog({
 							</div>
 						) : (data?.transactions?.length || 0) === 0 ? (
 							<p className="text-muted-foreground text-xs italic">
-								No transactions found.
+								No credit activity found.
 							</p>
 						) : (
 							<div className="rounded-md border">

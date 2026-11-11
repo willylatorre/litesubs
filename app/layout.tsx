@@ -15,9 +15,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-	metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://litesubs.com"),
+	metadataBase: new URL(
+		process.env.NEXT_PUBLIC_APP_URL || "https://litesubs.com",
+	),
 	title: "liteSubs",
-	description: "Simple credit plans instead of heavy subscriptions. Sell one-time credit plans or set up auto-refill credits, both in one simple system.",
+	description:
+		"Simple credit plans instead of heavy subscriptions. Sell one-time credit packs or monthly allowances, charged on your own Stripe account.",
 	icons: {
 		icon: "/favicon.svg",
 	},
@@ -30,9 +33,7 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-			<body
-				className="antialiased light min-h-screen flex flex-col"
-			>
+			<body className="antialiased light min-h-screen flex flex-col">
 				<div className="flex-1">{children}</div>
 				<Toaster />
 			</body>

@@ -1,6 +1,10 @@
 "use client";
 
+import { ChevronRight } from "lucide-react";
+import { CustomerDetailsDialog } from "@/app/dashboard/customers/customer-details-dialog";
+import type { DemoPlanData } from "@/components/landing/create-plan-dialog-demo";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
 	Table,
@@ -10,34 +14,28 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { ChevronRight } from "lucide-react";
-import type { DemoPackData } from "@/components/landing/create-pack-dialog-demo";
-import { CustomerDetailsDialog } from "@/app/dashboard/customers/customer-details-dialog";
 
 interface CustomersTableDemoProps {
-	pack: DemoPackData;
+	plan: DemoPlanData;
 }
 
-export function CustomersTableDemo({ pack }: CustomersTableDemoProps) {
-	// Simulated customer data
+export function CustomersTableDemo({ plan }: CustomersTableDemoProps) {
 	const customer = {
 		name: "Jane Doe",
 		email: "jane@example.com",
 		image: "",
-		credits: pack.credits,
-		activePacks: [pack],
+		credits: plan.credits,
 		updatedAt: new Date(),
 	};
 
 	const demoData = {
-		totalSpent: pack.price * 100,
-		subscriptions: [
+		totalSpent: plan.price * 100,
+		enrollments: [
 			{
-				id: "demo-sub-id",
-				productId: "demo-product-id",
-				product: { name: pack.name },
-				credits: pack.credits,
+				id: "demo-enrollment-id",
+				planId: "demo-plan-id",
+				plan: { name: plan.name },
+				credits: plan.credits,
 			},
 		],
 		transactions: [
@@ -45,17 +43,17 @@ export function CustomersTableDemo({ pack }: CustomersTableDemoProps) {
 				id: "demo-tx-id",
 				createdAt: new Date().toISOString(),
 				type: "purchase",
-				amount: pack.price,
+				amount: plan.price,
 			},
 		],
 	};
 
-	const initialSubscriptions = [
+	const initialEnrollments = [
 		{
-			id: "demo-product-id",
-			name: pack.name,
-			subscriptionId: "demo-sub-id",
-			credits: pack.credits,
+			id: "demo-plan-id",
+			name: plan.name,
+			enrollmentId: "demo-enrollment-id",
+			credits: plan.credits,
 		},
 	];
 
@@ -89,11 +87,9 @@ export function CustomersTableDemo({ pack }: CustomersTableDemoProps) {
 						</TableCell>
 						<TableCell>
 							<div className="flex flex-wrap gap-1">
-								{customer.activePacks.map((p, i) => (
-									<Badge key={i} variant="secondary" className="text-xs">
-										{p.name}
-									</Badge>
-								))}
+								<Badge variant="secondary" className="text-xs">
+									{plan.name}
+								</Badge>
 							</div>
 						</TableCell>
 						<TableCell className="font-mono text-lg">
@@ -111,7 +107,7 @@ export function CustomersTableDemo({ pack }: CustomersTableDemoProps) {
 										email: customer.email,
 										image: customer.image,
 									}}
-									initialSubscriptions={initialSubscriptions}
+									initialEnrollments={initialEnrollments}
 									demoData={demoData}
 								>
 									<Button variant="ghost" size="sm">

@@ -7,11 +7,17 @@ import {
 } from "@modelcontextprotocol/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/app/db";
-import { liteSubscriptions, transactions, user } from "@/app/db/schema";
+import { enrollments, planVersions, transactions, user } from "@/app/db/schema";
 import { changeCredits } from "@/lib/services/credits";
 import { getCustomer, listCustomers } from "@/lib/services/customers";
 import { claimEnrollmentInvite, enrollCustomer } from "@/lib/services/enroll";
-import { createPlan } from "@/lib/services/plans";
+import {
+	createPlan,
+	getPlan,
+	listPlans,
+	resolvePublishedPlan,
+	updatePlan,
+} from "@/lib/services/plans";
 import { type Principal, sessionPrincipal } from "@/lib/services/principal";
 
 // Run only against an explicitly provisioned test database; never use .env's DB.
@@ -37,9 +43,21 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 	try {
 		const plan = await createPlan(principal, {
 			name: "Algebra",
-			price: 10,
-			credits: 10,
+			terms: {
+				billingMode: "one_time",
+				currency: "usd",
+				price: 10,
+				credits: 10,
+			},
 		});
+		// Publishing (and its Stripe provisioning) is a later slice; seed the
+		// immutable terms directly so enrollment has a sellable version.
+		await db
+			.update(planVersions)
+			.set({ status: "published", publishedAt: new Date() })
+			.where(
+				and(eq(planVersions.planId, plan.id), eq(planVersions.status, "draft")),
+			);
 		await enrollCustomer(principal, {
 			plan: plan.id,
 			customer: studentEmail,
@@ -48,10 +66,10 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 		});
 		const balance = async () =>
 			(
-				await db.query.liteSubscriptions.findFirst({
+				await db.query.enrollments.findFirst({
 					where: and(
-						eq(liteSubscriptions.userId, studentId),
-						eq(liteSubscriptions.productId, plan.id),
+						eq(enrollments.userId, studentId),
+						eq(enrollments.planId, plan.id),
 					),
 				})
 			)?.credits;
@@ -68,6 +86,77 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 				},
 				"usage",
 			);
+		await t.test(
+			"drafts are unsellable and keep editable terms separate from publication",
+			async () => {
+				const draft = await createPlan(principal, {
+					name: "Draft monthly",
+					terms: {
+						billingMode: "recurring",
+						currency: "eur",
+						price: 25,
+						credits: 5,
+						interval: "month",
+					},
+				});
+				assert.equal(draft.isDraft, true);
+				assert.equal(draft.terms?.status, "draft");
+				assert.equal(draft.terms?.price, 2500);
+				assert.equal(draft.terms?.interval, "month");
+
+				// No transport can purchase, enroll, or invite into a draft.
+				for (const attempt of [
+					() =>
+						enrollCustomer(principal, {
+							plan: draft.id,
+							customer: studentEmail,
+							mode: "comp",
+							reason: "Draft attempt",
+						}),
+					() => resolvePublishedPlan(creatorId, draft.id),
+				])
+					await assert.rejects(attempt, { code: "PLAN_NOT_PUBLISHED" });
+
+				// Editing replaces the working copy, not a frozen version.
+				const updated = await updatePlan(principal, draft.id, {
+					name: "Draft monthly renamed",
+					terms: {
+						billingMode: "recurring",
+						currency: "eur",
+						price: 30,
+						credits: 8,
+						interval: "month",
+					},
+				});
+				assert.equal(updated.name, "Draft monthly renamed");
+				assert.equal(updated.terms?.credits, 8);
+				assert.equal(
+					(
+						await db.query.planVersions.findMany({
+							where: and(
+								eq(planVersions.planId, draft.id),
+								eq(planVersions.status, "draft"),
+							),
+						})
+					).length,
+					1,
+				);
+
+				// Invalid term combinations fail instead of silently coercing.
+				await assert.rejects(
+					createPlan(principal, {
+						name: "Yearly attempt",
+						terms: { billingMode: "recurring", price: 10, credits: 1 },
+					}),
+				);
+
+				// Tenant isolation: another creator cannot read or edit it.
+				await assert.rejects(getPlan(sessionPrincipal(otherId), draft.id), {
+					code: "NOT_FOUND",
+				});
+				assert.deepEqual(await listPlans(sessionPrincipal(otherId)), []);
+			},
+		);
 		await t.test(
 			"concurrent retries debit exactly once and preserve original receipt",
 			async () => {
@@ -124,7 +213,15 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 					{ code: "NOT_FOUND" },
 				);
 				await assert.rejects(
-					createPlan(machine, { name: "Forbidden", price: 10, credits: 1 }),
+					createPlan(machine, {
+						name: "Forbidden",
+						terms: {
+							billingMode: "one_time",
+							currency: "usd",
+							price: 10,
+							credits: 1,
+						},
+					}),
 					{ code: "FORBIDDEN" },
 				);
 				await assert.rejects(
@@ -191,7 +288,7 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 						1,
 					);
 					assert.equal(
-						(await getCustomer(principal, invitedId)).subscriptions[0].credits,
+						(await getCustomer(principal, invitedId)).enrollments[0].credits,
 						10,
 					);
 				} finally {

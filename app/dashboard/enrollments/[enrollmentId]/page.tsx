@@ -1,8 +1,16 @@
-import { getUserSubscriptionDetails } from "@/app/actions/dashboard";
+import { ArrowLeft, CreditCard } from "lucide-react";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getUserEnrollmentDetails } from "@/app/actions/dashboard";
 import { getUserTransactions } from "@/app/actions/transactions";
 import { BuyButton } from "@/components/buy-button";
 import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+	Card,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card";
 import {
 	Table,
 	TableBody,
@@ -11,28 +19,32 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, CreditCard } from "lucide-react";
-import Link from "next/link";
-import { notFound } from "next/navigation";
 
-export default async function SubscriptionDetailPage({
+export default async function EnrollmentDetailPage({
 	params,
 }: {
-	params: Promise<{ subscriptionId: string }>;
+	params: Promise<{ enrollmentId: string }>;
 }) {
-    const { subscriptionId } = await params;
-	const detailsRes = await getUserSubscriptionDetails(subscriptionId);
+	const { enrollmentId } = await params;
+	const detailsRes = await getUserEnrollmentDetails(enrollmentId);
 
 	if (!detailsRes.success || !detailsRes.data) {
 		return notFound();
 	}
 
-	const sub = detailsRes.data;
-	const transactionsRes = await getUserTransactions(sub.productId);
-	const transactions = transactionsRes.success ? (transactionsRes.data ?? []) : [];
-	const calEventTypeUrl = sub.product.integration?.calcomIntegration?.eventTypeUrl;
+	const enrollment = detailsRes.data;
+	const plan = enrollment.plan;
+	const published = plan.versions.find(
+		(version) => version.status === "published",
+	);
+	const recurring = published?.billingMode === "recurring";
+	const transactionsRes = await getUserTransactions(plan.id);
+	const transactions = transactionsRes.success
+		? (transactionsRes.data ?? [])
+		: [];
+	const calEventTypeUrl = plan.integration?.calcomIntegration?.eventTypeUrl;
 	const canBook = Boolean(calEventTypeUrl);
-	const hasCredits = sub.credits > 0;
+	const hasCredits = enrollment.credits > 0;
 
 	return (
 		<div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
@@ -44,9 +56,10 @@ export default async function SubscriptionDetailPage({
 						</Link>
 					</Button>
 					<div>
-						<h1 className="text-2xl font-bold tracking-tight">{sub.product.name}</h1>
+						<h1 className="text-2xl font-bold tracking-tight">{plan.name}</h1>
 						<p className="text-muted-foreground text-sm">
-							By {sub.creator.name}
+							By {enrollment.creator.name}
+							{recurring ? " · renews monthly" : ""}
 						</p>
 					</div>
 				</div>
@@ -63,15 +76,18 @@ export default async function SubscriptionDetailPage({
 								Book
 							</Button>
 						))}
-					<BuyButton
-						disabled={!sub.productId}
-						productId={sub.productId}
-						price={sub.product.price}
-						currency={sub.product.currency}
-						productName={sub.product.name}
-						label="Top up Credits"
-						fullWidth={false}
-					/>
+					{/* Monthly plans are subscription-only in v1; no paid top-ups. */}
+					{!recurring && published && (
+						<BuyButton
+							disabled={!published}
+							planId={plan.id}
+							price={published.price}
+							currency={published.currency}
+							productName={plan.name}
+							label="Top up Credits"
+							fullWidth={false}
+						/>
+					)}
 				</div>
 			</div>
 
@@ -80,7 +96,22 @@ export default async function SubscriptionDetailPage({
 					<CardHeader>
 						<CardDescription>Credits Left</CardDescription>
 						<CardTitle className="stat-card-value @[250px]/card:text-3xl">
-							{sub.credits}
+							{enrollment.credits}
+						</CardTitle>
+					</CardHeader>
+				</Card>
+				<Card className="stat-card @container/card">
+					<CardHeader>
+						<CardDescription>Plan</CardDescription>
+						<CardTitle className="text-lg">
+							{published
+								? `${new Intl.NumberFormat("en-US", {
+										style: "currency",
+										currency: published.currency.toUpperCase(),
+									}).format(
+										published.price / 100,
+									)}${recurring ? " / month" : " one-time"}`
+								: "Unavailable"}
 						</CardTitle>
 					</CardHeader>
 				</Card>
@@ -89,7 +120,7 @@ export default async function SubscriptionDetailPage({
 			<div className="mt-6">
 				<h2 className="section-title flex items-center gap-2 mb-4">
 					<CreditCard className="h-5 w-5" />
-					Transaction Ledger
+					Credit History
 				</h2>
 				<div className="table-container">
 					<Table>
@@ -108,7 +139,7 @@ export default async function SubscriptionDetailPage({
 										colSpan={4}
 										className="text-center h-24 text-muted-foreground"
 									>
-										No transactions recorded.
+										No credit history recorded.
 									</TableCell>
 								</TableRow>
 							) : (
@@ -120,10 +151,15 @@ export default async function SubscriptionDetailPage({
 										<TableCell className="capitalize">
 											{tx.type.replace("_", " ")}
 										</TableCell>
-										<TableCell className="max-w-[200px] truncate" title={tx.description || ""}>
+										<TableCell
+											className="max-w-[200px] truncate"
+											title={tx.description || ""}
+										>
 											{tx.description || "-"}
 										</TableCell>
-										<TableCell className={`text-right font-mono font-medium ${tx.amount > 0 ? "text-green-600" : "text-red-600"}`}>
+										<TableCell
+											className={`text-right font-mono font-medium ${tx.amount > 0 ? "text-green-600" : "text-red-600"}`}
+										>
 											{tx.amount > 0 ? "+" : ""}
 											{tx.amount}
 										</TableCell>

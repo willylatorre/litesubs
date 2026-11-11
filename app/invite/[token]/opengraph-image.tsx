@@ -24,7 +24,11 @@ export default async function Image({
 		where: eq(invites.token, token),
 		with: {
 			creator: true,
-			product: true,
+			plan: {
+				with: {
+					versions: { orderBy: (version, { desc }) => [desc(version.version)] },
+				},
+			},
 		},
 	});
 
@@ -51,7 +55,10 @@ export default async function Image({
 		);
 	}
 
-	const isProduct = !!invite.product;
+	const published = invite.plan?.versions.find(
+		(version) => version.status === "published",
+	);
+	const isProduct = Boolean(invite.plan && published);
 	const creatorInitial = invite.creator.name.charAt(0).toUpperCase();
 
 	return new ImageResponse(
@@ -126,7 +133,7 @@ export default async function Image({
 					</div>
 				</div>
 
-				{isProduct && invite.product ? (
+				{isProduct && invite.plan && published ? (
 					<div
 						style={{
 							display: "flex",
@@ -143,7 +150,7 @@ export default async function Image({
 								lineHeight: 1.1,
 							}}
 						>
-							{invite.product.name}
+							{invite.plan.name}
 						</div>
 						<div
 							style={{
@@ -156,7 +163,7 @@ export default async function Image({
 							}}
 						>
 							<div style={{ fontSize: 32, fontWeight: "bold", color: "#111" }}>
-								{invite.product.credits} Credits
+								{published.credits} Credits
 							</div>
 							<div
 								style={{
@@ -170,8 +177,8 @@ export default async function Image({
 							<div style={{ fontSize: 32, color: "#4B5563" }}>
 								{new Intl.NumberFormat("en-US", {
 									style: "currency",
-									currency: invite.product.currency,
-								}).format(invite.product.price / 100)}
+									currency: published.currency.toUpperCase(),
+								}).format(published.price / 100)}
 							</div>
 						</div>
 					</div>

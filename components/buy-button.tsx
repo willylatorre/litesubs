@@ -2,6 +2,7 @@
 
 import { IconLock } from "@tabler/icons-react";
 import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { createCheckoutSession } from "@/app/actions/stripe";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export function BuyButton({
-	productId,
+	planId,
 	price,
 	currency = "usd",
 	label,
@@ -24,7 +25,7 @@ export function BuyButton({
 	disabled,
 	fullWidth = true,
 }: {
-	productId: string;
+	planId: string;
 	price: number;
 	currency?: string;
 	label?: string;
@@ -41,6 +42,17 @@ export function BuyButton({
 	}).format(price / 100);
 
 	const triggerLabel = label || `Buy for ${formattedPrice}`;
+
+	function onConfirm() {
+		startTransition(async () => {
+			const result = await createCheckoutSession(planId);
+			// A successful checkout redirects; only failures return a value.
+			if (result && "error" in result) {
+				toast.error(result.error);
+				setOpen(false);
+			}
+		});
+	}
 
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
@@ -59,7 +71,7 @@ export function BuyButton({
 					<DialogDescription>
 						You are about to purchase{" "}
 						<span className="font-semibold text-foreground">
-							{productName || "this pack"}
+							{productName || "this plan"}
 						</span>
 						.
 					</DialogDescription>
@@ -74,7 +86,8 @@ export function BuyButton({
 					<div className="flex items-start gap-3 rounded-md border p-3 text-xs text-muted-foreground">
 						<IconLock className="mt-0.5 size-4 shrink-0 text-primary" />
 						<p>
-						All payments are securely processed through Stripe, a trusted and PCI-DSS compliant payment provider. We do not store or process your credit card information. Your payment details are encrypted and handled directly by Stripe.
+							Payment is processed by Stripe on the creator&apos;s own account.
+							We do not store or process your card details.
 						</p>
 					</div>
 				</div>
@@ -89,11 +102,7 @@ export function BuyButton({
 					</Button>
 					<Button
 						className="min-w-[120px]"
-						onClick={() =>
-							startTransition(async () => {
-								await createCheckoutSession(productId);
-							})
-						}
+						onClick={onConfirm}
 						disabled={isPending}
 					>
 						{isPending ? "Redirecting..." : "Pay Now"}

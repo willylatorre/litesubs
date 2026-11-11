@@ -2,25 +2,23 @@
 
 import { and, count, countDistinct, eq, sum } from "drizzle-orm";
 import { db } from "@/app/db";
-import {
-	invites,
-	liteSubscriptions,
-	products,
-	transactions,
-} from "@/app/db/schema";
+import { enrollments, invites, plans, transactions } from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
 
-export async function getUserSubscriptionDetails(subscriptionId: string) {
+export async function getUserEnrollmentDetails(enrollmentId: string) {
 	return authenticatedAction(async (session) => {
-		const sub = await db.query.liteSubscriptions.findFirst({
+		const enrollment = await db.query.enrollments.findFirst({
 			where: and(
-				eq(liteSubscriptions.id, subscriptionId),
-				eq(liteSubscriptions.userId, session.user.id),
+				eq(enrollments.id, enrollmentId),
+				eq(enrollments.userId, session.user.id),
 			),
 			with: {
 				creator: true,
-				product: {
+				plan: {
 					with: {
+						versions: {
+							orderBy: (version, { desc }) => [desc(version.version)],
+						},
 						integration: {
 							with: {
 								calcomIntegration: true,
@@ -31,17 +29,17 @@ export async function getUserSubscriptionDetails(subscriptionId: string) {
 			},
 		});
 
-		if (!sub) {
-			return { success: false, error: "Subscription not found" };
+		if (!enrollment) {
+			return { success: false, error: "Enrollment not found" };
 		}
 
-		return { success: true, data: sub };
+		return { success: true, data: enrollment };
 	});
 }
 
 export async function getDashboardData() {
 	return authenticatedAction(async (session) => {
-		const [statsResult, subsResult, invitesResult] = await Promise.all([
+		const [statsResult, enrollmentResult, invitesResult] = await Promise.all([
 			// Consumer Stats
 			(async () => {
 				const [spentResult] = await db
@@ -55,24 +53,27 @@ export async function getDashboardData() {
 						),
 					);
 
-				const [subsCountResult] = await db
+				const [enrollmentCountResult] = await db
 					.select({ count: count() })
-					.from(liteSubscriptions)
-					.where(eq(liteSubscriptions.userId, session.user.id));
+					.from(enrollments)
+					.where(eq(enrollments.userId, session.user.id));
 
 				return {
 					totalSpent: Number(spentResult?.value || 0),
-					activeSubscriptionsCount: Number(subsCountResult?.count || 0),
+					enrollmentCount: Number(enrollmentCountResult?.count || 0),
 				};
 			})(),
 
-			// User Subscriptions
-			db.query.liteSubscriptions.findMany({
-				where: eq(liteSubscriptions.userId, session.user.id),
+			// User enrollments
+			db.query.enrollments.findMany({
+				where: eq(enrollments.userId, session.user.id),
 				with: {
 					creator: true,
-					product: {
+					plan: {
 						with: {
+							versions: {
+								orderBy: (version, { desc }) => [desc(version.version)],
+							},
 							integration: {
 								with: {
 									calcomIntegration: true,
@@ -91,8 +92,11 @@ export async function getDashboardData() {
 				),
 				with: {
 					creator: true,
-					product: {
+					plan: {
 						with: {
+							versions: {
+								orderBy: (version, { desc }) => [desc(version.version)],
+							},
 							integration: {
 								with: {
 									calcomIntegration: true,
@@ -108,15 +112,15 @@ export async function getDashboardData() {
 			success: true,
 			data: {
 				stats: statsResult,
-				subscriptions: subsResult,
+				enrollments: enrollmentResult,
 				pendingInvites: invitesResult,
 			},
 		};
 	}).then(
 		(res) =>
 			res.data || {
-				stats: { totalSpent: 0, activeSubscriptionsCount: 0 },
-				subscriptions: [],
+				stats: { totalSpent: 0, enrollmentCount: 0 },
+				enrollments: [],
 				pendingInvites: [],
 			},
 	);
@@ -125,7 +129,7 @@ export async function getDashboardData() {
 export async function getCreatorStats() {
 	return authenticatedAction(async (session) => {
 		// Run all independent queries in parallel for ~3x faster response
-		const [[revenueResult], [productsResult], [customersResult]] =
+		const [[revenueResult], [plansResult], [customersResult]] =
 			await Promise.all([
 				db
 					.select({ value: sum(transactions.amountMoney) })
@@ -139,24 +143,19 @@ export async function getCreatorStats() {
 					),
 				db
 					.select({ count: count() })
-					.from(products)
-					.where(
-						and(
-							eq(products.creatorId, session.user.id),
-							eq(products.active, true),
-						),
-					),
+					.from(plans)
+					.where(eq(plans.creatorId, session.user.id)),
 				db
-					.select({ count: countDistinct(liteSubscriptions.userId) })
-					.from(liteSubscriptions)
-					.where(eq(liteSubscriptions.creatorId, session.user.id)),
+					.select({ count: countDistinct(enrollments.userId) })
+					.from(enrollments)
+					.where(eq(enrollments.creatorId, session.user.id)),
 			]);
 
 		return {
 			success: true,
 			data: {
 				totalRevenue: Number(revenueResult?.value || 0),
-				activeProducts: Number(productsResult?.count || 0),
+				totalPlans: Number(plansResult?.count || 0),
 				totalCustomers: Number(customersResult?.count || 0),
 			},
 		};
@@ -164,7 +163,7 @@ export async function getCreatorStats() {
 		(res) =>
 			res.data || {
 				totalRevenue: 0,
-				activeProducts: 0,
+				totalPlans: 0,
 				totalCustomers: 0,
 			},
 	);
@@ -173,45 +172,48 @@ export async function getCreatorStats() {
 export async function getConsumerStats() {
 	return authenticatedAction(async (session) => {
 		const [spentResult] = await db
-			.select({ value: sum(products.price) })
+			.select({ value: sum(transactions.amountMoney) })
 			.from(transactions)
-			.innerJoin(products, eq(transactions.productId, products.id))
 			.where(
 				and(
 					eq(transactions.userId, session.user.id),
 					eq(transactions.type, "purchase"),
+					eq(transactions.status, "completed"),
 				),
 			);
 
-		const [subsResult] = await db
+		const [enrollmentsResult] = await db
 			.select({ count: count() })
-			.from(liteSubscriptions)
-			.where(eq(liteSubscriptions.userId, session.user.id));
+			.from(enrollments)
+			.where(eq(enrollments.userId, session.user.id));
 
 		return {
 			success: true,
 			data: {
 				totalSpent: Number(spentResult?.value || 0),
-				activeSubscriptionsCount: Number(subsResult?.count || 0),
+				enrollmentCount: Number(enrollmentsResult?.count || 0),
 			},
 		};
 	}).then(
 		(res) =>
 			res.data || {
 				totalSpent: 0,
-				activeSubscriptionsCount: 0,
+				enrollmentCount: 0,
 			},
 	);
 }
 
-export async function getUserSubscriptions() {
+export async function getUserEnrollments() {
 	return authenticatedAction(async (session) => {
-		const subs = await db.query.liteSubscriptions.findMany({
-			where: eq(liteSubscriptions.userId, session.user.id),
+		const rows = await db.query.enrollments.findMany({
+			where: eq(enrollments.userId, session.user.id),
 			with: {
 				creator: true,
-				product: {
+				plan: {
 					with: {
+						versions: {
+							orderBy: (version, { desc }) => [desc(version.version)],
+						},
 						integration: {
 							with: {
 								calcomIntegration: true,
@@ -222,6 +224,6 @@ export async function getUserSubscriptions() {
 			},
 		});
 
-		return { success: true, data: subs };
+		return { success: true, data: rows };
 	}).then((res) => res.data || []);
 }

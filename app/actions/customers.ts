@@ -3,7 +3,7 @@
 import { and, eq, sum } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/app/db";
-import { liteSubscriptions, transactions } from "@/app/db/schema";
+import { enrollments, transactions } from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
 import { adjustCredits } from "@/lib/services/credits";
 import {
@@ -51,22 +51,23 @@ export async function getCustomerDetails(customerId: string) {
 	});
 }
 
-export async function updateSubscriptionCredits(
-	subscriptionId: string,
+export async function updateEnrollmentCredits(
+	enrollmentId: string,
 	amount: number,
 	description: string,
 ) {
 	return authenticatedAction(async (session) => {
-		const sub = await db.query.liteSubscriptions.findFirst({
+		const enrollment = await db.query.enrollments.findFirst({
 			where: and(
-				eq(liteSubscriptions.id, subscriptionId),
-				eq(liteSubscriptions.creatorId, session.user.id),
+				eq(enrollments.id, enrollmentId),
+				eq(enrollments.creatorId, session.user.id),
 			),
 		});
-		if (!sub) throw new ServiceError("NOT_FOUND", "Enrollment not found", 404);
+		if (!enrollment)
+			throw new ServiceError("NOT_FOUND", "Enrollment not found", 404);
 		await adjustCredits(sessionPrincipal(session.user.id), {
-			customerId: sub.userId,
-			planId: sub.productId,
+			customerId: enrollment.userId,
+			planId: enrollment.planId,
 			delta: amount,
 			type: "manual_adjustment",
 			reason: description || "Manual adjustment",
@@ -82,14 +83,14 @@ export async function updateCustomerCredits(
 	description: string,
 ) {
 	return authenticatedAction(async (session) => {
-		const subs = await db.query.liteSubscriptions.findMany({
+		const rows = await db.query.enrollments.findMany({
 			where: and(
-				eq(liteSubscriptions.userId, userId),
-				eq(liteSubscriptions.creatorId, session.user.id),
+				eq(enrollments.userId, userId),
+				eq(enrollments.creatorId, session.user.id),
 			),
 			limit: 2,
 		});
-		if (subs.length !== 1)
+		if (rows.length !== 1)
 			throw new ServiceError(
 				"AMBIGUOUS",
 				"Choose a specific enrollment before adjusting credits",
@@ -97,7 +98,7 @@ export async function updateCustomerCredits(
 			);
 		await adjustCredits(sessionPrincipal(session.user.id), {
 			customerId: userId,
-			planId: subs[0].productId,
+			planId: rows[0].planId,
 			delta: amount,
 			type: "manual_adjustment",
 			reason: description || "Manual adjustment",

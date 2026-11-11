@@ -4,9 +4,10 @@ import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/app/db";
 import {
+	enrollments,
 	invites,
-	liteSubscriptions,
-	products,
+	plans,
+	planVersions,
 	transactions,
 	user,
 } from "@/app/db/schema";
@@ -26,7 +27,7 @@ export type SampleWorkspaceState = {
 const SAMPLE_PATHS = [
 	"/dashboard",
 	"/dashboard/creator",
-	"/dashboard/packs",
+	"/dashboard/plans",
 	"/dashboard/customers",
 ];
 
@@ -37,9 +38,9 @@ function revalidateSamplePaths() {
 async function readState(creatorId: string): Promise<SampleWorkspaceState> {
 	const ids = sampleIds(creatorId);
 	const [plan] = await db
-		.select({ id: products.id })
-		.from(products)
-		.where(and(eq(products.id, ids.plan), eq(products.creatorId, creatorId)))
+		.select({ id: plans.id })
+		.from(plans)
+		.where(and(eq(plans.id, ids.plan), eq(plans.creatorId, creatorId)))
 		.limit(1);
 	return {
 		loaded: Boolean(plan),
@@ -71,19 +72,32 @@ export async function createSampleWorkspace(): Promise<
 
 		const data = await db.transaction(async (tx) => {
 			await tx
-				.insert(products)
+				.insert(plans)
 				.values({
 					id: ids.plan,
 					creatorId,
 					name: SAMPLE_PLAN.name,
 					description: SAMPLE_PLAN.description,
+				})
+				.onConflictDoNothing({ target: plans.id });
+
+			// Sample mode simulates an already-published local plan so the demo
+			// shows a sellable offer. No Stripe object is provisioned.
+			await tx
+				.insert(planVersions)
+				.values({
+					id: ids.planVersion,
+					planId: ids.plan,
+					creatorId,
+					status: "published",
+					billingMode: "one_time",
+					currency: SAMPLE_PLAN.currency,
 					price: SAMPLE_PLAN.price,
 					credits: SAMPLE_PLAN.credits,
-					currency: SAMPLE_PLAN.currency,
-					type: "one_time",
-					active: true,
+					version: 1,
+					publishedAt: new Date(),
 				})
-				.onConflictDoNothing({ target: products.id });
+				.onConflictDoNothing({ target: planVersions.id });
 
 			await tx
 				.insert(user)
@@ -100,15 +114,15 @@ export async function createSampleWorkspace(): Promise<
 			const balance = SAMPLE_PLAN.credits - usedCredits;
 
 			await tx
-				.insert(liteSubscriptions)
+				.insert(enrollments)
 				.values({
 					id: ids.enrollment,
 					userId: ids.customer,
-					productId: ids.plan,
+					planId: ids.plan,
 					creatorId,
 					credits: balance,
 				})
-				.onConflictDoNothing({ target: liteSubscriptions.id });
+				.onConflictDoNothing({ target: enrollments.id });
 
 			await tx
 				.insert(transactions)
@@ -117,7 +131,7 @@ export async function createSampleWorkspace(): Promise<
 						id: ids.purchaseTransaction,
 						userId: ids.customer,
 						creatorId,
-						productId: ids.plan,
+						planId: ids.plan,
 						amount: SAMPLE_PLAN.credits,
 						amountMoney: SAMPLE_PLAN.price,
 						currency: SAMPLE_PLAN.currency,
@@ -131,7 +145,7 @@ export async function createSampleWorkspace(): Promise<
 						id: ids.usageTransaction,
 						userId: ids.customer,
 						creatorId,
-						productId: ids.plan,
+						planId: ids.plan,
 						amount: -usedCredits,
 						type: "usage",
 						status: "completed",
@@ -149,7 +163,7 @@ export async function createSampleWorkspace(): Promise<
 					id: ids.invite,
 					creatorId,
 					email: ids.inviteEmail,
-					productId: ids.plan,
+					planId: ids.plan,
 					// Random, like any real invite: the sample token must not be guessable.
 					token: crypto.randomUUID(),
 					status: "pending",
@@ -186,15 +200,15 @@ export async function removeSampleWorkspace(): Promise<
 					and(
 						eq(transactions.creatorId, creatorId),
 						eq(transactions.userId, ids.customer),
-						eq(transactions.productId, ids.plan),
+						eq(transactions.planId, ids.plan),
 					),
 				);
 			await tx
-				.delete(liteSubscriptions)
+				.delete(enrollments)
 				.where(
 					and(
-						eq(liteSubscriptions.creatorId, creatorId),
-						eq(liteSubscriptions.id, ids.enrollment),
+						eq(enrollments.creatorId, creatorId),
+						eq(enrollments.id, ids.enrollment),
 					),
 				);
 			await tx
@@ -203,10 +217,16 @@ export async function removeSampleWorkspace(): Promise<
 					and(eq(invites.creatorId, creatorId), eq(invites.id, ids.invite)),
 				);
 			await tx
-				.delete(products)
+				.delete(planVersions)
 				.where(
-					and(eq(products.creatorId, creatorId), eq(products.id, ids.plan)),
+					and(
+						eq(planVersions.creatorId, creatorId),
+						eq(planVersions.planId, ids.plan),
+					),
 				);
+			await tx
+				.delete(plans)
+				.where(and(eq(plans.creatorId, creatorId), eq(plans.id, ids.plan)));
 			// The sample customer has no credentials and is never a signed-in account.
 			// Remove it only when nothing references it any more.
 			await tx.execute(sql`
@@ -214,7 +234,7 @@ export async function removeSampleWorkspace(): Promise<
 				where id = ${ids.customer}
 					and email = ${ids.customerEmail}
 					and not exists (
-						select 1 from lite_subscriptions where user_id = ${ids.customer}
+						select 1 from enrollments where user_id = ${ids.customer}
 					)
 			`);
 		});

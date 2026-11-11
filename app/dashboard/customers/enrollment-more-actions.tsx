@@ -1,15 +1,10 @@
 "use client";
 
+import { Check, Copy, Link2, Loader2, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
-import { Link, Loader2, MoreHorizontal, Check, Copy } from "lucide-react";
-import { createPaymentLink } from "@/app/actions/stripe";
+import { toast } from "sonner";
+import { createCustomerCheckout } from "@/app/actions/stripe";
 import { Button } from "@/components/ui/button";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
 	Dialog,
 	DialogContent,
@@ -17,56 +12,55 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-interface SubscriptionMoreActionsProps {
-	customerId: string;
-	productId: string;
+interface EnrollmentMoreActionsProps {
+	customerEmail: string;
+	planId: string;
 }
 
-export function SubscriptionMoreActions({
-	customerId,
-	productId,
-}: SubscriptionMoreActionsProps) {
+/**
+ * Ask one customer to pay for one plan. Stripe returns a single-use Checkout
+ * session instead of a reusable link that embeds someone's identity.
+ */
+export function EnrollmentMoreActions({
+	customerEmail,
+	planId,
+}: EnrollmentMoreActionsProps) {
 	const [isLoading, setIsLoading] = useState(false);
-	const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+	const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [copied, setCopied] = useState(false);
 
-	const handleGenerateLink = async () => {
+	async function handleGenerate() {
 		setIsLoading(true);
 		try {
-			const result = await createPaymentLink(customerId, productId);
+			const result = await createCustomerCheckout(planId, customerEmail);
 			if (result.success && result.url) {
-				setPaymentUrl(result.url);
+				setCheckoutUrl(result.url);
 				setDialogOpen(true);
 			} else {
-				toast.error(result.error || "Failed to generate payment link");
+				toast.error(result.error || "Failed to create checkout");
 			}
 		} catch {
-			toast.error("Failed to generate payment link");
+			toast.error("Failed to create checkout");
 		} finally {
 			setIsLoading(false);
 		}
-	};
+	}
 
-	const handleCopy = async () => {
-		if (!paymentUrl) return;
-		try {
-			await navigator.clipboard.writeText(paymentUrl);
-			setCopied(true);
-			toast.success("Payment link copied to clipboard");
-			setTimeout(() => setCopied(false), 2000);
-		} catch {
-			toast.error("Failed to copy link");
-		}
-	};
-
-	const handleDialogClose = () => {
-		setDialogOpen(false);
-		setPaymentUrl(null);
-		setCopied(false);
-	};
+	async function handleCopy() {
+		if (!checkoutUrl) return;
+		await navigator.clipboard.writeText(checkoutUrl);
+		setCopied(true);
+		toast.success("Checkout link copied");
+		setTimeout(() => setCopied(false), 2000);
+	}
 
 	return (
 		<>
@@ -87,25 +81,32 @@ export function SubscriptionMoreActions({
 					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
-					<DropdownMenuItem onClick={handleGenerateLink} disabled={isLoading}>
-						<Link className="h-4 w-4" />
-						Generate payment link
+					<DropdownMenuItem onClick={handleGenerate} disabled={isLoading}>
+						<Link2 className="h-4 w-4" />
+						Create checkout link
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
 
-			<Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
+			<Dialog
+				open={dialogOpen}
+				onOpenChange={(next) => {
+					setDialogOpen(next);
+					if (!next) setCopied(false);
+				}}
+			>
 				<DialogContent className="sm:max-w-md">
 					<DialogHeader>
-						<DialogTitle>Payment Link Generated</DialogTitle>
+						<DialogTitle>Checkout Link Created</DialogTitle>
 						<DialogDescription>
-							Share this link with the customer to complete their purchase.
+							Send this single-use link to {customerEmail}. Credits are granted
+							only after Stripe confirms payment.
 						</DialogDescription>
 					</DialogHeader>
 					<div className="flex items-center gap-2 rounded-md border bg-muted/50 p-3">
 						<input
 							type="text"
-							value={paymentUrl || ""}
+							value={checkoutUrl || ""}
 							readOnly
 							className="flex-1 bg-transparent text-sm font-mono truncate outline-none"
 						/>

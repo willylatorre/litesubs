@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { logUnexpectedError } from "@/lib/api-response";
+import { createPlanSchema, updatePlanSchema } from "@/lib/schemas";
 import { changeCredits, creditInput } from "@/lib/services/credits";
 import {
 	getCustomer,
@@ -13,14 +14,25 @@ import {
 	getPlan,
 	listPlans,
 	pageInput,
-	planInput,
 	updatePlan,
-	updatePlanInput,
 } from "@/lib/services/plans";
 import { type Principal, ServiceError } from "@/lib/services/principal";
 
+/**
+ * Server-level guidance, sent in the initialize response. Clients surface this
+ * to the model once, so it carries the cross-tool rules that a per-tool
+ * description cannot: the order of operations and the units trap.
+ * Keep the first paragraph self-contained; some clients truncate.
+ */
+const instructions = `Litesubs manages credit plans. A plan is a service with commercial terms: credits at a price, either one-time or monthly. An enrollment ties one customer to one plan and holds that customer's balance for it. Typical order: create_plan, enroll_customer, then grant_credits if needed.
+
+Rules worth repeating: a new plan starts as a draft with no published terms, and a draft cannot be enrolled or purchased. Publishing happens in the dashboard after the creator connects their Stripe account; no MCP tool publishes a plan, so tell the creator to publish there instead of retrying enroll_customer. Plan prices in create_plan/update_plan are major units (10 means $10), while responses return minor units (cents). Published terms are immutable: editing terms replaces the draft only, and already-sold credits do not change. consume_credits requires an idempotency_key built from the business event, not a timestamp, and is unavailable to OAuth connections (it needs an API key). enroll_customer defaults to invoice mode and returns a payment link; credits arrive only after payment, and no email is sent, so forward the link yourself. Comp enrollment requires a reason and cannot be repeated for an existing enrollment. No payout, refund, or billing-charge tools exist.`;
+
 export function createServer(principal: Principal) {
-	const server = new McpServer({ name: "litesubs", version: "1.0.0" });
+	const server = new McpServer(
+		{ name: "litesubs", version: "1.0.0" },
+		{ instructions },
+	);
 	function register<S extends z.ZodRawShape>(
 		name: string,
 		description: string,
@@ -83,29 +95,29 @@ export function createServer(principal: Principal) {
 	}
 	register(
 		"list_plans",
-		"List your plans. Prices returned in minor units (cents). Paginate with limit/offset.",
+		"List your plans with their draft or published terms. Prices are in minor units (cents). Drafts cannot be purchased. Paginate with limit/offset.",
 		pageInput,
 		true,
 		(input) => listPlans(principal, input),
 	);
 	register(
 		"get_plan",
-		"Get your plan by ID or exact name. Ambiguous names require an ID. Prices returned in cents.",
+		"Get your plan by ID or exact name, including its current terms and whether it is still a draft. Ambiguous names require an ID.",
 		z.object({ plan: z.string().min(1) }),
 		true,
 		({ plan }) => getPlan(principal, plan),
 	);
 	register(
 		"create_plan",
-		"Create a one-time credit plan. Input price is major units (10 means $10); returned price is cents. Does not enroll or bill anyone.",
-		planInput,
+		"Create a plan draft with its commercial terms. price is in major units (10 means $10); responses return cents. billingMode one_time or recurring; recurring requires interval month. Does not contact Stripe, enroll, or bill anyone.",
+		createPlanSchema,
 		false,
 		(input) => createPlan(principal, input),
 	);
 	register(
 		"update_plan",
-		"Update your plan by ID/exact name, including active status. Changes apply to future purchases, not existing credit balances. Input price is major units.",
-		z.object({ plan: z.string().min(1), changes: updatePlanInput }),
+		"Edit the service name/description or replace the draft commercial terms. Published terms are immutable and already-sold customers keep theirs. Input price is in major units.",
+		z.object({ plan: z.string().min(1), changes: updatePlanSchema }),
 		false,
 		({ plan, changes }) => updatePlan(principal, plan, changes),
 	);
@@ -125,14 +137,14 @@ export function createServer(principal: Principal) {
 	);
 	register(
 		"enroll_customer",
-		"Enroll a student in your plan. Default invoice returns a checkout link (credits only after payment). Explicit comp grants plan credits and requires reason; repeat comps are rejected. If no account exists, returns invited plus a claim link, not a completed enrollment. NO EMAIL IS SENT: the creator must forward the link. Comp credits are granted once on claim.",
+		"Enroll a customer in a published plan. Default invoice returns a checkout link (credits only after payment). Explicit comp grants the published terms' credits and requires reason; repeat comps are rejected. If no account exists, returns invited plus a claim link, not a completed enrollment. NO EMAIL IS SENT: the creator must forward the link.",
 		enrollmentInput,
 		false,
 		(input) => enrollCustomer(principal, input),
 	);
 	register(
 		"grant_credits",
-		"Grant positive credits to a specific enrolled customer and plan. reason appears in their ledger. dry_run previews the before/after balance. Optional idempotency_key makes retries safe. No refunds through this API.",
+		"Grant positive credits to a specific enrolled customer and published plan. reason appears in their ledger. dry_run previews the before/after balance. Optional idempotency_key makes retries safe. No refunds through this API.",
 		creditInput,
 		false,
 		(input) => changeCredits(principal, input, "manual_adjustment"),

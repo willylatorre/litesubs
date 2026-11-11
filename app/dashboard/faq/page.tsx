@@ -27,12 +27,12 @@ const generalFaqItems = [
 	{
 		id: "general-one-time-or-recurring",
 		q: "Can I sell credits one-time or recurring?",
-		a: "Yes. You can offer one-time credit purchases or auto-refill credits (recurring). From the user’s point of view, it’s always just credits.",
+		a: "Yes. You can sell one-time credit packs, or a monthly plan that grants a fresh allowance each paid month. Monthly credits do not roll over, so unused units expire at the end of the period.",
 	},
 	{
 		id: "general-subscription-tool",
 		q: "Is LiteSubs a subscription tool?",
-		a: "Not really — and that’s the point. LiteSubs replaces heavy subscriptions with lighter, more flexible credits. Recurring payments are optional and simply refill credits automatically.",
+		a: "Not really — and that’s the point. LiteSubs replaces heavy subscriptions with lighter, more flexible credits. A monthly plan is optional and simply grants a new allowance each paid period.",
 	},
 	{
 		id: "general-assigned-to-who",
@@ -42,7 +42,7 @@ const generalFaqItems = [
 	{
 		id: "general-when-run-out",
 		q: "What happens when credits run out?",
-		a: "When credits reach zero, usage stops. You can let customers buy more credits, enable auto-refill, or manually top them up — you stay in control.",
+		a: "When credits reach zero, usage stops. Customers can buy another one-time pack, or you can grant additional credits manually — you stay in control.",
 	},
 	{
 		id: "general-what-businesses",
@@ -57,7 +57,7 @@ const generalFaqItems = [
 	{
 		id: "general-payments",
 		q: "How does payment work?",
-		a: "Payments are handled securely via Stripe. LiteSubs never stores credit card details.",
+		a: "Each creator connects their own Stripe account, so customers pay the creator directly with a 2% Litesubs fee. Litesubs never stores credit card details.",
 	},
 	{
 		id: "general-free",
@@ -67,7 +67,7 @@ const generalFaqItems = [
 	{
 		id: "general-switch-later",
 		q: "Can I switch from credits to subscriptions later?",
-		a: "You don’t need to. With LiteSubs, subscriptions are just auto-refilling credits. You can evolve your pricing without changing your product model.",
+		a: "Plans are separate offers: a one-time pack or a monthly plan. You can add or edit a plan without changing how existing customers use their credits.",
 	},
 	{
 		id: "general-why-credits",
@@ -84,7 +84,7 @@ export default function DashboardFaqPage() {
 					<div className="space-y-1">
 						<h1 className="text-2xl font-bold tracking-tight">FAQ</h1>
 						<p className="text-sm text-muted-foreground">
-							Answers to common questions about LiteSubs and payouts.
+							Answers to common questions about LiteSubs.
 						</p>
 					</div>
 				</div>
@@ -93,7 +93,9 @@ export default function DashboardFaqPage() {
 					<Card>
 						<CardHeader>
 							<CardTitle>General</CardTitle>
-							<CardDescription>How LiteSubs works at a high level.</CardDescription>
+							<CardDescription>
+								How LiteSubs works at a high level.
+							</CardDescription>
 						</CardHeader>
 						<CardContent>
 							<Accordion type="single" collapsible className="w-full">
@@ -123,4 +125,3 @@ export default function DashboardFaqPage() {
 		</div>
 	);
 }
-

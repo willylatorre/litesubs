@@ -29,6 +29,7 @@ async function handle(
 			const [group, id] = resource;
 			const query = Object.fromEntries(new URL(req.url).searchParams);
 			let result: unknown;
+			let status = 200;
 			if (resource.length > 2)
 				return Response.json({ error: "Not found" }, { status: 404 });
 			switch (`${req.method} ${group}`) {
@@ -40,6 +41,7 @@ async function handle(
 				case "POST plans":
 					if (id) break;
 					result = await createPlan(principal, await req.json());
+					status = 201;
 					break;
 				case "PATCH plans":
 					if (!id) break;
@@ -78,7 +80,7 @@ async function handle(
 			if (result === undefined)
 				return Response.json({ error: "Not found" }, { status: 404 });
 			return Response.json(result, {
-				status: req.method === "POST" && group === "plans" ? 201 : 200,
+				status,
 				headers: { "Cache-Control": "no-store" },
 			});
 		});

@@ -15,8 +15,9 @@ export function buildLlmsTxt(): string {
 > Litesubs is a platform for selling credit plans instead of recurring
 > subscriptions. Creators define plans (a number of credits at a price), enroll
 > customers, and consume credits from their own apps through a remote MCP server
-> or a REST API. Credits belong to one customer and one plan; they cannot go
-> negative.
+> or a REST API. Credits belong to one customer and one plan; their balance cannot
+> go negative. Plans start as drafts and become purchasable only once a version is
+> published on the creator's own Stripe account.
 
 - App: ${base}
 - Docs: ${base}/docs
@@ -46,6 +47,28 @@ export function buildLlmsTxt(): string {
 - No payout or refund tools are exposed.
 - Mutation tools request client confirmation, but that is not a security
   boundary; every operation is re-checked server-side.
+- Planned but not implemented: publish_plan and unpublish_plan. Until they ship a
+  new plan stays a draft, so enroll_customer returns PLAN_NOT_PUBLISHED and the
+  creator must publish in the dashboard first.
+
+## Installing the MCP server
+
+Full per-client instructions: ${base}/docs#mcp
+
+- Claude Code: claude mcp add --transport http --scope user litesubs ${mcpResource}
+  then claude mcp login litesubs (or /mcp inside a session).
+- Claude (claude.ai, Desktop, mobile): Customize > Connectors > Add custom
+  connector, URL ${mcpResource}, keep "Use Claude's published identity".
+- ChatGPT: web app > Plugins > Add custom MCP server, URL ${mcpResource},
+  authentication OAuth.
+- VS Code (Copilot Chat, 1.106+): add ${mcpResource} as a remote HTTP server and
+  approve the browser sign-in.
+- Codex CLI: codex mcp add litesubs --url ${mcpResource} then codex mcp login.
+- Cursor: OAuth is not possible yet (it does not support CIMD and this server
+  does not run open dynamic client registration). Configure the URL with an
+  x-api-key header instead; that connection can only consume credits.
+- Other clients: remote streamable HTTP over HTTPS plus CIMD support for OAuth,
+  or an API key for consumption only.
 
 ## REST API
 
@@ -69,7 +92,11 @@ Errors return code, error, and optional details or fieldErrors. Status codes:
 ## Rules that change how you call the API
 
 - Plan prices: input in major units (10 means $10); responses return minor units
-  (1000 cents). Updating a plan does not change existing balances.
+  (1000 cents). Draft plans are never purchasable or enrollable until a version is
+  published. Editing terms does not change credits already granted.
+- Billing: billingMode is one_time or recurring; recurring requires interval
+  "month" (yearly is deferred). Monthly plans renew and their credits
+  do not roll over.
 - consume_credits requires an idempotency_key derived from the business event
   (booking ID, message ID), not a timestamp. Retrying with the same key returns
   the original receipt; a different payload under the same key is rejected.
