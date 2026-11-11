@@ -262,7 +262,13 @@ test("OAuth consent, PKCE and resource-bound tokens work through the remote MCP 
 				method: "tools/call",
 				params: {
 					name: "create_plan",
-					arguments: { name: "Not allowed", price: 10, credits: 1 },
+					// Valid input, deliberately: the request may only fail on scope.
+					// An invalid payload would fail validation first and mask the
+					// INSUFFICIENT_SCOPE assertion below.
+					arguments: {
+						name: "Not allowed",
+						terms: { billingMode: "one_time", price: 10, credits: 1 },
+					},
 					_meta: {
 						[PROTOCOL_VERSION_META_KEY]: "2026-07-28",
 						[CLIENT_CAPABILITIES_META_KEY]: {},

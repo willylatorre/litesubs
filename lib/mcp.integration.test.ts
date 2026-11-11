@@ -130,6 +130,20 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 				});
 				assert.equal(updated.name, "Draft monthly renamed");
 				assert.equal(updated.terms?.credits, 8);
+				// A partial terms patch must not inject defaults that flip the
+				// billing mode back to one-time.
+				const patched = await updatePlan(principal, draft.id, {
+					terms: {
+						billingMode: "recurring",
+						currency: "eur",
+						price: 30,
+						credits: 9,
+						interval: "month",
+					},
+				});
+				assert.equal(patched.terms?.billingMode, "recurring");
+				assert.equal(patched.terms?.interval, "month");
+				assert.equal(patched.terms?.credits, 9);
 				assert.equal(
 					(
 						await db.query.planVersions.findMany({

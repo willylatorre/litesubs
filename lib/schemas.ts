@@ -4,10 +4,32 @@ import { BILLING_INTERVALS, BILLING_MODES, CURRENCIES } from "@/lib/constants";
 /**
  * Commercial terms for a plan. Price is entered in major units (10 means
  * $10.00) and stored in minor units; API responses always return minor units.
+ *
+ * The fields are defined without defaults on purpose: `default()` survives
+ * `.partial()` in Zod 4, which would silently inject `billingMode: "one_time"`
+ * into a patch and turn a monthly draft into a one-time offer. Defaults are
+ * applied only when creating a plan.
  */
 const planTermsFields = z.object({
 	billingMode: z.enum(BILLING_MODES).default("one_time"),
 	currency: z.enum(CURRENCIES).default("usd"),
+	price: z.coerce
+		.number()
+		.finite()
+		.min(0, "Price must be positive")
+		.max(1_000_000, "Price is too high"),
+	credits: z.coerce
+		.number()
+		.int()
+		.min(1, "Credits must be at least 1")
+		.max(1_000_000),
+	interval: z.enum(BILLING_INTERVALS).nullable().optional(),
+});
+
+/** Patch fields, deliberately without the create-time defaults (see above). */
+const planTermsPatchFields = z.object({
+	billingMode: z.enum(BILLING_MODES),
+	currency: z.enum(CURRENCIES),
 	price: z.coerce
 		.number()
 		.finite()
@@ -54,7 +76,7 @@ function checkTerms(
 export const planTermsSchema = planTermsFields.superRefine(checkTerms);
 
 /** Partial terms validated as a set once merged with the existing draft. */
-export const planTermsPatchSchema = planTermsFields
+export const planTermsPatchSchema = planTermsPatchFields
 	.partial()
 	.superRefine((terms, ctx) => {
 		if (!terms.billingMode && !terms.interval) return;
