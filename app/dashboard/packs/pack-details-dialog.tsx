@@ -204,7 +204,7 @@ export function PackDetailsDialog({
 											(!selectedEventType &&
 												!details.product.integration?.calcomIntegration
 													?.eventTypeId) ||
-											(selectedEventType &&
+											(!!selectedEventType &&
 												selectedEventType.id ===
 													details.product.integration?.calcomIntegration
 														?.eventTypeId)

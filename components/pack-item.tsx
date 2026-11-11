@@ -86,7 +86,7 @@ export function PackItem({
 		return (
 			<BuyButton
 				disabled={!productId}
-				productId={productId}
+				productId={productId ?? ""}
 				price={finalPrice}
 				currency={currency}
 				productName={name}

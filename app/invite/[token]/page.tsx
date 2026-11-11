@@ -27,7 +27,15 @@ const getInvite = cache(async (token: string) => {
 		where: eq(invites.token, token),
 		with: {
 			creator: true,
-			product: true,
+			product: {
+				with: {
+					integration: {
+						with: {
+							calcomIntegration: true,
+						},
+					},
+				},
+			},
 		},
 	});
 });

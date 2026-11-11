@@ -48,7 +48,7 @@ export async function getConnectAccountStatus() {
  * Returns the onboarding URL to redirect the user to
  */
 export async function createConnectAccount() {
-	return authenticatedAction(async (session) => {
+	return authenticatedAction<{ url: string; accountId?: string }>(async (session) => {
 		let stripe;
 		try {
 			stripe = getStripe();

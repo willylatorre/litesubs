@@ -29,7 +29,7 @@ export default async function SubscriptionDetailPage({
 
 	const sub = detailsRes.data;
 	const transactionsRes = await getUserTransactions(sub.productId);
-	const transactions = transactionsRes.success ? transactionsRes.data : [];
+	const transactions = transactionsRes.success ? (transactionsRes.data ?? []) : [];
 	const calEventTypeUrl = sub.product.integration?.calcomIntegration?.eventTypeUrl;
 	const canBook = Boolean(calEventTypeUrl);
 	const hasCredits = sub.credits > 0;
@@ -54,7 +54,7 @@ export default async function SubscriptionDetailPage({
 					{canBook &&
 						(hasCredits ? (
 							<Button size="lg" asChild>
-								<Link href={calEventTypeUrl} target="_blank">
+								<Link href={calEventTypeUrl as string} target="_blank">
 									Book
 								</Link>
 							</Button>

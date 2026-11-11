@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 	const { searchParams } = new URL(request.url);
 	const code = searchParams.get("code");
 	const state = searchParams.get("state");
-	const storedState = cookies().get(CAL_OAUTH_STATE_COOKIE)?.value;
+	const storedState = (await cookies()).get(CAL_OAUTH_STATE_COOKIE)?.value;
 
 	if (!code || !state || !storedState || state !== storedState) {
 		return NextResponse.redirect(
