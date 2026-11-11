@@ -54,16 +54,20 @@ BETTER_AUTH_URL=https://litesubs.com
 NEXT_PUBLIC_APP_URL=https://litesubs.com
 MCP_RESOURCE_URL=https://litesubs.com/api/mcp
 BETTER_AUTH_SECRET=<stable secret>
-DATABASE_URL=<fresh PostgreSQL database URL>
+DATABASE_URL=<PostgreSQL database URL>
+STRIPE_SECRET_KEY=<platform secret, used only to act on connected accounts>
+STRIPE_WEBHOOK_SECRET=<signing secret for /api/webhooks/stripe>
 ```
 
 Keep the MCP resource URL stable: it is the token audience. Development may use
 `http://localhost:3000/api/mcp`; non-loopback resources require HTTPS. Never derive
 the audience from an untrusted Host header.
 
-Invoice enrollment also requires the existing Stripe credentials and verified
-purchase webhook. Credits arrive from successful payment, not the return page.
-Email delivery is not implemented: creators must forward returned links.
+Payments use direct charges on each creator's connected account, so the platform
+key only signs API calls; no platform Customer is created. The Stripe webhook
+endpoint is `/api/webhooks/stripe`, verified with `STRIPE_WEBHOOK_SECRET`.
+Credits arrive from confirmed payment, not the return page. Email delivery is not
+implemented: creators must forward returned links.
 
 ## Authentication
 
