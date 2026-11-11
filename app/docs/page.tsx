@@ -39,6 +39,14 @@ export default function DocsPage() {
 					</div>
 				</header>
 
+				<p className="mt-4 text-sm text-muted-foreground">
+					Working with an AI agent? It can read a plain-text map of this site at{" "}
+					<a href="/llms.txt" className="underline underline-offset-4">
+						/llms.txt
+					</a>
+					.
+				</p>
+
 				<hr className="my-10 border-border/70" />
 
 				<IntegrationDocs />

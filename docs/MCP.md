@@ -175,6 +175,11 @@ transactional ledger writes; the existing payout and Connect subsystem is preser
 | GET | `/api/v1/transactions` |
 | GET / POST | `/api/v1/invites` |
 
+`/llms.txt` serves a curated plain-text index for agents (site summary, docs
+anchors, MCP scopes and tool list, REST routes, and the calling rules that are
+easy to get wrong). It is generated from `lib/llms-txt.ts`; update it when tool
+names or endpoints change. It is an index, not a second copy of this doc.
+
 List routes take `limit` (1–100, default 50) and `offset`. Reads/writes return
 plain JSON. Errors include `code`, `error`, and optional `details`/`fieldErrors`.
 Old products/invites paths are thin compatibility adapters; dashboard hooks use

@@ -79,6 +79,6 @@ This model establishes a direct relationship between the creator and the buyer, 
 - [ ] **Subscriptions plan:** Add support for subscriptions. This is actually just a plan but with a periodicity of "monthly" instead of "one-time". When creating the payment, it should create a subscription and listen every month to the webhook to add revenue to the creator. The card should have some slightly different actions, like "Cancel subscription" instead of "add credits".
 
 ### 💻 Developer Experience (API)
-- [ ] **API Key Management:** UI for creators to generate/revoke API keys for their projects.
-- [ ] **Credit Consumption API:** Build a secure endpoint for external applications to deduct credits from a user's balance.
+- [x] **API Key Management:** UI for creators to generate/revoke API keys for their projects. (`/dashboard/developers/api-keys`)
+- [x] **Credit Consumption API:** Build a secure endpoint for external applications to deduct credits from a user's balance. (`POST /api/v1/credits/consume`, plus the `consume_credits` MCP tool)
 - [ ] **Webhooks:** Set up outgoing webhooks to notify external services of successful purchases or balance changes.
