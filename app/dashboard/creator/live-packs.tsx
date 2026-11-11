@@ -36,9 +36,9 @@ export function LivePacks() {
 			<CardContent className="grid gap-4 pt-4">
 				{isLoading ? (
 					<div className="grid gap-4">
-						{Array.from({ length: 3 }).map((_, i) => (
+						{["a", "b", "c"].map((row) => (
 							<div
-								key={i}
+								key={row}
 								className="flex items-center justify-between rounded-lg border p-3 shadow-sm"
 							>
 								<div className="space-y-1">
@@ -70,7 +70,8 @@ export function LivePacks() {
 									description: pack.description,
 									badge: "Active",
 									currency: pack.currency,
-									eventTypeName: pack.integration?.calcomIntegration?.eventTypeName,
+									eventTypeName:
+										pack.integration?.calcomIntegration?.eventTypeName,
 								}}
 								action={
 									<Button asChild variant="outline" size="sm">

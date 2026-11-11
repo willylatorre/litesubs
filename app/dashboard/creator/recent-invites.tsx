@@ -44,8 +44,8 @@ export function RecentInvites() {
 					</TableHeader>
 					<TableBody>
 						{isLoading ? (
-							Array.from({ length: 3 }).map((_, i) => (
-								<TableRow key={i}>
+							["a", "b", "c"].map((row) => (
+								<TableRow key={row}>
 									<TableCell>
 										<Skeleton className="h-4 w-[150px]" />
 									</TableCell>
