@@ -1,5 +1,8 @@
+import { ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { getCreatorCustomers } from "@/app/actions/customers";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
 	Table,
@@ -9,9 +12,8 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { ChevronRight } from "lucide-react";
+import { isSampleCustomerId } from "@/lib/sample-data";
 import { CustomerDetailsDialog } from "./customer-details-dialog";
-import { Badge } from "@/components/ui/badge";
 import { DecreaseCreditButton } from "./decrease-credit-button";
 
 export const dynamic = "force-dynamic";
@@ -44,11 +46,24 @@ export default async function CustomersPage() {
 					<TableBody>
 						{customers.length === 0 ? (
 							<TableRow>
-								<TableCell
-									colSpan={5}
-									className="text-center h-24 text-muted-foreground"
-								>
-									No customers found. Share your plans to get started!
+								<TableCell colSpan={5} className="h-32 text-center">
+									<div className="flex flex-col items-center gap-2">
+										<p className="text-muted-foreground">
+											No customers yet. After you create a plan, invite a
+											customer or share a checkout link and their balance
+											appears here.
+										</p>
+										<p className="text-sm text-muted-foreground">
+											New here?{" "}
+											<Link
+												href="/dashboard/creator"
+												className="underline underline-offset-4"
+											>
+												Load a sample customer
+											</Link>{" "}
+											to see a filled-in ledger.
+										</p>
+									</div>
 								</TableCell>
 							</TableRow>
 						) : (
@@ -75,7 +90,12 @@ export default async function CustomersPage() {
 													</AvatarFallback>
 												</Avatar>
 												<div className="flex flex-col">
-													<span>{record.user.name}</span>
+													<span className="flex items-center gap-2">
+														{record.user.name}
+														{isSampleCustomerId(record.userId) && (
+															<Badge variant="outline">Sample</Badge>
+														)}
+													</span>
 													<span className="text-xs text-muted-foreground">
 														{record.user.email}
 													</span>
@@ -96,9 +116,7 @@ export default async function CustomersPage() {
 													</Badge>
 												))
 											) : (
-												<span className="text-muted-foreground text-xs">
-													-
-												</span>
+												<span className="text-muted-foreground text-xs">-</span>
 											)}
 										</div>
 									</TableCell>

@@ -132,10 +132,22 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 
 					<div className="flex flex-col gap-8">
 						{allSubscriptions.length === 0 ? (
-							<div className="col-span-full flex flex-col items-center justify-center p-8 text-center border rounded-lg bg-card text-muted-foreground">
-								<p>
-									You don't have any active subscriptions or credits yet.
+							<div className="col-span-full flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-card p-8 text-center">
+								<p className="text-sm text-muted-foreground">
+									You have no credit plans yet. Plans you buy or are invited to
+									show up here, with the credits left on each.
 								</p>
+								<div className="flex flex-wrap items-center justify-center gap-3 text-sm">
+									<Link
+										href="/dashboard/creator"
+										className="rounded-md border px-3 py-1.5 font-medium transition-colors hover:bg-accent"
+									>
+										I sell credits — open the creator dashboard
+									</Link>
+									<Link href="/sample" className="underline underline-offset-4">
+										See a sample workspace
+									</Link>
+								</div>
 							</div>
 						) : (
 							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

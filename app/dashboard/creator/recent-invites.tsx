@@ -18,6 +18,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { useInvites } from "@/hooks/use-invites";
+import { isSampleInviteId } from "@/lib/sample-data";
 
 export function RecentInvites() {
 	const { data: invites, isLoading } = useInvites();
@@ -60,15 +61,26 @@ export function RecentInvites() {
 							<TableRow>
 								<TableCell
 									colSpan={3}
-									className="text-center text-muted-foreground"
+									className="py-8 text-center text-muted-foreground"
 								>
-									No invites sent yet.
+									No invites yet. Use{" "}
+									<span className="font-medium text-foreground">
+										Generate Invite Link
+									</span>{" "}
+									to invite someone by email.
 								</TableCell>
 							</TableRow>
 						) : (
 							invites?.slice(0, 5).map((invite) => (
 								<TableRow key={invite.id}>
-									<TableCell className="font-medium">{invite.email}</TableCell>
+									<TableCell className="font-medium">
+										<span className="flex items-center gap-2">
+											{invite.email}
+											{isSampleInviteId(invite.id) && (
+												<Badge variant="outline">Sample</Badge>
+											)}
+										</span>
+									</TableCell>
 									<TableCell>
 										<Badge
 											variant={

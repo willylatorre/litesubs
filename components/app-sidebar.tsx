@@ -1,6 +1,7 @@
 "use client";
 
 import {
+	IconBook,
 	IconChecklist,
 	IconCode,
 	IconDashboard,
@@ -77,6 +78,11 @@ const data = {
 		},
 	],
 	navSecondary: [
+		{
+			title: "API & MCP docs",
+			url: "/docs",
+			icon: IconBook,
+		},
 		{
 			title: "FAQ",
 			url: "/dashboard/faq",

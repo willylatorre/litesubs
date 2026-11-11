@@ -12,6 +12,11 @@ export function SiteHeader() {
 		if (path.startsWith("/dashboard/creator")) return "Creator Dashboard";
 		if (path.startsWith("/dashboard/customers")) return "Customers";
 		if (path.startsWith("/dashboard/packs")) return "Credit Plans";
+		if (path.startsWith("/dashboard/developers/api-keys")) return "API Tokens";
+		if (path.startsWith("/dashboard/developers")) return "API & MCP";
+		if (path.startsWith("/dashboard/integrations")) return "Integrations";
+		if (path.startsWith("/dashboard/payouts")) return "Payouts";
+		if (path.startsWith("/dashboard/faq")) return "FAQ";
 		if (path.startsWith("/dashboard/account")) return "Account";
 
 		// Fallback: capitalize last segment

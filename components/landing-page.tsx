@@ -125,13 +125,16 @@ export function LandingPage() {
 					transition={{ delay: 0.35, duration: 0.3 }}
 					className="flex flex-col items-center gap-3 mt-4"
 				>
-					<div className="flex gap-4">
+					<div className="flex flex-col gap-3 md:flex-row">
 						<Button size="lg" className="px-8" asChild variant="secondary">
 							<a href="/dashboard">Go to dashboard</a>
 						</Button>
+						<Button size="lg" className="px-8" asChild variant="outline">
+							<a href="/sample">See a sample workspace</a>
+						</Button>
 					</div>
 					<span className="text-xs text-muted-foreground">
-						Free during early access
+						Free during early access · no credit card required
 					</span>
 				</motion.div>
 			</motion.div>

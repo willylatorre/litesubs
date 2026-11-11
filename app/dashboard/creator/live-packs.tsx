@@ -50,7 +50,14 @@ export function LivePacks() {
 						))}
 					</div>
 				) : livePacks.length === 0 ? (
-					<p className="text-sm text-muted-foreground">No active plans.</p>
+					<div className="flex flex-col items-start gap-2 rounded-lg border border-dashed p-4">
+						<p className="text-sm text-muted-foreground">
+							No live plans yet. Create one to get a shareable checkout link.
+						</p>
+						<Button asChild size="sm" variant="outline">
+							<Link href="/dashboard/packs">Create a plan</Link>
+						</Button>
+					</div>
 				) : (
 					<div className="grid gap-4">
 						{livePacks.slice(0, 5).map((pack) => (

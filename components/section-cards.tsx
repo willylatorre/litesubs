@@ -10,12 +10,15 @@ interface SectionCardsProps {
 	totalRevenue: number;
 	activeProducts: number;
 	totalCustomers: number;
+	/** True when the figures include the removable sample workspace rows. */
+	includesSample?: boolean;
 }
 
 export function SectionCards({
 	totalRevenue,
 	activeProducts,
 	totalCustomers,
+	includesSample = false,
 }: SectionCardsProps) {
 	return (
 		<div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
@@ -25,6 +28,11 @@ export function SectionCards({
 					<CardTitle className="stat-card-value @[250px]/card:text-3xl">
 						${(totalRevenue / 100).toFixed(2)}
 					</CardTitle>
+					{includesSample && (
+						<p className="text-[11px] text-muted-foreground">
+							Includes sample data
+						</p>
+					)}
 				</CardHeader>
 			</Card>
 			<Card className="stat-card @container/card">

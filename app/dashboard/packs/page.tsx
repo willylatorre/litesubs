@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -11,6 +12,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { useProducts } from "@/hooks/use-products";
+import { isSamplePlanId } from "@/lib/sample-data";
 import { CreatePackDialog } from "./create-pack-dialog";
 import { PackActions } from "./pack-actions";
 import { PackDetailsDialog } from "./pack-details-dialog";
@@ -47,8 +49,8 @@ export default function PacksPage() {
 					</TableHeader>
 					<TableBody>
 						{isLoading ? (
-							Array.from({ length: 3 }).map((_, i) => (
-								<TableRow key={i}>
+							["a", "b", "c"].map((row) => (
+								<TableRow key={row}>
 									<TableCell>
 										<Skeleton className="h-4 w-[100px]" />
 									</TableCell>
@@ -68,11 +70,27 @@ export default function PacksPage() {
 							))
 						) : packs?.length === 0 ? (
 							<TableRow>
-								<TableCell
-									colSpan={5}
-									className="text-center h-24 text-muted-foreground"
-								>
-									No plans created yet. Click "Create Plan" to get started.
+								<TableCell colSpan={5} className="h-32 text-center">
+									<div className="flex flex-col items-center gap-3">
+										<p className="text-muted-foreground">
+											No plans yet. A plan is a bundle of credits you sell — for
+											example 10 tutoring sessions for $100.
+										</p>
+										<p className="text-sm text-muted-foreground">
+											Use{" "}
+											<span className="font-medium text-foreground">
+												Create Plan
+											</span>{" "}
+											above, or{" "}
+											<Link
+												href="/dashboard/creator"
+												className="underline underline-offset-4"
+											>
+												load a sample plan
+											</Link>{" "}
+											to see how everything fits together.
+										</p>
+									</div>
 								</TableCell>
 							</TableRow>
 						) : (
@@ -83,6 +101,9 @@ export default function PacksPage() {
 											<div className="flex flex-col cursor-pointer hover:underline">
 												<div className="flex items-center gap-2">
 													<span>{pack.name}</span>
+													{isSamplePlanId(pack.id) && (
+														<Badge variant="outline">Sample</Badge>
+													)}
 													{pack.integration?.calcomIntegration?.eventTypeId && (
 														<Badge variant="outline">cal.com</Badge>
 													)}

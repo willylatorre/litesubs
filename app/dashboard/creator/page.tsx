@@ -1,22 +1,52 @@
 import { Suspense } from "react";
 import { getCreatorStats } from "@/app/actions/dashboard";
+import { getSampleWorkspace } from "@/app/actions/sample-data";
 import { SectionCards, SectionCardsSkeleton } from "@/components/section-cards";
+import { Skeleton } from "@/components/ui/skeleton";
 import { CreatePackDialog } from "../packs/create-pack-dialog";
+import { GettingStarted } from "./getting-started";
 import { InviteUserDialog } from "./invite-user-dialog";
 import { LivePacks } from "./live-packs";
 import { RecentInvites } from "./recent-invites";
 
 export const dynamic = "force-dynamic";
 
-// Async component to fetch and display stats - streamed via Suspense
-async function SectionCardsWithData() {
-	const stats = await getCreatorStats();
+// One fetch feeds both the onboarding card and the stat cards, and the whole
+// block streams in below the already-rendered page header.
+async function CreatorOverview() {
+	const [stats, sample] = await Promise.all([
+		getCreatorStats(),
+		getSampleWorkspace(),
+	]);
+	const sampleLoaded = Boolean(sample.data?.loaded);
+	const isEmpty = stats.activeProducts === 0 && stats.totalCustomers === 0;
+
 	return (
-		<SectionCards
-			totalRevenue={stats.totalRevenue}
-			activeProducts={stats.activeProducts}
-			totalCustomers={stats.totalCustomers}
-		/>
+		<>
+			{sample.data && (
+				<GettingStarted
+					initialSample={sample.data}
+					isEmpty={isEmpty}
+					activeProducts={stats.activeProducts}
+					totalCustomers={stats.totalCustomers}
+				/>
+			)}
+			<SectionCards
+				totalRevenue={stats.totalRevenue}
+				activeProducts={stats.activeProducts}
+				totalCustomers={stats.totalCustomers}
+				includesSample={sampleLoaded}
+			/>
+		</>
+	);
+}
+
+function OverviewSkeleton() {
+	return (
+		<div className="space-y-4">
+			<Skeleton className="mx-4 h-[164px] rounded-xl lg:mx-6" />
+			<SectionCardsSkeleton />
+		</div>
 	);
 }
 
@@ -35,9 +65,8 @@ export default function CreatorDashboardPage() {
 					</div>
 				</div>
 
-				{/* Stats stream in with Suspense - shows skeleton while loading */}
-				<Suspense fallback={<SectionCardsSkeleton />}>
-					<SectionCardsWithData />
+				<Suspense fallback={<OverviewSkeleton />}>
+					<CreatorOverview />
 				</Suspense>
 
 				<div className="grid gap-4 px-4 lg:px-6 lg:grid-cols-2">
