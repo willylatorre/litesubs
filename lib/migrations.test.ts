@@ -19,6 +19,7 @@ const MIGRATIONS = [
 	"drizzle/0003_connect_oauth.sql",
 	"drizzle/0004_plan_publication.sql",
 	"drizzle/0005_s05_purchase.sql",
+	"drizzle/0006_s06_credit_grants.sql",
 ];
 
 /** Create a fresh database, run `body`, then always drop it. */
@@ -354,5 +355,68 @@ test("0005 adds purchase tables without disturbing existing ledger rows", {
 			`),
 			/duplicate key/,
 		);
+	});
+});
+
+/**
+ * S06 moves credits from a counter to grants. The backfill is the dangerous
+ * part: if it misses an enrollment, that customer's paid credits become
+ * unspendable the moment consumption starts allocating from grants.
+ */
+test("0006 backfills every existing balance into a spendable grant", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, 6));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES
+				('u1','Creator','c@example.test',true),
+				('u2','Buyer','b@example.test',true);
+			INSERT INTO plans(id,creator_id,name) VALUES ('p1','u1','Pack'),('p2','u1','Empty');
+			INSERT INTO plan_versions(id,plan_id,creator_id,status,billing_mode,currency,price,credits,version,published_at)
+			VALUES ('pv1','p1','u1','published','one_time','usd',1000,10,1,now());
+			-- A zero-balance enrollment must not gain a phantom grant.
+			INSERT INTO enrollments(id,user_id,plan_id,creator_id,credits) VALUES
+				('e1','u2','p1','u1',7),
+				('e2','u2','p2','u1',0);
+			INSERT INTO transactions(id,user_id,creator_id,plan_id,plan_version_id,amount,type,status)
+			VALUES ('t1','u2','u1','p1','pv1',10,'purchase','completed');
+		`);
+		await apply(client, MIGRATIONS[6]);
+
+		// The balance becomes exactly one grant of the same size, linked to the
+		// purchase that produced it.
+		const {
+			rows: [grant],
+		} = await client.query(
+			"select enrollment_id, kind, amount, remaining, expires_at, source_transaction_id, plan_version_id from credit_grants",
+		);
+		assert.deepEqual(grant, {
+			enrollment_id: "e1",
+			kind: "adjustment",
+			amount: 7,
+			remaining: 7,
+			expires_at: null,
+			source_transaction_id: "t1",
+			plan_version_id: "pv1",
+		});
+
+		// Projection and grants agree, so nothing is stranded or invented.
+		const { rows: totals } = await client.query(`
+			select e.id, e.credits, coalesce(sum(g.remaining), 0)::int as granted
+			from enrollments e
+			left join credit_grants g on g.enrollment_id = e.id
+			group by e.id, e.credits order by e.id
+		`);
+		assert.deepEqual(totals, [
+			{ id: "e1", credits: 7, granted: 7 },
+			{ id: "e2", credits: 0, granted: 0 },
+		]);
+
+		// The ledger keeps its shape; only the new type is added to the enum.
+		const { rows: types } = await client.query(
+			"select unnest(enum_range(null::transaction_type)) as t",
+		);
+		assert.ok(types.map((row) => row.t).includes("expiry"));
 	});
 });

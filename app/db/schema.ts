@@ -60,6 +60,12 @@ export const paymentStatusEnum = pgEnum("payment_status", [
 	"expired",
 	"refunded",
 ]);
+export const grantKindEnum = pgEnum("grant_kind", [
+	"purchase",
+	"comp",
+	"adjustment",
+	"period",
+]);
 
 // Tables
 
@@ -446,6 +452,100 @@ export const checkoutTokens = pgTable(
 	],
 );
 
+/**
+ * A pool of credits a customer can spend, and where it came from.
+ *
+ * Every positive credit movement is a grant: a purchase, a complimentary
+ * enrollment, or a creator's manual increase. Consumption allocates across
+ * grants instead of decrementing one undifferentiated balance, which is what
+ * makes spending attributable and expiry enforceable without a cron job.
+ *
+ * `remaining` and `expiresAt` are the spendable truth. The enrollment balance is
+ * a projection kept in step by the same transaction.
+ */
+export const creditGrants = pgTable(
+	"credit_grants",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		enrollmentId: text("enrollment_id")
+			.notNull()
+			.references(() => enrollments.id, { onDelete: "cascade" }),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		planId: text("plan_id")
+			.notNull()
+			.references(() => plans.id, { onDelete: "cascade" }),
+		/** The terms that produced this grant, when it came from a version. */
+		planVersionId: text("plan_version_id").references(() => planVersions.id, {
+			onDelete: "set null",
+		}),
+		/** The ledger row that created it, so history is source-linked both ways. */
+		sourceTransactionId: text("source_transaction_id"),
+		kind: grantKindEnum("kind").notNull(),
+		/** Granted units, never changes after creation. */
+		amount: integer("amount").notNull(),
+		/** Units still spendable. Decremented only by allocation. */
+		remaining: integer("remaining").notNull(),
+		expiresAt: timestamp("expires_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [
+		index("credit_grant_enrollment_idx").on(table.enrollmentId),
+		index("credit_grant_creator_idx").on(table.creatorId),
+		index("credit_grant_user_idx").on(table.userId),
+		index("credit_grant_expiry_idx").on(table.expiresAt),
+		check("credit_grant_amount_positive", sql`${table.amount} > 0`),
+		check(
+			"credit_grant_remaining_bounded",
+			sql`${table.remaining} >= 0 and ${table.remaining} <= ${table.amount}`,
+		),
+	],
+);
+
+/**
+ * Which grant paid for which unit of a debit.
+ *
+ * Allocations are the audit trail behind a usage entry: they let a creator see
+ * that a debit of 7 came from 5 units of one pack and 2 of another, and they
+ * make "consumed across more than one grant" verifiable rather than implied.
+ */
+export const creditAllocations = pgTable(
+	"credit_allocations",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		transactionId: text("transaction_id")
+			.notNull()
+			.references(() => transactions.id, { onDelete: "cascade" }),
+		grantId: text("grant_id")
+			.notNull()
+			.references(() => creditGrants.id, { onDelete: "cascade" }),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		/** Units taken from this grant for this debit. Always positive. */
+		amount: integer("amount").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [
+		index("credit_allocation_transaction_idx").on(table.transactionId),
+		index("credit_allocation_grant_idx").on(table.grantId),
+		index("credit_allocation_creator_idx").on(table.creatorId),
+		check("credit_allocation_amount_positive", sql`${table.amount} > 0`),
+	],
+);
+
 export const invites = pgTable(
 	"invites",
 	{
@@ -548,20 +648,57 @@ export const enrollmentsRelations = relations(enrollments, ({ one }) => ({
 	}),
 }));
 
-export const transactionsRelations = relations(transactions, ({ one }) => ({
-	user: one(user, {
-		fields: [transactions.userId],
-		references: [user.id],
+export const transactionsRelations = relations(
+	transactions,
+	({ one, many }) => ({
+		user: one(user, {
+			fields: [transactions.userId],
+			references: [user.id],
+		}),
+		creator: one(user, {
+			fields: [transactions.creatorId],
+			references: [user.id],
+		}),
+		plan: one(plans, {
+			fields: [transactions.planId],
+			references: [plans.id],
+		}),
+		planVersion: one(planVersions, {
+			fields: [transactions.planVersionId],
+			references: [planVersions.id],
+		}),
+		allocations: many(creditAllocations),
 	}),
-	creator: one(user, {
-		fields: [transactions.creatorId],
-		references: [user.id],
+);
+
+export const creditGrantsRelations = relations(
+	creditGrants,
+	({ one, many }) => ({
+		enrollment: one(enrollments, {
+			fields: [creditGrants.enrollmentId],
+			references: [enrollments.id],
+		}),
+		plan: one(plans, {
+			fields: [creditGrants.planId],
+			references: [plans.id],
+		}),
+		allocations: many(creditAllocations),
 	}),
-	plan: one(plans, {
-		fields: [transactions.planId],
-		references: [plans.id],
+);
+
+export const creditAllocationsRelations = relations(
+	creditAllocations,
+	({ one }) => ({
+		transaction: one(transactions, {
+			fields: [creditAllocations.transactionId],
+			references: [transactions.id],
+		}),
+		grant: one(creditGrants, {
+			fields: [creditAllocations.grantId],
+			references: [creditGrants.id],
+		}),
 	}),
-}));
+);
 
 export const invitesRelations = relations(invites, ({ one }) => ({
 	creator: one(user, {

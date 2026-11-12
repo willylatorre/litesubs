@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/app/db";
 import { enrollments, invites, transactions, user } from "@/app/db/schema";
 import { appUrl } from "@/lib/app-url";
+import { grantCredits } from "./credits";
 import { resolveCustomer } from "./customers";
 import { pageInput, resolvePublishedPlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
@@ -110,13 +111,14 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 	}
 	if (data.mode === "comp") {
 		return db.transaction(async (tx) => {
+			// The balance starts at zero; the comp is then a real grant, so every
+			// credit has a source and an optional expiry from the beginning.
 			const [enrollment] = await tx
 				.insert(enrollments)
 				.values({
 					creatorId: principal.creatorId,
 					userId: customer.id,
 					planId: plan.id,
-					credits: terms.credits,
 				})
 				.onConflictDoNothing()
 				.returning();
@@ -126,16 +128,30 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 					"Already enrolled; use grant_credits for additional credits",
 					409,
 				);
-			await tx.insert(transactions).values({
+			const [entry] = await tx
+				.insert(transactions)
+				.values({
+					creatorId: principal.creatorId,
+					userId: customer.id,
+					planId: plan.id,
+					planVersionId: terms.id,
+					amount: terms.credits,
+					type: "manual_adjustment",
+					status: "completed",
+					description: data.reason,
+					balanceBefore: 0,
+					balanceAfter: terms.credits,
+				})
+				.returning({ id: transactions.id });
+			await grantCredits(tx, {
+				enrollmentId: enrollment.id,
 				creatorId: principal.creatorId,
 				userId: customer.id,
 				planId: plan.id,
+				planVersionId: terms.id,
+				sourceTransactionId: entry.id,
+				kind: "comp",
 				amount: terms.credits,
-				type: "manual_adjustment",
-				status: "completed",
-				description: data.reason,
-				balanceBefore: 0,
-				balanceAfter: terms.credits,
 			});
 			return { status: "enrolled", enrollment };
 		});
@@ -259,22 +275,34 @@ export async function claimEnrollmentInvite(
 					creatorId: invite.creatorId,
 					userId,
 					planId: plan.id,
-					credits: invite.compCredits,
 				})
 				.onConflictDoNothing()
 				.returning();
-			if (enrollment && invite.compCredits > 0)
-				await tx.insert(transactions).values({
+			if (enrollment && invite.compCredits > 0) {
+				const [entry] = await tx
+					.insert(transactions)
+					.values({
+						creatorId: invite.creatorId,
+						userId,
+						planId: plan.id,
+						amount: invite.compCredits,
+						type: "manual_adjustment",
+						status: "completed",
+						description: invite.compReason ?? "Complimentary enrollment",
+						balanceBefore: 0,
+						balanceAfter: invite.compCredits,
+					})
+					.returning({ id: transactions.id });
+				await grantCredits(tx, {
+					enrollmentId: enrollment.id,
 					creatorId: invite.creatorId,
 					userId,
 					planId: plan.id,
+					sourceTransactionId: entry.id,
+					kind: "comp",
 					amount: invite.compCredits,
-					type: "manual_adjustment",
-					status: "completed",
-					description: invite.compReason ?? "Complimentary enrollment",
-					balanceBefore: 0,
-					balanceAfter: invite.compCredits,
 				});
+			}
 		}
 		await tx
 			.update(invites)

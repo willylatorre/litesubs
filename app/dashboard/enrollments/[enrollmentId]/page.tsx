@@ -129,6 +129,7 @@ export default async function EnrollmentDetailPage({
 								<TableHead>Date</TableHead>
 								<TableHead>Type</TableHead>
 								<TableHead>Description</TableHead>
+								<TableHead className="text-right">Usable after</TableHead>
 								<TableHead className="text-right">Amount</TableHead>
 							</TableRow>
 						</TableHeader>
@@ -136,7 +137,7 @@ export default async function EnrollmentDetailPage({
 							{transactions.length === 0 ? (
 								<TableRow>
 									<TableCell
-										colSpan={4}
+										colSpan={5}
 										className="text-center h-24 text-muted-foreground"
 									>
 										No credit history recorded.
@@ -151,11 +152,24 @@ export default async function EnrollmentDetailPage({
 										<TableCell className="capitalize">
 											{tx.type.replace("_", " ")}
 										</TableCell>
-										<TableCell
-											className="max-w-[200px] truncate"
-											title={tx.description || ""}
-										>
-											{tx.description || "-"}
+										<TableCell className="max-w-[220px]">
+											<span
+												className="block truncate"
+												title={tx.description || ""}
+											>
+												{tx.description || "-"}
+											</span>
+											{/* A usage debit shows which grants paid for it, so
+											    spending is attributable rather than an opaque number. */}
+											{tx.allocations?.length ? (
+												<span className="text-xs text-muted-foreground">
+													from {tx.allocations.length} credit source
+													{tx.allocations.length === 1 ? "" : "s"}
+												</span>
+											) : null}
+										</TableCell>
+										<TableCell className="text-right font-mono text-muted-foreground">
+											{tx.balanceAfter ?? "—"}
 										</TableCell>
 										<TableCell
 											className={`text-right font-mono font-medium ${tx.amount > 0 ? "text-green-600" : "text-red-600"}`}

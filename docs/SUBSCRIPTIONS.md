@@ -31,6 +31,11 @@ Implemented slices:
   first purchases reuse one Customer), a `payments` receipt written before the
   session, fulfillment that grants once via a `pending -> paid` transition, and
   single-use hashed purchase-request tokens. See `drizzle/0005_s05_purchase.sql`.
+- S06 — grant-aware consumption: credits are grants with their own remaining
+  amount and expiry, debits allocate across them in a documented order and
+  record the split, and the enrollment balance is a projection updated in the
+  same transaction. Expiry is enforced on read. See
+  `drizzle/0006_s06_credit_grants.sql`.
 
 ## Purpose
 
@@ -558,20 +563,20 @@ action; show the resulting history in the enrollment detail.
 
 #### Acceptance criteria
 
-- [ ] Consumption spends only usable grants, using a documented deterministic order:
+- [x] Consumption spends only usable grants, using a documented deterministic order:
       earliest expiry first, then oldest grant; non-expiring grants come last.
-- [ ] The request either allocates the entire debit or fails without partial effects.
+- [x] The request either allocates the entire debit or fails without partial effects.
       Grant remaining amounts and the enrollment projection cannot become negative.
-- [ ] Duplicate idempotency keys replay the original receipt; conflicting payloads
+- [x] Duplicate idempotency keys replay the original receipt; conflicting payloads
       fail. Concurrent different debits serialize correctly, including a debit
       that spans more than one purchased pack.
-- [ ] Reads/debits exclude expired grants even without a scheduled expiry job.
+- [x] Reads/debits exclude expired grants even without a scheduled expiry job.
       Materialized expiry ledger entries are themselves retry-safe.
-- [ ] Dry runs have no durable effects or key reservations and report the current
+- [x] Dry runs have no durable effects or key reservations and report the current
       usable balance without consuming grants.
-- [ ] API-key consumption retains `credits:consume` restrictions; creator adjustments
+- [x] API-key consumption retains `credits:consume` restrictions; creator adjustments
       keep their separate authorization. Other creators cannot debit the enrollment.
-- [ ] Ledger history identifies usage, its source allocations, and before/after
+- [x] Ledger history identifies usage, its source allocations, and before/after
       usable balances rather than mixing the debit with a financial payment.
 
 #### Implementation notes and relevant files
@@ -589,6 +594,14 @@ Buy two packs, consume across their grants, replay the debit, and demonstrate an
 overdraft rejection and concurrent-debit correctness. Advance the test clock past
 a grant expiry and verify consumption fails without relying on a webhook/job.
 Automatic Cal.com booking consumption is not included in this slice.
+
+**Implemented:** yes — see `lib/services/credits.ts`,
+`drizzle/0006_s06_credit_grants.sql`, and `lib/credits.integration.test.ts`.
+
+Spend order is expiry-soonest first, then non-expiring oldest first. Expiry is
+enforced on read (`usableBalance`/allocation ignore past-boundary grants), so
+correctness never depends on a scheduled job; `expireGrants` only materializes
+ledger rows and is itself idempotent.
 
 #### Blocked by
 

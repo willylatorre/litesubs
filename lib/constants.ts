@@ -20,6 +20,8 @@ export const TRANSACTION_TYPES = [
 	"manual_adjustment",
 	"usage",
 	"refund",
+	/** A grant reached its expiry boundary and stops being spendable. */
+	"expiry",
 ] as const;
 
 export const TRANSACTION_STATUSES = [

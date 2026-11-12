@@ -48,6 +48,7 @@ export async function getCreatorCustomerTransactions(
 			orderBy: [desc(transactions.createdAt)],
 			with: {
 				plan: true,
+				allocations: true,
 			},
 		});
 
@@ -69,6 +70,8 @@ export async function getUserTransactions(planId?: string) {
 			with: {
 				creator: true,
 				plan: true,
+				// A usage debit is attributable: show which grants it consumed.
+				allocations: true,
 			},
 		});
 

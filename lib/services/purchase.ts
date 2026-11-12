@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { db } from "@/app/db";
 import {
 	checkoutTokens,
@@ -17,6 +17,7 @@ import {
 	isValidApplicationFee,
 } from "@/lib/stripe-direct-charges";
 import { getPaymentReadiness } from "./connect";
+import { grantCredits } from "./credits";
 import { resolvePublishedPlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
 
@@ -380,29 +381,39 @@ export async function fulfillPayment(input: {
 			})
 			.returning();
 
-		const [updated] = await tx
-			.update(enrollments)
-			.set({ credits: sql`${enrollments.credits} + ${claimed.credits}` })
-			.where(eq(enrollments.id, enrollment.id))
-			.returning();
+		// A purchase is a grant, so it is spendable, attributable to its version,
+		// and expirable by the same engine as every other credit movement.
+		const [entry] = await tx
+			.insert(transactions)
+			.values({
+				userId: claimed.userId,
+				creatorId: claimed.creatorId,
+				planId: claimed.planId,
+				planVersionId: claimed.planVersionId,
+				amount: claimed.credits,
+				amountMoney: input.amountPaid,
+				currency: claimed.currency,
+				type: "purchase",
+				description: `Purchase of ${claimed.credits} credits`,
+				stripeCheckoutId: input.checkoutSessionId,
+				status: "completed",
+				usesStripeConnect: true,
+				stripeApplicationFee: claimed.applicationFee,
+				stripeConnectAccountId: claimed.stripeAccountId,
+				balanceBefore: enrollment.credits,
+				balanceAfter: enrollment.credits + claimed.credits,
+			})
+			.returning({ id: transactions.id });
 
-		await tx.insert(transactions).values({
-			userId: claimed.userId,
+		await grantCredits(tx, {
+			enrollmentId: enrollment.id,
 			creatorId: claimed.creatorId,
+			userId: claimed.userId,
 			planId: claimed.planId,
 			planVersionId: claimed.planVersionId,
+			sourceTransactionId: entry.id,
+			kind: "purchase",
 			amount: claimed.credits,
-			amountMoney: input.amountPaid,
-			currency: claimed.currency,
-			type: "purchase",
-			description: `Purchase of ${claimed.credits} credits`,
-			stripeCheckoutId: input.checkoutSessionId,
-			status: "completed",
-			usesStripeConnect: true,
-			stripeApplicationFee: claimed.applicationFee,
-			stripeConnectAccountId: claimed.stripeAccountId,
-			balanceBefore: enrollment.credits,
-			balanceAfter: updated?.credits ?? enrollment.credits + claimed.credits,
 		});
 
 		return { status: "fulfilled" as const, credits: claimed.credits };

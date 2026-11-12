@@ -103,6 +103,9 @@ Errors return code, error, and optional details or fieldErrors. Status codes:
 - consume_credits requires an idempotency_key derived from the business event
   (booking ID, message ID), not a timestamp. Retrying with the same key returns
   the original receipt; a different payload under the same key is rejected.
+  Consumption spends expiring credits first (soonest expiry), then older
+  non-expiring ones; a debit is all-or-nothing and never partially applies.
+  Expired credits are unusable immediately, not when a cleanup job runs.
 - grant_credits takes an optional idempotency_key. reason is required and appears
   in the customer ledger. dry_run previews the before/after balance without
   writing or reserving a key.

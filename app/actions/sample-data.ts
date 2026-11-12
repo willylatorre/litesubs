@@ -4,6 +4,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/app/db";
 import {
+	creditAllocations,
+	creditGrants,
 	enrollments,
 	invites,
 	plans,
@@ -133,6 +135,7 @@ export async function createSampleWorkspace(): Promise<
 						userId: ids.customer,
 						creatorId,
 						planId: ids.plan,
+						planVersionId: ids.planVersion,
 						amount: SAMPLE_PLAN.credits,
 						amountMoney: SAMPLE_PLAN.price,
 						currency: SAMPLE_PLAN.currency,
@@ -157,6 +160,37 @@ export async function createSampleWorkspace(): Promise<
 					},
 				])
 				.onConflictDoNothing({ target: transactions.id });
+
+			// The demo's credits must be real grants, or the sample would show a
+			// balance that not even the sample's own consumption could spend.
+			await tx
+				.insert(creditGrants)
+				.values({
+					id: ids.grant,
+					enrollmentId: ids.enrollment,
+					creatorId,
+					userId: ids.customer,
+					planId: ids.plan,
+					planVersionId: ids.planVersion,
+					sourceTransactionId: ids.purchaseTransaction,
+					kind: "purchase",
+					amount: SAMPLE_PLAN.credits,
+					remaining: balance,
+				})
+				.onConflictDoNothing({ target: creditGrants.id });
+
+			await tx
+				.insert(creditAllocations)
+				.values({
+					id: ids.usageAllocation,
+					transactionId: ids.usageTransaction,
+					grantId: ids.grant,
+					creatorId,
+					amount: usedCredits,
+				})
+				.onConflictDoNothing({
+					target: creditAllocations.id,
+				});
 
 			await tx
 				.insert(invites)
