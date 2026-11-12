@@ -18,6 +18,13 @@ Implemented slices:
   `drizzle/0003_connect_oauth.sql`. Verified reading of the Stripe Connect docs
   also corrected the checkout implementation: it had been using destination
   charges (`transfer_data`), which is now fixed to true direct charges.
+- S04 — publication in `lib/services/publish.ts`: a draft is provisioned as a
+  Product/Price on the creator's connected account, the version is frozen with
+  those references, replacing terms supersedes the previous version, and
+  unpublishing archives the offer while keeping history. Exposed on every
+  transport (`publishPlan`/`unpublishPlan`, `publish_plan`/`unpublish_plan` MCP
+  tools, `POST /api/v1/plans/{id}/publish|unpublish`, and the plans dashboard).
+  See `drizzle/0004_plan_publication.sql`.
 
 ## Purpose
 
@@ -421,26 +428,26 @@ with no way to publish and no tool to explain why.
 
 #### Acceptance criteria
 
-- [ ] Publishing requires current merchant readiness and positive purchasable terms
+- [x] Publishing requires current merchant readiness and positive purchasable terms
       compatible with Stripe's minimum amount/currency rules. Complimentary
       enrollment remains separate from a zero-price paid offer.
-- [ ] Product/Price objects are created on the creator account, not the platform;
+- [x] Product/Price objects are created on the creator account, not the platform;
       a published version records that account and immutable commercial terms.
-- [ ] Retries/concurrent publishing attempts use stable idempotency and constraints;
+- [x] Retries/concurrent publishing attempts use stable idempotency and constraints;
       a timeout after Stripe succeeds is recoverable without duplicate offers.
-- [ ] Failed provisioning leaves an actionable draft/retry state, never a published
+- [x] Failed provisioning leaves an actionable draft/retry state, never a published
       row with missing Stripe references or a half-sellable version.
-- [ ] Editing price/credits/mode/interval creates new terms rather than mutating an
+- [x] Editing price/credits/mode/interval creates new terms rather than mutating an
       already-published version; service name/description edits remain distinct.
-- [ ] Unpublish disables new sales without deleting Stripe subscriptions, credit
+- [x] Unpublish disables new sales without deleting Stripe subscriptions, credit
       grants, purchased versions, or their history.
-- [ ] UI, REST, and creator MCP expose the same publication lifecycle and errors;
+- [x] UI, REST, and creator MCP expose the same publication lifecycle and errors;
       other creators cannot publish/edit this plan.
-- [ ] `publish_plan` and `unpublish_plan` exist as MCP tools under `plans:write`,
+- [x] `publish_plan` and `unpublish_plan` exist as MCP tools under `plans:write`,
       with the same readiness, idempotency, and provisioning errors as the UI.
       An ambiguous plan name returns candidates instead of guessing, as the other
       plan tools do.
-- [ ] Unpublishing over MCP requires an explicit confirmation input, matching the
+- [x] Unpublishing over MCP requires an explicit confirmation input, matching the
       confirmation the UI asks for, so a model cannot stop sales by accident.
 
 #### Implementation notes and relevant files
@@ -457,6 +464,9 @@ creator catalog entries.
 Publish an offer and inspect its Stripe objects on the creator account. Publish a
 replacement and show the previous version remains immutable. Inject a provisioning
 timeout and retry; assert one published version and one set of intended objects.
+
+**Implemented:** yes — see `lib/services/publish.ts`,
+`lib/stripe-offers.ts`, and `drizzle/0004_plan_publication.sql`.
 
 #### Blocked by
 

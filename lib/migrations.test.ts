@@ -17,6 +17,7 @@ const MIGRATIONS = [
 	"drizzle/0001_plans_enrollments.sql",
 	"drizzle/0002_connected_accounts.sql",
 	"drizzle/0003_connect_oauth.sql",
+	"drizzle/0004_plan_publication.sql",
 ];
 
 /** Create a fresh database, run `body`, then always drop it. */
@@ -232,6 +233,59 @@ test("0003 adds OAuth state without marking existing accounts as authorized", {
 			client.query(
 				"insert into connect_oauth_states(id,state_hash,user_id,expires_at) values ('s2','h1','u1', now() + interval '10 minutes')",
 			),
+			/duplicate key/,
+		);
+	});
+});
+
+/**
+ * S04 records the Stripe offer a published version sells. Existing published
+ * rows have no Stripe references yet (they predate publication), so the columns
+ * must stay nullable; the single-published index must still allow the one row
+ * each plan already had.
+ */
+test("0004 adds publication references without breaking existing published rows", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(
+			client,
+			MIGRATIONS[0],
+			MIGRATIONS[1],
+			MIGRATIONS[2],
+			MIGRATIONS[3],
+		);
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES ('u1','Creator','c@example.test',true);
+			INSERT INTO plans(id,creator_id,name) VALUES ('p1','u1','Pack');
+			INSERT INTO plan_versions(id,plan_id,creator_id,status,billing_mode,currency,price,credits,version,published_at)
+			VALUES ('pv1','p1','u1','published','one_time','usd',1000,10,1,now());
+		`);
+		await apply(client, MIGRATIONS[4]);
+
+		const {
+			rows: [row],
+		} = await client.query(
+			"select status, published_at, unpublished_at, stripe_account_id, stripe_product_id, stripe_price_id from plan_versions where id = 'pv1'",
+		);
+		assert.equal(row.status, "published");
+		assert.ok(row.published_at);
+		assert.deepEqual(
+			[
+				row.unpublished_at,
+				row.stripe_account_id,
+				row.stripe_product_id,
+				row.stripe_price_id,
+			],
+			[null, null, null, null],
+		);
+
+		// The database itself guarantees one current offer per plan.
+		await assert.rejects(
+			client.query(`
+				INSERT INTO plan_versions(id,plan_id,creator_id,status,billing_mode,currency,price,credits,version,published_at)
+				VALUES ('pv2','p1','u1','published','one_time','usd',2000,20,2,now());
+			`),
 			/duplicate key/,
 		);
 	});

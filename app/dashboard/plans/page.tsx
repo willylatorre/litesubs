@@ -140,12 +140,18 @@ export default function PlansPage() {
 									<TableCell>
 										{plan.isDraft ? (
 											<Badge variant="secondary">Draft</Badge>
+										) : plan.hasDraftChanges ? (
+											<Badge variant="outline">Changes pending</Badge>
 										) : (
 											<Badge variant="default">Published</Badge>
 										)}
 									</TableCell>
 									<TableCell className="text-right">
-										<PlanActions planId={plan.id} isDraft={plan.isDraft} />
+										<PlanActions
+											planId={plan.id}
+											isDraft={plan.isDraft}
+											hasDraftChanges={plan.hasDraftChanges}
+										/>
 									</TableCell>
 								</TableRow>
 							))
@@ -154,8 +160,9 @@ export default function PlansPage() {
 				</Table>
 			</div>
 			<p className="text-xs text-muted-foreground">
-				Draft plans cannot be purchased or invited to. Publishing requires a
-				payment-ready Stripe account — set one up under Payments.
+				Publishing creates the offer on your connected Stripe account, so only a
+				payment-ready account can sell. Drafts and pending changes are never
+				purchasable until you publish them.
 			</p>
 		</div>
 	);

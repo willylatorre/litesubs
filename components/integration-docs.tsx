@@ -13,6 +13,8 @@ import { mcpResource } from "@/lib/mcp-config";
 const endpoints = [
 	["GET / POST", "/api/v1/plans", "Read or create plans"],
 	["GET / PATCH", "/api/v1/plans/:id", "Read or update a plan"],
+	["POST", "/api/v1/plans/:id/publish", "Publish the draft offer"],
+	["POST", "/api/v1/plans/:id/unpublish", "Stop new sales"],
 	["GET", "/api/v1/customers", "Read enrolled customers"],
 	["GET", "/api/v1/customers/:id", "Read a customer's per-plan balances"],
 	["POST", "/api/v1/enrollments", "Enroll or invite a customer"],
@@ -263,6 +265,21 @@ x-api-key: <machine token>            # consumption only`}
 						consumption return <code>PLAN_NOT_PUBLISHED</code>. Monthly plans
 						use <code>billingMode: "recurring"</code> with{" "}
 						<code>interval: "month"</code>; yearly offers are not supported yet.
+					</p>
+					<CodeBlock
+						language="curl · publish the offer"
+						code={`curl -X POST '${base}/api/v1/plans/<plan id>/publish' \\
+  -H 'Authorization: Bearer <oauth token>'
+
+# Later, stop new sales (existing customers keep their credits)
+curl -X POST '${base}/api/v1/plans/<plan id>/unpublish' \\
+  -H 'Authorization: Bearer <oauth token>'`}
+					/>
+					<p>
+						Publishing needs a payment-ready Stripe account and creates the
+						Product/Price on that creator account. Publishing new terms
+						supersedes the previous version, so existing customers keep exactly
+						what they bought.
 					</p>
 					<CodeBlock
 						language="curl · create a plan"

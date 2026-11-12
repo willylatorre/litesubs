@@ -68,6 +68,14 @@ export function PlanDetailsDialog({
 	const published = versions.find((version) => version.status === "published");
 	const terms = draft ?? published;
 	const isDraft = !published;
+	const hasDraftChanges = Boolean(
+		draft &&
+			published &&
+			(draft.price !== published.price ||
+				draft.credits !== published.credits ||
+				draft.currency !== published.currency ||
+				draft.billingMode !== published.billingMode),
+	);
 
 	const enrollments = details?.enrollments ?? [];
 	const displayedEnrollments = enrollments.slice(0, 5);
@@ -125,6 +133,10 @@ export function PlanDetailsDialog({
 									<div>
 										{isDraft ? (
 											<Badge variant="secondary">Draft — not purchasable</Badge>
+										) : hasDraftChanges ? (
+											<Badge variant="outline">
+												Published — changes pending
+											</Badge>
 										) : (
 											<Badge variant="default">Published</Badge>
 										)}
@@ -155,8 +167,23 @@ export function PlanDetailsDialog({
 
 							{isDraft && (
 								<p className="rounded-md border border-dashed bg-muted/40 p-3 text-xs text-muted-foreground">
-									This plan is a draft. Publishing requires a connected Stripe
-									account so the creator can charge customers directly.
+									This plan is a draft. Publishing creates the offer on your
+									connected Stripe account so customers pay you directly.
+								</p>
+							)}
+							{hasDraftChanges && (
+								<p className="rounded-md border border-dashed bg-muted/40 p-3 text-xs text-muted-foreground">
+									The terms above are waiting to be published. The live offer is{" "}
+									{published
+										? `${published.credits} credits for ${new Intl.NumberFormat(
+												"en-US",
+												{
+													style: "currency",
+													currency: published.currency.toUpperCase(),
+												},
+											).format(published.price / 100)}`
+										: "unavailable"}
+									; customers still buy it until you publish.
 								</p>
 							)}
 

@@ -17,6 +17,12 @@ import {
 	updatePlan,
 } from "@/lib/services/plans";
 import { type Principal, ServiceError } from "@/lib/services/principal";
+import {
+	publishInput,
+	publishPlan,
+	unpublishInput,
+	unpublishPlan,
+} from "@/lib/services/publish";
 
 /**
  * Server-level guidance, sent in the initialize response. Clients surface this
@@ -26,7 +32,7 @@ import { type Principal, ServiceError } from "@/lib/services/principal";
  */
 const instructions = `Litesubs manages credit plans. A plan is a service with commercial terms: credits at a price, either one-time or monthly. An enrollment ties one customer to one plan and holds that customer's balance for it. Typical order: create_plan, enroll_customer, then grant_credits if needed.
 
-Rules worth repeating: a new plan starts as a draft with no published terms, and a draft cannot be enrolled or purchased. Publishing happens in the dashboard after the creator connects their Stripe account; no MCP tool publishes a plan, so tell the creator to publish there instead of retrying enroll_customer. Plan prices in create_plan/update_plan are major units (10 means $10), while responses return minor units (cents). Published terms are immutable: editing terms replaces the draft only, and already-sold credits do not change. consume_credits requires an idempotency_key built from the business event, not a timestamp, and is unavailable to OAuth connections (it needs an API key). enroll_customer defaults to invoice mode and returns a payment link; credits arrive only after payment, and no email is sent, so forward the link yourself. Comp enrollment requires a reason and cannot be repeated for an existing enrollment. No payout, refund, or billing-charge tools exist.`;
+Rules worth repeating: a new plan starts as a draft with no published terms, and a draft cannot be enrolled or purchased. Publishing requires a payment-ready connected Stripe account; use publish_plan (or the dashboard) and it provisions the Product/Price on the creator's account. Publishing new terms supersedes the previous version while existing customers keep theirs; unpublish_plan stops new sales and needs confirm: true. Plan prices in create_plan/update_plan are major units (10 means $10), while responses return minor units (cents). Published terms are immutable: editing terms replaces the draft only, and already-sold credits do not change. consume_credits requires an idempotency_key built from the business event, not a timestamp, and is unavailable to OAuth connections (it needs an API key). enroll_customer defaults to invoice mode and returns a payment link; credits arrive only after payment, and no email is sent, so forward the link yourself. Comp enrollment requires a reason and cannot be repeated for an existing enrollment. No payout, refund, or billing-charge tools exist.`;
 
 export function createServer(principal: Principal) {
 	const server = new McpServer(
@@ -120,6 +126,20 @@ export function createServer(principal: Principal) {
 		z.object({ plan: z.string().min(1), changes: updatePlanSchema }),
 		false,
 		({ plan, changes }) => updatePlan(principal, plan, changes),
+	);
+	register(
+		"publish_plan",
+		"Publish the draft as the plan's sellable offer. Requires a payment-ready connected Stripe account; the Product/Price are created on the creator's account. Publishing new terms supersedes the previous version, which existing customers keep. Safe to retry: a repeat call returns already_published instead of creating a second offer.",
+		publishInput,
+		false,
+		(input) => publishPlan(principal, input),
+	);
+	register(
+		"unpublish_plan",
+		"Stop new sales for a published plan. Existing customers, purchases, and subscriptions are unaffected; the terms remain readable. Requires confirm: true because it ends the offer. Re-publishing later creates a new version.",
+		unpublishInput,
+		false,
+		(input) => unpublishPlan(principal, input),
 	);
 	register(
 		"list_customers",

@@ -82,7 +82,8 @@ export async function createSampleWorkspace(): Promise<
 				.onConflictDoNothing({ target: plans.id });
 
 			// Sample mode simulates an already-published local plan so the demo
-			// shows a sellable offer. No Stripe object is provisioned.
+			// shows a sellable offer. No Stripe object is provisioned, so this row
+			// deliberately has no stripe_* references.
 			await tx
 				.insert(planVersions)
 				.values({

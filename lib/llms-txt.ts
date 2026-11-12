@@ -41,15 +41,16 @@ export function buildLlmsTxt(): string {
 - Client identification: CIMD with SSRF protections.
 - Auth: OAuth authorization code + PKCE. No cookie sessions on MCP.
 - Scopes: plans:read, plans:write, customers:read, customers:write, billing:read.
-- Creator tools: list_plans, get_plan, create_plan, update_plan, list_customers,
-  get_customer, enroll_customer, grant_credits, list_transactions.
+- Creator tools: list_plans, get_plan, create_plan, update_plan, publish_plan,
+  unpublish_plan, list_customers, get_customer, enroll_customer, grant_credits,
+  list_transactions.
 - Machine-key tools: consume_credits only (permission credits:consume).
 - No payout or refund tools are exposed.
 - Mutation tools request client confirmation, but that is not a security
   boundary; every operation is re-checked server-side.
-- Planned but not implemented: publish_plan and unpublish_plan. Until they ship a
-  new plan stays a draft, so enroll_customer returns PLAN_NOT_PUBLISHED and the
-  creator must publish in the dashboard first.
+- publish_plan provisions the offer on the creator's connected Stripe account and
+  needs a payment-ready account. unpublish_plan requires confirm: true because it
+  ends new sales; existing customers keep their credits.
 
 ## Installing the MCP server
 
@@ -77,6 +78,8 @@ Content-Type: application/json. Lists accept limit (1-100, default 50) and offse
 
 - GET, POST /api/v1/plans - list or create plans
 - GET, PATCH /api/v1/plans/:id - read or update a plan
+- POST /api/v1/plans/:id/publish - publish the draft offer
+- POST /api/v1/plans/:id/unpublish - stop new sales
 - GET /api/v1/customers - enrolled customers with per-plan balances
 - GET /api/v1/customers/:id - one customer's balances
 - POST /api/v1/enrollments - enroll or invite a customer

@@ -152,27 +152,28 @@ session-oriented traffic is rejected.
 | --- | --- |
 | `list_plans`, `get_plan` | `plans:read` |
 | `create_plan`, `update_plan` | `plans:write` |
+| `publish_plan`, `unpublish_plan` | `plans:write` |
 | `list_customers`, `get_customer` | `customers:read` |
 | `enroll_customer`, `grant_credits` | `customers:write` |
 | `list_transactions` | `billing:read` |
 | `consume_credits` | API key `credits:consume` only |
 
-Creator connections see nine creator tools; machine keys see only
+Creator connections see eleven creator tools; machine keys see only
 `consume_credits`. Services enforce scopes again even if tool visibility changes.
 Scope failures return structured tool errors; payout/refund tools are absent.
 The earlier draft incorrectly claimed `createInsufficientScopeError` was missing:
 the settled installation exports it from `better-auth/oauth2`. Dynamic step-up
 is not implemented by this version of the application.
 
-**Publication is not exposed over MCP yet.** Plans are created as drafts, and
-`enroll_customer` rejects one with `PLAN_NOT_PUBLISHED`, but no tool publishes a
-plan: publishing provisions Stripe Products/Prices on the creator's account and
-is still unimplemented in the app (slice S04 in `docs/SUBSCRIPTIONS.md`). Until
-that lands, a creator who works only through MCP can create plans but cannot
-sell them, so the server `instructions` tell the model to stop and send the
-creator to the dashboard rather than retry. S04 adds `publish_plan` and
-`unpublish_plan`; when it ships, update this section and the llms.txt tool list
-in the same change.
+**Publication is exposed over MCP.** `publish_plan` provisions the Product/Price
+on the creator's connected account exactly as the dashboard does, and
+`unpublish_plan` stops new sales while leaving existing customers, purchases,
+and subscriptions untouched. `unpublish_plan` requires `confirm: true` so a model
+cannot end sales by accident, and both tools share the service layer's readiness
+checks, idempotency, and `PLAN_NOT_PUBLISHED`/`PAYMENTS_NOT_READY` errors —
+`enroll_customer` and the dashboard see identical behaviour. Plan names resolve
+exactly as in the other plan tools: an ambiguous name returns candidates rather
+than guessing.
 
 Mutation annotations request client confirmation, but annotations are not a
 security boundary. Credit tools require `reason`, support `dry_run`, and return

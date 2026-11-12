@@ -17,6 +17,7 @@ import {
 	listPlans,
 	updatePlan,
 } from "@/lib/services/plans";
+import { publishPlan, unpublishPlan } from "@/lib/services/publish";
 
 export const runtime = "nodejs";
 async function handle(
@@ -26,12 +27,31 @@ async function handle(
 	try {
 		const { resource } = await context.params;
 		return await withPrincipal(request, async (req, principal) => {
-			const [group, id] = resource;
+			const [group, id, action] = resource;
 			const query = Object.fromEntries(new URL(req.url).searchParams);
+			// Only publication has a third path segment: the offer lifecycle is a
+			// transition on an existing plan, not a separately addressable record.
+			if (resource.length > 3)
+				return Response.json({ error: "Not found" }, { status: 404 });
+			if (resource.length === 3) {
+				const notFound =
+					group !== "plans" ||
+					!id ||
+					req.method !== "POST" ||
+					(action !== "publish" && action !== "unpublish");
+				if (notFound)
+					return Response.json({ error: "Not found" }, { status: 404 });
+				const published =
+					action === "publish"
+						? await publishPlan(principal, { plan: id })
+						: await unpublishPlan(principal, { plan: id, confirm: true });
+				return Response.json(published, {
+					status: 200,
+					headers: { "Cache-Control": "no-store" },
+				});
+			}
 			let result: unknown;
 			let status = 200;
-			if (resource.length > 2)
-				return Response.json({ error: "Not found" }, { status: 404 });
 			switch (`${req.method} ${group}`) {
 				case "GET plans":
 					result = id

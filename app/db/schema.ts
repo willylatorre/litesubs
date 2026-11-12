@@ -157,6 +157,16 @@ export const planVersions = pgTable(
 		credits: integer("credits").notNull(),
 		version: integer("version").notNull().default(1),
 		publishedAt: timestamp("published_at", { withTimezone: true }),
+		unpublishedAt: timestamp("unpublished_at", { withTimezone: true }),
+		/**
+		 * Stripe objects owned by the creator's account. They are recorded only
+		 * for a version that was provisioned, so a published row can never exist
+		 * without the offer it sells. Retries reuse them instead of creating a
+		 * second Product/Price; the draft is a separate row and never holds them.
+		 */
+		stripeAccountId: text("stripe_account_id"),
+		stripeProductId: text("stripe_product_id"),
+		stripePriceId: text("stripe_price_id"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),
@@ -173,6 +183,11 @@ export const planVersions = pgTable(
 		uniqueIndex("plan_version_single_draft_idx")
 			.on(table.planId)
 			.where(sql`${table.status} = 'draft'`),
+		// At most one offer is sellable at a time; a replacement supersedes the
+		// previous version rather than leaving two current prices in Stripe.
+		uniqueIndex("plan_version_single_published_idx")
+			.on(table.planId)
+			.where(sql`${table.status} = 'published'`),
 		check("plan_version_price_non_negative", sql`${table.price} >= 0`),
 		check("plan_version_credits_positive", sql`${table.credits} > 0`),
 		// Monthly is the only recurring interval in v1; one-time offers have none.

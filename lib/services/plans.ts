@@ -31,6 +31,10 @@ export type PlanDetail = PlanRow & {
 	terms: PlanTerms | null;
 	/** True while no published terms exist, so the plan cannot be sold. */
 	isDraft: boolean;
+	/** What a customer can buy right now; `terms` may be newer draft terms. */
+	publishedTerms: PlanTerms | null;
+	/** A published offer with unpublished edits waiting in the draft. */
+	hasDraftChanges: boolean;
 };
 
 function toTerms(version: PlanVersionRow | undefined): PlanTerms | null {
@@ -70,7 +74,29 @@ async function withTerms(
 		...plan,
 		terms: toTerms(draft ?? published),
 		isDraft: !published,
+		publishedTerms: toTerms(published),
+		hasDraftChanges: Boolean(
+			draft && (!published || !sameOffer(draft, published)),
+		),
 	};
+}
+
+/**
+ * Whether two versions sell the same thing. Service identity is not commercial
+ * terms, so renaming a plan is not a pending price change.
+ *
+ * Exported so publication uses one definition: "what the customer buys" must
+ * mean the same thing when deciding to publish and when reporting pending
+ * changes in the UI.
+ */
+export function sameOffer(a: PlanVersionRow, b: PlanVersionRow): boolean {
+	return (
+		a.billingMode === b.billingMode &&
+		a.interval === b.interval &&
+		a.currency === b.currency &&
+		a.price === b.price &&
+		a.credits === b.credits
+	);
 }
 
 // Resolve exact IDs/names only within this creator. Never guess a fuzzy match.

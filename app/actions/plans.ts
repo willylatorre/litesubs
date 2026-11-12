@@ -7,6 +7,7 @@ import { enrollments, plans, planVersions } from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
 import { createPlan, listPlans, updatePlan } from "@/lib/services/plans";
 import { sessionPrincipal } from "@/lib/services/principal";
+import { publishPlan, unpublishPlan } from "@/lib/services/publish";
 
 export async function createPlanAction(
 	_prevState: unknown,
@@ -87,6 +88,33 @@ export async function updatePlanAction(
 		);
 		revalidatePath("/dashboard/plans");
 		revalidatePath("/dashboard/creator");
+		return { success: true, data: result };
+	});
+}
+
+/** Publish the draft as the plan's sellable offer on the creator's Stripe account. */
+export async function publishPlanAction(identifier: string) {
+	return authenticatedAction(async (session) => {
+		const result = await publishPlan(sessionPrincipal(session.user.id), {
+			plan: identifier,
+		});
+		revalidatePath("/dashboard/plans");
+		revalidatePath("/dashboard/creator");
+		revalidatePath("/dashboard/payments");
+		return { success: true, data: result };
+	});
+}
+
+/** Stop new sales. Existing customers and purchases are unaffected. */
+export async function unpublishPlanAction(identifier: string) {
+	return authenticatedAction(async (session) => {
+		const result = await unpublishPlan(sessionPrincipal(session.user.id), {
+			plan: identifier,
+			confirm: true,
+		});
+		revalidatePath("/dashboard/plans");
+		revalidatePath("/dashboard/creator");
+		revalidatePath("/dashboard/payments");
 		return { success: true, data: result };
 	});
 }

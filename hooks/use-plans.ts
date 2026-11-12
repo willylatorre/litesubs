@@ -34,6 +34,10 @@ export type Plan = {
 	} | null;
 	terms: PlanTermsClient | null;
 	isDraft: boolean;
+	/** The live offer, when one exists. `terms` may already be newer draft terms. */
+	publishedTerms?: PlanTermsClient | null;
+	/** A live offer exists but the draft holds unpublished changes. */
+	hasDraftChanges?: boolean;
 	enrollmentCount?: number;
 };
 
