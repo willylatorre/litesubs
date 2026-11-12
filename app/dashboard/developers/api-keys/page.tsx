@@ -1,7 +1,7 @@
 "use client";
 
-import { ApiKeysCard } from "@daveyplate/better-auth-ui";
 import Link from "next/link";
+import { ApiKeys } from "@/components/auth/api-key/api-keys";
 
 export default function ApiTokensPage() {
 	return (
@@ -17,7 +17,7 @@ export default function ApiTokensPage() {
 				consume your customers’ credits. It cannot grant credits, change plans,
 				or read billing history.
 			</p>
-			<ApiKeysCard />
+			<ApiKeys />
 			<p className="text-sm text-muted-foreground">
 				New tokens are shown once. Store them securely and never embed them in a
 				public frontend. Revoke any token that may have been exposed.

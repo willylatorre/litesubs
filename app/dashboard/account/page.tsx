@@ -1,13 +1,6 @@
 "use client";
 
-import {
-	ApiKeysCard,
-	ChangePasswordCard,
-	DeleteAccountCard,
-	SessionsCard,
-	TwoFactorCard,
-	UpdateNameCard,
-} from "@daveyplate/better-auth-ui";
+import { Settings } from "@/components/auth/settings/settings";
 
 export default function AccountPage() {
 	return (
@@ -17,20 +10,7 @@ export default function AccountPage() {
 				Billing is managed per creator: each plan you buy is billed by that
 				creator&apos;s Stripe account, from its own invoice history.
 			</p>
-			<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-				<div className="space-y-6">
-					<UpdateNameCard />
-					<ChangePasswordCard />
-					<ApiKeysCard />
-				</div>
-				<div className="space-y-6">
-					<TwoFactorCard />
-				</div>
-				<div className="space-y-6">
-					<SessionsCard />
-					<DeleteAccountCard />
-				</div>
-			</div>
+			<Settings view="account" />
 		</div>
 	);
 }
