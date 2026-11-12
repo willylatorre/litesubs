@@ -19,6 +19,7 @@ export function SiteHeader() {
 		if (path.startsWith("/dashboard/payments")) return "Payments";
 		if (path.startsWith("/dashboard/faq")) return "FAQ";
 		if (path.startsWith("/dashboard/account")) return "Account";
+		if (path.startsWith("/dashboard/security")) return "Security";
 
 		// Fallback: capitalize last segment
 		const segments = path.split("/").filter(Boolean);
