@@ -25,6 +25,12 @@ Implemented slices:
   transport (`publishPlan`/`unpublishPlan`, `publish_plan`/`unpublish_plan` MCP
   tools, `POST /api/v1/plans/{id}/publish|unpublish`, and the plans dashboard).
   See `drizzle/0004_plan_publication.sql`.
+- S05 — one-time purchase through direct-charge Checkout: one shared purchase
+  service for self-service and creator-requested links, an account-scoped Stripe
+  Customer per buyer and creator (claimed before the Stripe call so concurrent
+  first purchases reuse one Customer), a `payments` receipt written before the
+  session, fulfillment that grants once via a `pending -> paid` transition, and
+  single-use hashed purchase-request tokens. See `drizzle/0005_s05_purchase.sql`.
 
 ## Purpose
 
@@ -490,22 +496,22 @@ customer-specific purchase requests through the same service.
 
 #### Acceptance criteria
 
-- [ ] Only a published, available version on a payment-ready account is purchasable.
+- [x] Only a published, available version on a payment-ready account is purchasable.
       The requested customer/version/creator ownership is validated server-side.
-- [ ] Concurrent first purchases reuse one intended Customer per local customer and
+- [x] Concurrent first purchases reuse one intended Customer per local customer and
       connected account. A platform Customer is never passed to that account.
-- [ ] Checkout uses direct charges and the agreed 2% rounded application fee, with
+- [x] Checkout uses direct charges and the agreed 2% rounded application fee, with
       no `transfer_data` or platform fallback; persist actual paid amounts/fees.
-- [ ] A paid pack creates an enrollment as needed, one payment receipt, one credit
+- [x] A paid pack creates an enrollment as needed, one payment receipt, one credit
       grant, and its ledger entry atomically. Rebuying adds a separate grant.
-- [ ] Fulfillment is signature-verified and account-bound; unpaid Checkout completion
+- [x] Fulfillment is signature-verified and account-bound; unpaid Checkout completion
       grants nothing, asynchronous success fulfills once, and duplicate/concurrent
       deliveries cannot produce duplicate units or receipts.
-- [ ] Expired/failed Checkout attempts are visible without granting units. The success
+- [x] Expired/failed Checkout attempts are visible without granting units. The success
       page tolerates webhook delay and does not itself grant credits.
-- [ ] Creator-generated customer purchase requests use single-use authenticated
+- [x] Creator-generated customer purchase requests use single-use authenticated
       checkout handling rather than reusable links containing another user's identity.
-- [ ] Remove platform Customer signup, `user.stripeCustomerId`, Better Auth's obsolete
+- [x] Remove platform Customer signup, `user.stripeCustomerId`, Better Auth's obsolete
       Stripe server/client plugins, platform portal code, and destination-charge
       handlers without breaking normal authentication.
 
@@ -526,6 +532,10 @@ Buy a sandbox pack, wait for fulfillment, and show the receipt and grant. Buy
 again without creating another Stripe Customer. Exercise async payment, invalid
 signatures, concurrent webhook deliveries, and a wrong-account event. Confirm
 the charge belongs to the creator and the application fee belongs to Litesubs.
+
+**Implemented:** yes — see `lib/services/purchase.ts`,
+`lib/stripe-direct-charges.ts`, `drizzle/0005_s05_purchase.sql`, and
+`app/pay/[token]/page.tsx`.
 
 #### Blocked by
 

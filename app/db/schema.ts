@@ -48,6 +48,18 @@ export const transactionStatusEnum = pgEnum(
 export const inviteStatusEnum = pgEnum("invite_status", INVITE_STATUSES);
 export const currencyEnum = pgEnum("currency", CURRENCIES);
 export const integrationTypeEnum = pgEnum("integration_type", ["calcom"]);
+export const customerProvisioningEnum = pgEnum("customer_provisioning", [
+	"provisioning",
+	"ready",
+	"failed",
+]);
+export const paymentStatusEnum = pgEnum("payment_status", [
+	"pending",
+	"paid",
+	"failed",
+	"expired",
+	"refunded",
+]);
 
 // Tables
 
@@ -262,6 +274,14 @@ export const transactions = pgTable(
 		usesStripeConnect: boolean("uses_stripe_connect").default(false),
 		stripeApplicationFee: integer("stripe_application_fee"), // Platform fee in minor units
 		stripeConnectAccountId: text("stripe_connect_account_id"), // Connected account ID
+		/**
+		 * The exact published terms this credit movement belongs to. A purchase
+		 * grant is source-linked to its immutable version, so a later price change
+		 * never rewrites what a customer bought.
+		 */
+		planVersionId: text("plan_version_id").references(() => planVersions.id, {
+			onDelete: "set null",
+		}),
 		// Caller-supplied key that makes credit writes retry-safe. Nullable so
 		// purchase/Stripe rows are unaffected; only `usage` writes require it.
 		idempotencyKey: text("idempotency_key"),
@@ -281,6 +301,148 @@ export const transactions = pgTable(
 		uniqueIndex("tx_creator_idempotency_idx")
 			.on(table.creatorId, table.idempotencyKey)
 			.where(sql`${table.idempotencyKey} is not null`),
+		index("tx_plan_version_idx").on(table.planVersionId),
+	],
+);
+
+/**
+ * A creator's Stripe Customer on **their own** connected account.
+ *
+ * Stripe Customers are account-scoped, so the same Litesubs user is a different
+ * Customer object for every creator they buy from. This mapping is what makes
+ * "reuse one intended Customer" possible without ever passing a platform
+ * Customer to a connected account.
+ *
+ * `provisioning` is a claim row: it is inserted before the Stripe call so two
+ * concurrent first purchases cannot both create a Customer. The unique
+ * (creator, user) constraint makes the race resolve in the database.
+ */
+export const creatorCustomers = pgTable(
+	"creator_customers",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		/** The account this Customer belongs to; never the platform account. */
+		stripeAccountId: text("stripe_account_id"),
+		stripeCustomerId: text("stripe_customer_id"),
+		status: customerProvisioningEnum("status")
+			.default("provisioning")
+			.notNull(),
+		email: text("email"),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		unique("creator_customer_unique").on(table.creatorId, table.userId),
+		index("creator_customer_creator_idx").on(table.creatorId),
+		index("creator_customer_user_idx").on(table.userId),
+		// One Stripe Customer cannot be shared across creators' accounts.
+		uniqueIndex("creator_customer_stripe_unique")
+			.on(table.stripeAccountId, table.stripeCustomerId)
+			.where(sql`${table.stripeCustomerId} is not null`),
+	],
+);
+
+/**
+ * One row per Checkout attempt, written when the session is created.
+ *
+ * This is the payment receipt and the audit trail: it records the intended
+ * terms, the amount actually charged, the application fee, and the account the
+ * charge belongs to. Fulfillment reads it rather than trusting metadata alone.
+ */
+export const payments = pgTable(
+	"payments",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		planId: text("plan_id")
+			.notNull()
+			.references(() => plans.id, { onDelete: "cascade" }),
+		planVersionId: text("plan_version_id")
+			.notNull()
+			.references(() => planVersions.id, { onDelete: "restrict" }),
+		stripeAccountId: text("stripe_account_id").notNull(),
+		stripeCustomerId: text("stripe_customer_id"),
+		stripeCheckoutId: text("stripe_checkout_id").unique(),
+		stripePaymentIntentId: text("stripe_payment_intent_id"),
+		status: paymentStatusEnum("status").default("pending").notNull(),
+		/** Intended terms at session creation; the charge cannot silently differ. */
+		credits: integer("credits").notNull(),
+		amountTotal: integer("amount_total").notNull(),
+		currency: currencyEnum("currency").notNull(),
+		applicationFee: integer("application_fee").notNull(),
+		/** Amount actually paid, recorded at fulfillment. */
+		amountPaid: integer("amount_paid"),
+		fulfilledAt: timestamp("fulfilled_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("payment_creator_idx").on(table.creatorId),
+		index("payment_user_idx").on(table.userId),
+		index("payment_plan_idx").on(table.planId),
+		index("payment_status_idx").on(table.status),
+		check("payment_amounts_non_negative", sql`${table.amountTotal} >= 0`),
+	],
+);
+
+/**
+ * Single-use, authenticated purchase requests.
+ *
+ * A creator used to send the customer a link carrying that customer's identity,
+ * which was reusable by anyone who saw it. Now the link carries only an opaque
+ * token; the recipient signs in, and the token is consumed on first use so it
+ * cannot be forwarded to buy someone else's plan.
+ */
+export const checkoutTokens = pgTable(
+	"checkout_tokens",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		tokenHash: text("token_hash").notNull().unique(),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		planId: text("plan_id")
+			.notNull()
+			.references(() => plans.id, { onDelete: "cascade" }),
+		expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+		consumedAt: timestamp("consumed_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [
+		index("checkout_token_creator_idx").on(table.creatorId),
+		index("checkout_token_expiry_idx").on(table.expiresAt),
 	],
 );
 
@@ -444,5 +606,38 @@ export const integrationsRelations = relations(
 			references: [calcomIntegrations.id],
 		}),
 		plans: many(plans),
+	}),
+);
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+	creator: one(user, {
+		fields: [payments.creatorId],
+		references: [user.id],
+	}),
+	customer: one(user, {
+		fields: [payments.userId],
+		references: [user.id],
+	}),
+	plan: one(plans, {
+		fields: [payments.planId],
+		references: [plans.id],
+	}),
+	planVersion: one(planVersions, {
+		fields: [payments.planVersionId],
+		references: [planVersions.id],
+	}),
+}));
+
+export const creatorCustomersRelations = relations(
+	creatorCustomers,
+	({ one }) => ({
+		creator: one(user, {
+			fields: [creatorCustomers.creatorId],
+			references: [user.id],
+		}),
+		customer: one(user, {
+			fields: [creatorCustomers.userId],
+			references: [user.id],
+		}),
 	}),
 );

@@ -108,7 +108,9 @@ Errors return code, error, and optional details or fieldErrors. Status codes:
   writing or reserving a key.
 - Enrollment defaults to invoice mode: it returns a Checkout Session link and
   grants credits only after payment. Complimentary mode (comp) requires a reason
-  and grants the plan's current credits once.
+  and grants the plan's current credits once. A customer-specific purchase
+  request returns a single-use /pay link bound to that signed-in buyer; forward
+  it instead of reusing it.
 - Unknown emails receive an expiring invite with a claim link; that is not a
   completed enrollment. No email is sent: the creator forwards payment and claim
   links.

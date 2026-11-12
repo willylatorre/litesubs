@@ -1,22 +1,23 @@
-import { and, eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import type { Stripe } from "stripe";
 import { db } from "@/app/db";
-import {
-	enrollments,
-	plans,
-	planVersions,
-	transactions,
-} from "@/app/db/schema";
 import { connectedAccounts } from "@/app/db/stripe-connect-schema";
 import { deriveReadiness } from "@/lib/connect-readiness";
 import { markAccountDeauthorized } from "@/lib/services/connect";
+import {
+	closePayment,
+	fulfillPayment,
+	getPayment,
+} from "@/lib/services/purchase";
 import { getStripe } from "@/lib/stripe";
 
 /**
- * Fulfil a paid one-time Checkout. Credits come only from a confirmed payment,
- * never from the success page. Locally enforced keys (Checkout session ID)
- * make duplicate and concurrent deliveries grant once.
+ * Fulfil a paid one-time Checkout.
+ *
+ * Credits come only from a confirmed payment, never from the success page. The
+ * service's `pending -> paid` transition is the idempotency boundary, so
+ * duplicate and concurrent deliveries grant once.
  */
 async function handleCheckoutCompleted(
 	checkoutSession: Stripe.Checkout.Session,
@@ -24,7 +25,7 @@ async function handleCheckoutCompleted(
 	eventAccountId?: string,
 ): Promise<Response> {
 	const metadata = checkoutSession.metadata;
-	if (!metadata?.planId || !metadata?.creatorId) {
+	if (!metadata?.paymentId || !metadata?.creatorId) {
 		console.error("Webhook received with missing metadata", { eventId });
 		return new Response("Missing metadata", { status: 400 });
 	}
@@ -34,112 +35,61 @@ async function handleCheckoutCompleted(
 		return new Response("Payment not confirmed", { status: 200 });
 
 	try {
-		const existing = await db.query.transactions.findFirst({
-			where: eq(transactions.stripeCheckoutId, checkoutSession.id),
-		});
-		if (existing?.status === "completed")
-			return new Response("Event already processed", { status: 200 });
-
-		const customerId =
-			metadata.userId ??
-			(typeof checkoutSession.customer_email === "string"
-				? await resolveUserIdByEmail(checkoutSession.customer_email)
-				: null);
-		if (!customerId) {
-			console.error("Checkout has no resolvable customer", { eventId });
-			return new Response("Missing customer", { status: 400 });
+		const payment = await getPayment(metadata.paymentId);
+		if (!payment) {
+			console.error("Checkout payment row not found", { eventId });
+			return new Response("Unknown payment", { status: 400 });
 		}
 
-		const plan = await db.query.plans.findFirst({
-			where: and(
-				eq(plans.id, metadata.planId),
-				eq(plans.creatorId, metadata.creatorId),
-			),
-		});
-		if (!plan) {
-			console.error("Checkout plan not found for creator", {
+		// For a direct charge the event is scoped to the connected account, so
+		// `event.account` is authoritative. Metadata is correlation data and must
+		// not be able to point the receipt at a different account.
+		const accountId = eventAccountId ?? payment.stripeAccountId;
+		if (accountId !== payment.stripeAccountId) {
+			console.error("Checkout account does not match the payment", {
 				eventId,
-				planId: metadata.planId,
+				accountId,
+				expected: payment.stripeAccountId,
 			});
-			return new Response("Unknown plan", { status: 400 });
+			return new Response("Account mismatch", { status: 400 });
 		}
-		const version = metadata.planVersionId
-			? await db.query.planVersions.findFirst({
-					where: eq(planVersions.id, metadata.planVersionId),
-				})
-			: undefined;
-		if (!version || version.planId !== plan.id) {
-			console.error("Checkout version does not match plan", {
-				eventId,
-				planId: plan.id,
-			});
-			return new Response("Unknown plan version", { status: 400 });
-		}
-		const creditsToAdd = version.credits;
-		// For a direct charge the event itself is scoped to the connected account,
-		// so `event.account` is authoritative. Metadata is correlation data and
-		// must not be able to point the receipt at a different account.
-		const accountId = eventAccountId ?? metadata.stripeConnectAccountId ?? null;
 		if (eventAccountId) {
 			const owner = await db.query.connectedAccounts.findFirst({
 				where: eq(connectedAccounts.stripeAccountId, eventAccountId),
 			});
 			// A direct-charge event from an account we do not have mapped to this
 			// creator is not ours to fulfil.
-			if (!owner || owner.userId !== plan.creatorId) {
+			if (!owner || owner.userId !== payment.creatorId) {
 				console.error("Direct charge came from an unmapped account", {
 					eventId,
 					eventAccountId,
-					creatorId: plan.creatorId,
+					creatorId: payment.creatorId,
 				});
 				return new Response("Account mismatch", { status: 400 });
 			}
 		}
-		const applicationFee = metadata.applicationFeeAmount
-			? Number.parseInt(metadata.applicationFeeAmount, 10)
-			: null;
-
-		await db.transaction(async (tx) => {
-			const [enrollment] = await tx
-				.insert(enrollments)
-				.values({
-					userId: customerId,
-					planId: plan.id,
-					creatorId: plan.creatorId,
-				})
-				.onConflictDoUpdate({
-					target: [enrollments.userId, enrollments.planId],
-					set: { updatedAt: new Date() },
-				})
-				.returning();
-
-			await tx
-				.update(enrollments)
-				.set({ credits: sql`${enrollments.credits} + ${creditsToAdd}` })
-				.where(eq(enrollments.id, enrollment.id));
-
-			// The Checkout session ID is the fulfillment key. A concurrent second
-			// delivery hits the unique constraint and rolls back granting twice.
-			await tx.insert(transactions).values({
-				userId: customerId,
-				creatorId: plan.creatorId,
-				planId: plan.id,
-				amount: creditsToAdd,
-				amountMoney: checkoutSession.amount_total,
-				currency:
-					(checkoutSession.currency as "usd" | "eur") ?? version.currency,
-				type: "purchase",
-				description: `Purchase of ${creditsToAdd} credits`,
-				stripeCheckoutId: checkoutSession.id,
-				status: "completed",
-				usesStripeConnect: true,
-				stripeApplicationFee: applicationFee,
-				stripeConnectAccountId: accountId,
-				balanceBefore: enrollment.credits,
-				balanceAfter: enrollment.credits + creditsToAdd,
+		// The charge must be at least the intended total; charging less than the
+		// receipt says is a mismatch, not a discount to compute credits from.
+		if ((checkoutSession.amount_total ?? 0) < payment.amountTotal) {
+			console.error("Checkout charged less than the receipt", {
+				eventId,
+				charged: checkoutSession.amount_total,
+				expected: payment.amountTotal,
 			});
-		});
+			return new Response("Amount mismatch", { status: 400 });
+		}
 
+		const paymentIntent =
+			typeof checkoutSession.payment_intent === "string"
+				? checkoutSession.payment_intent
+				: (checkoutSession.payment_intent?.id ?? null);
+		const result = await fulfillPayment({
+			checkoutSessionId: checkoutSession.id,
+			amountPaid: checkoutSession.amount_total ?? payment.amountTotal,
+			paymentIntentId: paymentIntent,
+		});
+		if (result.status === "already_fulfilled")
+			return new Response("Event already processed", { status: 200 });
 		return new Response(null, { status: 200 });
 	} catch (error) {
 		console.error("Failed to process checkout webhook", {
@@ -151,26 +101,13 @@ async function handleCheckoutCompleted(
 	}
 }
 
-async function resolveUserIdByEmail(email: string) {
-	const { user } = await import("@/app/db/schema");
-	const match = await db.query.user.findFirst({ where: eq(user.email, email) });
-	return match?.id ?? null;
-}
-
 async function handleCheckoutExpired(
 	checkoutSession: Stripe.Checkout.Session,
 	eventId: string,
 ): Promise<Response> {
 	try {
-		const existing = await db.query.transactions.findFirst({
-			where: eq(transactions.stripeCheckoutId, checkoutSession.id),
-		});
-		if (existing?.status === "ongoing") {
-			await db
-				.update(transactions)
-				.set({ status: "declined" })
-				.where(eq(transactions.id, existing.id));
-		}
+		await closePayment(checkoutSession.id, "expired");
+		console.log("Checkout session expired", { eventId });
 		return new Response(null, { status: 200 });
 	} catch (error) {
 		console.error("Failed to process expired session", {

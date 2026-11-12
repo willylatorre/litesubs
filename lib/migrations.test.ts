@@ -18,6 +18,7 @@ const MIGRATIONS = [
 	"drizzle/0002_connected_accounts.sql",
 	"drizzle/0003_connect_oauth.sql",
 	"drizzle/0004_plan_publication.sql",
+	"drizzle/0005_s05_purchase.sql",
 ];
 
 /** Create a fresh database, run `body`, then always drop it. */
@@ -285,6 +286,71 @@ test("0004 adds publication references without breaking existing published rows"
 			client.query(`
 				INSERT INTO plan_versions(id,plan_id,creator_id,status,billing_mode,currency,price,credits,version,published_at)
 				VALUES ('pv2','p1','u1','published','one_time','usd',2000,20,2,now());
+			`),
+			/duplicate key/,
+		);
+	});
+});
+
+/**
+ * S05 adds the purchase pipeline. It is purely additive: existing enrollments
+ * and ledger rows must be untouched, and `transactions.plan_version_id` starts
+ * null because historical purchases predate version tracking.
+ */
+test("0005 adds purchase tables without disturbing existing ledger rows", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(
+			client,
+			MIGRATIONS[0],
+			MIGRATIONS[1],
+			MIGRATIONS[2],
+			MIGRATIONS[3],
+			MIGRATIONS[4],
+		);
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES ('u1','Creator','c@example.test',true);
+			INSERT INTO plans(id,creator_id,name) VALUES ('p1','u1','Pack');
+			INSERT INTO enrollments(id,user_id,plan_id,creator_id,credits) VALUES ('e1','u1','p1','u1',7);
+			INSERT INTO transactions(id,user_id,creator_id,plan_id,amount,type,status)
+			VALUES ('t1','u1','u1','p1',10,'purchase','completed');
+		`);
+		await apply(client, MIGRATIONS[5]);
+
+		// The historical row survives, with no invented version link.
+		const {
+			rows: [tx],
+		} = await client.query(
+			"select id, plan_id, plan_version_id from transactions",
+		);
+		assert.deepEqual(tx, { id: "t1", plan_id: "p1", plan_version_id: null });
+		const {
+			rows: [enrollment],
+		} = await client.query("select credits from enrollments where id = 'e1'");
+		assert.equal(enrollment.credits, 7);
+
+		// One buyer is one Customer per creator, enforced by the database.
+		await client.query(`
+			INSERT INTO creator_customers(id,creator_id,user_id) VALUES ('cc1','u1','u1');
+		`);
+		await assert.rejects(
+			client.query(
+				"INSERT INTO creator_customers(id,creator_id,user_id) VALUES ('cc2','u1','u1')",
+			),
+			/duplicate key/,
+		);
+		// A Checkout session can back only one receipt.
+		await client.query(`
+			INSERT INTO plan_versions(id,plan_id,creator_id,status,billing_mode,currency,price,credits,version)
+			VALUES ('pv1','p1','u1','draft','one_time','usd',1000,10,1);
+			INSERT INTO payments(id,creator_id,user_id,plan_id,plan_version_id,stripe_account_id,stripe_checkout_id,credits,amount_total,currency,application_fee)
+			VALUES ('pay1','u1','u1','p1','pv1','acct_x','cs_1',10,1000,'usd',20);
+		`);
+		await assert.rejects(
+			client.query(`
+				INSERT INTO payments(id,creator_id,user_id,plan_id,plan_version_id,stripe_account_id,stripe_checkout_id,credits,amount_total,currency,application_fee)
+				VALUES ('pay2','u1','u1','p1','pv1','acct_x','cs_1',10,1000,'usd',20);
 			`),
 			/duplicate key/,
 		);

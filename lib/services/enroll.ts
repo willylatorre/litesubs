@@ -3,15 +3,10 @@ import { z } from "zod";
 import { db } from "@/app/db";
 import { enrollments, invites, transactions, user } from "@/app/db/schema";
 import { appUrl } from "@/lib/app-url";
-import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
-import {
-	createDirectCheckoutSession,
-	isValidApplicationFee,
-} from "@/lib/stripe-direct-charges";
-import { getPaymentReadiness } from "./connect";
 import { resolveCustomer } from "./customers";
 import { pageInput, resolvePublishedPlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
+import { startPurchase } from "./purchase";
 
 export const enrollmentInput = z.object({
 	plan: z.string().trim().min(1),
@@ -164,67 +159,30 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 	};
 }
 
+/**
+ * Start the creator's Checkout for one enrolled customer.
+ *
+ * The shared purchase service owns the fee, the account-scoped Customer, the
+ * receipt, and fulfillment rules, so this path cannot drift from self-service
+ * buying. It must return a URL, because the caller's contract is "here is what
+ * to forward".
+ */
 export async function checkoutUrl(
 	principal: Principal,
 	customerId: string,
 	planId: string,
 ) {
-	requireScope(principal, "customers:write");
-	const { plan, terms } = await resolvePublishedPlan(
-		principal.creatorId,
+	const result = await startPurchase(principal, {
 		planId,
-	);
-	const [customer, readiness] = await Promise.all([
-		db.query.user.findFirst({ where: eq(user.id, customerId) }),
-		getPaymentReadiness(principal.creatorId),
-	]);
-	if (!customer) throw new ServiceError("NOT_FOUND", "Customer not found", 404);
-	// Direct charges only: without a payment-ready creator account there is no
-	// sale. Falling back to the platform account is explicitly not supported.
-	if (!readiness.canSell || !readiness.stripeAccountId)
-		throw new ServiceError(
-			"PAYMENTS_NOT_READY",
-			"This creator cannot accept payments yet",
-			409,
-		);
-	const stripeAccountId = readiness.stripeAccountId;
-	const fee = Math.round(terms.price * PLATFORM_FEE_PERCENT);
-	if (!isValidApplicationFee(fee, terms.price))
-		throw new ServiceError(
-			"CHECKOUT_UNAVAILABLE",
-			"This plan's fee cannot be collected on Stripe",
-			409,
-		);
-	// Single-use, customer-specific checkout on the creator's own account.
-	const session = await createDirectCheckoutSession({
-		stripeAccountId,
-		lineItem: {
-			name: plan.name,
-			unitAmount: terms.price,
-			currency: terms.currency,
-		},
-		applicationFeeAmount: fee,
-		customerEmail: customer.email,
-		successUrl: appUrl(`/dashboard?success=true&planId=${plan.id}`),
-		cancelUrl: appUrl("/dashboard?canceled=true"),
-		metadata: {
-			userId: customerId,
-			planId: plan.id,
-			planVersionId: terms.id,
-			creatorId: principal.creatorId,
-			credits: String(terms.credits),
-			type: "credit_purchase",
-			stripeConnectAccountId: stripeAccountId,
-			applicationFeeAmount: String(fee),
-		},
+		userId: customerId,
 	});
-	if (!session.url)
+	if (!result.url)
 		throw new ServiceError(
 			"CHECKOUT_UNAVAILABLE",
 			"No checkout URL was returned",
 			502,
 		);
-	return session.url;
+	return result.url;
 }
 
 export async function listInvites(principal: Principal, input: unknown = {}) {
