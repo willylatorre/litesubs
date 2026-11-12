@@ -36,7 +36,16 @@ const enums = [...baseline.matchAll(/CREATE TYPE "public"\."([a-z_]+)"/g)].map(m
 if (tables.length !== 25 || !tables.includes("user") || !enums.length) throw new Error("Unexpected baseline; inspect it before resetting.");
 // Tables from superseded baselines must still be dropped, otherwise their
 // foreign keys keep "user" alive and the reset fails halfway.
-const LEGACY_TABLES = ["products", "lite_subscriptions", "user_balances"];
+const LEGACY_TABLES = [
+	"products",
+	"lite_subscriptions",
+	"user_balances",
+	"stripe_connect_accounts",
+	"user_payout_preferences",
+	"creator_payout_accounts",
+	"payouts",
+	"earnings_ledger",
+];
 const appTables = [...new Set([...tables, ...LEGACY_TABLES])];
 const quote = name => `"${name}"`;
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis:10000 });

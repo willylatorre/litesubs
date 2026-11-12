@@ -7,6 +7,11 @@ Implemented slices:
 - S01 — draft plans with immutable version records; `plans`, `plan_versions`,
   and `enrollments` are the live domain names. See
   `drizzle/0001_plans_enrollments.sql` for the additive migration.
+- S02 — new creator-owned Stripe onboarding with explicit controller
+  responsibilities, derived payment readiness, a Payments setup screen, and the
+  platform payout/earnings system removed. See
+  `drizzle/0002_connected_accounts.sql`. The sandbox journey and Stripe
+  configuration check remain for the operator (this slice is HITL).
 
 ## Purpose
 
@@ -292,19 +297,19 @@ Retire the old platform payout experience as part of this user journey.
 
 #### Acceptance criteria
 
-- [ ] Onboarding uses current supported Stripe account APIs and explicitly requests
+- [x] Onboarding uses current supported Stripe account APIs and explicitly requests
       the agreed responsibilities; no legacy account-type assumption substitutes
       for checking them.
-- [ ] A creator can start/retry/return from onboarding without duplicate accounts;
+- [x] A creator can start/retry/return from onboarding without duplicate accounts;
       incomplete onboarding remains visible and does not mark payments ready.
-- [ ] Payment readiness reflects the required merchant capability, not just whether
+- [x] Payment readiness reflects the required merchant capability, not just whether
       a local account row exists. Requirement changes are surfaced with a remedial
       action using supported hosted/embedded Stripe components.
-- [ ] Full Dashboard access is available once applicable. Displayed responsibility
+- [x] Full Dashboard access is available once applicable. Displayed responsibility
       wording does not promise that Litesubs has no legal obligations.
-- [ ] Platform payout requests, payout preferences, earnings-wallet UI, and outbound
+- [x] Platform payout requests, payout preferences, earnings-wallet UI, and outbound
       payment handlers are removed with their dead models/services/tests/docs.
-- [ ] No sales action falls back to platform charges when readiness is missing.
+- [x] No sales action falls back to platform charges when readiness is missing.
 - [ ] The operator verifies the sandbox configuration, supported regions, webhook
       setup, and the resulting Dashboard/fee/negative-balance responsibilities.
 

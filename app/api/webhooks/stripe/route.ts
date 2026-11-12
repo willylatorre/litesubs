@@ -8,10 +8,8 @@ import {
 	planVersions,
 	transactions,
 } from "@/app/db/schema";
-import {
-	type StripeConnectStatus,
-	stripeConnectAccounts,
-} from "@/app/db/stripe-connect-schema";
+import { connectedAccounts } from "@/app/db/stripe-connect-schema";
+import { deriveReadiness } from "@/lib/connect-readiness";
 import { getStripe } from "@/lib/stripe";
 
 /**
@@ -170,38 +168,34 @@ async function handleAccountUpdated(
 	eventId: string,
 ): Promise<Response> {
 	try {
-		const existingAccount = await db.query.stripeConnectAccounts.findFirst({
-			where: eq(stripeConnectAccounts.stripeAccountId, account.id),
+		const existingAccount = await db.query.connectedAccounts.findFirst({
+			where: eq(connectedAccounts.stripeAccountId, account.id),
 		});
 		if (!existingAccount) return new Response(null, { status: 200 });
 
-		let status: StripeConnectStatus = "pending";
-		if (account.details_submitted) {
-			if (account.charges_enabled && account.payouts_enabled) status = "active";
-			else if (
-				account.requirements?.disabled_reason ||
-				(account.requirements?.currently_due?.length ?? 0) > 0
-			)
-				status = "restricted";
-		}
-
+		// `account.updated` carries a full snapshot, so the same derivation the
+		// service uses applies here; readiness never becomes "sellable" because
+		// an event arrived.
+		const readiness = deriveReadiness(account);
 		await db
-			.update(stripeConnectAccounts)
+			.update(connectedAccounts)
 			.set({
-				status,
-				chargesEnabled: account.charges_enabled || false,
-				payoutsEnabled: account.payouts_enabled || false,
-				detailsSubmitted: account.details_submitted || false,
+				status: readiness.status,
+				chargesEnabled: readiness.chargesEnabled,
+				payoutsEnabled: readiness.payoutsEnabled,
+				detailsSubmitted: readiness.detailsSubmitted,
 				country: account.country,
 				defaultCurrency: account.default_currency,
-				updatedAt: new Date(),
+				requirementsCurrentlyDue: readiness.requirementsDue,
+				requirementsDisabledReason: readiness.disabledReason,
+				lastSyncedAt: new Date(),
 			})
-			.where(eq(stripeConnectAccounts.stripeAccountId, account.id));
+			.where(eq(connectedAccounts.stripeAccountId, account.id));
 
-		console.log("Connect account updated", {
+		console.log("Connected account updated", {
 			eventId,
 			accountId: account.id,
-			status,
+			status: readiness.status,
 		});
 		return new Response(null, { status: 200 });
 	} catch (error) {

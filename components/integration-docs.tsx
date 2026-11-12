@@ -168,9 +168,9 @@ export function IntegrationDocs({ embedded = false }: { embedded?: boolean }) {
 					<p>
 						Creator tools: list/get/create/update plans, list/get customers,
 						enroll customers, grant credits, and list transactions. The
-						consumption tool is available to machine keys only. No payout or
-						refund tools are exposed. Scope failures return structured tool
-						errors.
+						consumption tool is available to machine keys only. No refund,
+						payout, or billing-charge tools are exposed. Scope failures return
+						structured tool errors.
 					</p>
 				</Section>
 

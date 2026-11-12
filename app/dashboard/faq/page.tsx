@@ -1,4 +1,3 @@
-import { PayoutFAQ } from "@/components/payouts/payout-faq";
 import {
 	Accordion,
 	AccordionContent,
@@ -76,6 +75,29 @@ const generalFaqItems = [
 	},
 ] as const;
 
+const paymentFaqItems = [
+	{
+		id: "payments-own-account",
+		q: "Where does the money go?",
+		a: "Each creator connects their own Stripe account. Customers pay that account directly, and Stripe pays it out on your usual payout schedule.",
+	},
+	{
+		id: "payments-fees",
+		q: "Who pays Stripe fees?",
+		a: "You do, on your own Stripe account. Litesubs charges a 2% application fee per sale, shown separately in your Stripe Dashboard.",
+	},
+	{
+		id: "payments-dashboard",
+		q: "Can I use the normal Stripe Dashboard?",
+		a: "Yes. A connected account gets the full Stripe Dashboard for payments, customers, refunds, and payouts.",
+	},
+	{
+		id: "payments-blocked",
+		q: "Why can't I sell yet?",
+		a: "New sales need Stripe to confirm your account can accept payments. Until that is true the Payments screen shows what Stripe still needs.",
+	},
+] as const;
+
 export default function DashboardFaqPage() {
 	return (
 		<div className="@container/main flex flex-1 flex-col gap-2">
@@ -111,13 +133,20 @@ export default function DashboardFaqPage() {
 
 					<Card>
 						<CardHeader>
-							<CardTitle>Payouts</CardTitle>
+							<CardTitle>Payments</CardTitle>
 							<CardDescription>
-								How payouts work and what to expect.
+								How creators get paid and who handles fees.
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<PayoutFAQ />
+							<Accordion type="single" collapsible className="w-full">
+								{paymentFaqItems.map((item) => (
+									<AccordionItem key={item.id} value={item.id}>
+										<AccordionTrigger>{item.q}</AccordionTrigger>
+										<AccordionContent>{item.a}</AccordionContent>
+									</AccordionItem>
+								))}
+							</Accordion>
 						</CardContent>
 					</Card>
 				</div>

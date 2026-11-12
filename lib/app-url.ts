@@ -5,10 +5,10 @@ const LOCAL_URL = "http://localhost:3000";
  * Absolute base URL for the app, without a trailing slash.
  *
  * Never returns "undefined" — a missing NEXT_PUBLIC_APP_URL previously produced
- * URLs like "undefined/dashboard/payouts", which silently broke every Stripe
- * return_url / refresh_url (payout onboarding and Connect onboarding both
- * dead-ended). Prefer an explicit env var, fall back to localhost in
- * development, and to the production domain otherwise.
+ * URLs like "undefined/dashboard/payments", which silently broke every Stripe
+ * return_url / refresh_url (Connect onboarding dead-ended). Prefer an explicit
+ * env var, fall back to localhost in development, and to the production domain
+ * otherwise.
  */
 export function getAppUrl(): string {
 	const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();

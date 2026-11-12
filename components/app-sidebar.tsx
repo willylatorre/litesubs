@@ -52,8 +52,8 @@ const data = {
 			icon: IconPackage,
 		},
 		{
-			title: "Payouts",
-			url: "/dashboard/payouts",
+			title: "Payments",
+			url: "/dashboard/payments",
 			icon: IconWallet,
 		},
 		{

@@ -155,7 +155,7 @@ export default function PlansPage() {
 			</div>
 			<p className="text-xs text-muted-foreground">
 				Draft plans cannot be purchased or invited to. Publishing requires a
-				connected Stripe account, which the next step adds.
+				payment-ready Stripe account — set one up under Payments.
 			</p>
 		</div>
 	);

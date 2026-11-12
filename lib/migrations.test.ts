@@ -1,7 +1,8 @@
 /**
- * The additive 0001 migration must preserve every existing row. This runs the
- * real baseline + migration against a throwaway database, so a future edit that
- * drops or recreates a table fails here instead of on a deployment.
+ * Migrations must upgrade an existing database in place. These tests run the
+ * real baseline plus every later migration against a throwaway database, so a
+ * future edit that drops data or mis-backfills fails here instead of on a
+ * deployment.
  *
  * Opt-in: set MIGRATION_TEST_DATABASE_URL to a disposable PostgreSQL database
  * the test may drop and recreate. Skipped otherwise so `npm test` stays offline.
@@ -11,9 +12,14 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import pg from "pg";
 
-test("0001 renames credit tables without losing rows", {
-	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
-}, async () => {
+const MIGRATIONS = [
+	"drizzle/0000_init.sql",
+	"drizzle/0001_plans_enrollments.sql",
+	"drizzle/0002_connected_accounts.sql",
+];
+
+/** Create a fresh database, run `body`, then always drop it. */
+async function withFreshDatabase(body: (client: pg.Client) => Promise<void>) {
 	const database = process.env.MIGRATION_TEST_DATABASE_URL ?? "";
 	const adminUrl = new URL(database);
 	const dbName = adminUrl.pathname.slice(1);
@@ -28,11 +34,25 @@ test("0001 renames credit tables without losing rows", {
 	const client = new pg.Client({ connectionString: database });
 	await client.connect();
 	try {
-		for (const file of [
-			"drizzle/0000_init.sql",
-			"drizzle/0001_plans_enrollments.sql",
-		])
-			await client.query(await readFile(file, "utf8"));
+		await body(client);
+	} finally {
+		await client.end();
+		const cleanup = new pg.Client({ connectionString: adminUrl.toString() });
+		await cleanup.connect();
+		await cleanup.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+		await cleanup.end();
+	}
+}
+
+async function apply(client: pg.Client, ...files: string[]) {
+	for (const file of files) await client.query(await readFile(file, "utf8"));
+}
+
+test("0001 renames credit tables without losing rows", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, MIGRATIONS[0], MIGRATIONS[1]);
 
 		await client.query(`
 			INSERT INTO "user"(id,name,email,email_verified) VALUES
@@ -71,13 +91,7 @@ test("0001 renames credit tables without losing rows", {
 			"select count(*)::int as n from information_schema.columns where table_name = 'user' and column_name = 'stripe_customer_id'",
 		);
 		assert.equal(column.n, 0);
-	} finally {
-		await client.end();
-		const cleanup = new pg.Client({ connectionString: adminUrl.toString() });
-		await cleanup.connect();
-		await cleanup.query(`DROP DATABASE IF EXISTS "${dbName}"`);
-		await cleanup.end();
-	}
+	});
 });
 
 /**
@@ -88,21 +102,8 @@ test("0001 renames credit tables without losing rows", {
 test("0001 backfills published and draft terms from the old columns", {
 	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
 }, async () => {
-	const database = process.env.MIGRATION_TEST_DATABASE_URL ?? "";
-	const adminUrl = new URL(database);
-	const dbName = adminUrl.pathname.slice(1);
-	adminUrl.pathname = "/postgres";
-
-	const admin = new pg.Client({ connectionString: adminUrl.toString() });
-	await admin.connect();
-	await admin.query(`DROP DATABASE IF EXISTS "${dbName}"`);
-	await admin.query(`CREATE DATABASE "${dbName}"`);
-	await admin.end();
-
-	const client = new pg.Client({ connectionString: database });
-	await client.connect();
-	try {
-		await client.query(await readFile("drizzle/0000_init.sql", "utf8"));
+	await withFreshDatabase(async (client) => {
+		await apply(client, MIGRATIONS[0]);
 		await client.query(`
 			INSERT INTO "user"(id,name,email,email_verified) VALUES ('u1','Creator','c@example.test',true);
 			INSERT INTO products(id,creator_id,name,price,credits,currency,type,active) VALUES
@@ -110,9 +111,7 @@ test("0001 backfills published and draft terms from the old columns", {
 				('p_disabled','u1','Disabled pack',2000,20,'usd','one_time',false),
 				('p_monthly','u1','Monthly',3000,30,'eur','recurring',true);
 		`);
-		await client.query(
-			await readFile("drizzle/0001_plans_enrollments.sql", "utf8"),
-		);
+		await apply(client, MIGRATIONS[1]);
 
 		const { rows } = await client.query(
 			"select plan_id, status, billing_mode, interval, currency, price, credits from plan_versions order by plan_id",
@@ -146,11 +145,52 @@ test("0001 backfills published and draft terms from the old columns", {
 				credits: 30,
 			},
 		]);
-	} finally {
-		await client.end();
-		const cleanup = new pg.Client({ connectionString: adminUrl.toString() });
-		await cleanup.connect();
-		await cleanup.query(`DROP DATABASE IF EXISTS "${dbName}"`);
-		await cleanup.end();
-	}
+	});
+});
+
+/**
+ * S02 retires the platform payout ledger but must not lose a creator's Stripe
+ * account identity. An old Express account becomes a `connected` account with
+ * its real capabilities carried over — never silently upgraded to "ready".
+ */
+test("0002 carries connected accounts over and retires platform payouts", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, MIGRATIONS[0], MIGRATIONS[1]);
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES ('u1','Creator','c@example.test',true);
+			INSERT INTO stripe_connect_accounts(id,user_id,stripe_account_id,account_type,status,charges_enabled,payouts_enabled,details_submitted,country,default_currency)
+			VALUES
+				('sca_ready','u1','acct_ready','express','active',true,true,true,'US','usd');
+			INSERT INTO creator_payout_accounts(id,user_id) VALUES ('cpa1','u1');
+		`);
+		await apply(client, MIGRATIONS[2]);
+
+		const { rows } = await client.query(
+			"select user_id, stripe_account_id, onboarding_mode, status, dashboard_type, charges_enabled, payouts_enabled, requirements_currently_due from connected_accounts",
+		);
+		assert.deepEqual(rows, [
+			{
+				user_id: "u1",
+				stripe_account_id: "acct_ready",
+				onboarding_mode: "connected",
+				status: "active",
+				dashboard_type: "express",
+				charges_enabled: true,
+				payouts_enabled: true,
+				requirements_currently_due: [],
+			},
+		]);
+
+		// Retired platform payout tables and enums are gone.
+		const { rows: tables } = await client.query(
+			"select table_name from information_schema.tables where table_schema = 'public' and table_name in ('payouts','earnings_ledger','creator_payout_accounts','user_payout_preferences','stripe_connect_accounts')",
+		);
+		assert.deepEqual(tables, []);
+		const { rows: enums } = await client.query(
+			"select typname from pg_type where typname in ('payout_status','earnings_transaction_type','payout_method','payout_verification_status','stripe_connect_status')",
+		);
+		assert.deepEqual(enums, []);
+	});
 });

@@ -1,16 +1,11 @@
 import { and, eq, gt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/app/db";
-import {
-	enrollments,
-	invites,
-	stripeConnectAccounts,
-	transactions,
-	user,
-} from "@/app/db/schema";
+import { enrollments, invites, transactions, user } from "@/app/db/schema";
 import { appUrl } from "@/lib/app-url";
 import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
 import { getStripe } from "@/lib/stripe";
+import { getPaymentReadiness } from "./connect";
 import { resolveCustomer } from "./customers";
 import { pageInput, resolvePublishedPlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
@@ -176,23 +171,20 @@ export async function checkoutUrl(
 		principal.creatorId,
 		planId,
 	);
-	const [customer, connect] = await Promise.all([
+	const [customer, readiness] = await Promise.all([
 		db.query.user.findFirst({ where: eq(user.id, customerId) }),
-		db.query.stripeConnectAccounts.findFirst({
-			where: eq(stripeConnectAccounts.userId, principal.creatorId),
-		}),
+		getPaymentReadiness(principal.creatorId),
 	]);
 	if (!customer) throw new ServiceError("NOT_FOUND", "Customer not found", 404);
-	const connected =
-		connect?.chargesEnabled && connect.status === "active" ? connect : null;
 	// Direct charges only: without a payment-ready creator account there is no
 	// sale. Falling back to the platform account is explicitly not supported.
-	if (!connected)
+	if (!readiness.canSell || !readiness.stripeAccountId)
 		throw new ServiceError(
 			"PAYMENTS_NOT_READY",
 			"This creator cannot accept payments yet",
 			409,
 		);
+	const stripeAccountId = readiness.stripeAccountId;
 	const fee = Math.round(terms.price * PLATFORM_FEE_PERCENT);
 	const session = await getStripe().checkout.sessions.create({
 		mode: "payment",
@@ -218,12 +210,12 @@ export async function checkoutUrl(
 			credits: String(terms.credits),
 			type: "credit_purchase",
 			usesStripeConnect: "true",
-			stripeConnectAccountId: connected.stripeAccountId,
+			stripeConnectAccountId: stripeAccountId,
 			applicationFeeAmount: String(fee),
 		},
 		payment_intent_data: {
 			application_fee_amount: fee,
-			transfer_data: { destination: connected.stripeAccountId },
+			transfer_data: { destination: stripeAccountId },
 		},
 	});
 	if (!session.url)

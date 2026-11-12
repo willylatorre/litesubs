@@ -30,14 +30,3 @@ export const TRANSACTION_STATUSES = [
 
 /** Litesubs' share of each direct charge, charged via Stripe application fee. */
 export const PLATFORM_FEE_PERCENT = 0.02; // 2%
-export const MIN_PAYOUT_AMOUNT = 50.0;
-
-// Stripe Connect
-export const STRIPE_CONNECT_ACCOUNT_TYPE = "express"; // 'express' or 'standard'
-export const STRIPE_CONNECT_STATUSES = [
-	"pending",
-	"active",
-	"restricted",
-	"disabled",
-] as const;
-export const PAYOUT_METHODS = ["stripe_connect", "platform_payouts"] as const;

@@ -12,11 +12,13 @@ reset has been performed by this work.
 
 ## Deploying the baseline
 
-`drizzle/0000_init.sql` is the squashed starting schema (auth, payouts, Connect,
-integrations, invites). `drizzle/0001_plans_enrollments.sql` is the first
-additive migration: it renames `products`/`lite_subscriptions` to
-`plans`/`enrollments`, moves commercial terms into `plan_versions`, and removes
-the platform `user.stripe_customer_id`.
+`drizzle/0000_init.sql` is the squashed starting schema (auth, Connect,
+integrations, invites). `drizzle/0001_plans_enrollments.sql`
+renames `products`/`lite_subscriptions` to `plans`/`enrollments`, moves
+commercial terms into `plan_versions`, and removes the platform
+`user.stripe_customer_id`. `drizzle/0002_connected_accounts.sql` replaces the
+Express/account-type model with `connected_accounts` and drops the platform
+payout tables.
 
 **An existing database upgrades in place.** `npm run db:migrate` applies 0001
 and preserves accounts, enrollments, and ledger rows. Every previously active
@@ -58,6 +60,10 @@ DATABASE_URL=<PostgreSQL database URL>
 STRIPE_SECRET_KEY=<platform secret, used only to act on connected accounts>
 STRIPE_WEBHOOK_SECRET=<signing secret for /api/webhooks/stripe>
 ```
+
+The Stripe webhook endpoint must subscribe to `checkout.session.completed`,
+`checkout.session.async_payment_succeeded`, `checkout.session.expired`, and
+`account.updated`. The old `STRIPE_WEBHOOK_PURCHASES` variable is unused.
 
 Keep the MCP resource URL stable: it is the token audience. Development may use
 `http://localhost:3000/api/mcp`; non-loopback resources require HTTPS. Never derive
@@ -225,8 +231,19 @@ a 2% application fee. There is no platform-charge fallback: a creator without a
 payment-ready account cannot sell.
 
 System paths (Stripe fulfillment and comp enrollment/claim) retain their own
-transactional ledger writes. The legacy platform payout/earnings subsystem is
-being retired slice by slice and is not reachable from new purchases.
+transactional ledger writes.
+
+## Connected accounts and readiness
+
+Each creator connects their own Stripe account. `connected_accounts` stores the
+account identity, the agreed controller responsibilities (full Dashboard,
+Stripe-billed processing fees, Stripe-managed negative balances), and a cache of
+Stripe's reported capabilities. Readiness is derived from
+`charges_enabled` plus Stripe's requirement/disable state, never from "a row
+exists", so an incomplete or restricted account cannot start a sale.
+
+Litesubs no longer runs a platform payout ledger, payout requests, or payout
+method preferences. Stripe pays out on the creator's own account.
 
 ## REST v1
 

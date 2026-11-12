@@ -3,12 +3,12 @@
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { getCreatorConnectAccount } from "@/app/actions/stripe-connect";
 import { db } from "@/app/db";
 import { plans } from "@/app/db/schema";
 import { getAppUrl } from "@/lib/app-url";
 import { auth } from "@/lib/auth";
 import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
+import { getPaymentReadiness } from "@/lib/services/connect";
 import { resolvePublishedPlan } from "@/lib/services/plans";
 import { getStripe } from "@/lib/stripe";
 
@@ -29,8 +29,8 @@ export async function createCheckoutSession(planId: string) {
 	if (!published)
 		return { error: "This plan is not available for purchase yet" };
 
-	const connectAccount = await getCreatorConnectAccount(plan.creatorId);
-	if (!connectAccount)
+	const readiness = await getPaymentReadiness(plan.creatorId);
+	if (!readiness.canSell || !readiness.stripeAccountId)
 		return { error: "This creator cannot accept payments yet" };
 
 	const fee = Math.round(published.price * PLATFORM_FEE_PERCENT);
@@ -66,7 +66,7 @@ export async function createCheckoutSession(planId: string) {
 			},
 			payment_intent_data: {
 				application_fee_amount: fee,
-				transfer_data: { destination: connectAccount.stripeAccountId },
+				transfer_data: { destination: readiness.stripeAccountId },
 			},
 		});
 	} catch {
@@ -94,8 +94,8 @@ export async function createCustomerCheckout(
 	if (!plan || plan.creatorId !== session.user.id)
 		return { error: "Plan not found" };
 
-	const connectAccount = await getCreatorConnectAccount(plan.creatorId);
-	if (!connectAccount)
+	const readiness = await getPaymentReadiness(plan.creatorId);
+	if (!readiness.canSell || !readiness.stripeAccountId)
 		return { error: "Connect Stripe payments before requesting payment" };
 
 	let resolved: Awaited<ReturnType<typeof resolvePublishedPlan>>;
@@ -136,7 +136,7 @@ export async function createCustomerCheckout(
 			},
 			payment_intent_data: {
 				application_fee_amount: fee,
-				transfer_data: { destination: connectAccount.stripeAccountId },
+				transfer_data: { destination: readiness.stripeAccountId },
 			},
 		});
 		return { success: true, url: checkout.url };

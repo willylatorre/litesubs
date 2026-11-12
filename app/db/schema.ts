@@ -25,7 +25,6 @@ import { user } from "./auth-schema";
 // Re-export auth schema
 export * from "./auth-schema";
 export * from "./mcp-auth-schema";
-export * from "./payouts-schema";
 export * from "./stripe-connect-schema";
 
 // Enums

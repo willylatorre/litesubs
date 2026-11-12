@@ -2,7 +2,7 @@ import { relations } from "drizzle-orm";
 import {
 	boolean,
 	index,
-	integer,
+	jsonb,
 	pgEnum,
 	pgTable,
 	text,
@@ -11,26 +11,37 @@ import {
 import { user } from "./auth-schema";
 
 // Enums
-export const stripeConnectStatusEnum = pgEnum("stripe_connect_status", [
+
+/**
+ * Local readiness summary. It is derived from Stripe's reported capabilities
+ * and requirements, never assumed from "an account row exists".
+ */
+export const accountStatusEnum = pgEnum("account_status", [
 	"pending",
 	"active",
 	"restricted",
 	"disabled",
 ]);
 
-export const payoutMethodEnum = pgEnum("payout_method", [
-	"stripe_connect",
-	"platform_payouts",
+/**
+ * How the connected account was obtained. New-account creation and
+ * existing-account connection are different supported mechanisms.
+ */
+export const accountOnboardingModeEnum = pgEnum("account_onboarding_mode", [
+	"created",
+	"connected",
 ]);
 
 // Tables
 
 /**
- * Stores Stripe Connect account information for creators
- * who choose to receive payments directly to their Stripe account
+ * A creator's own Stripe account. Litesubs acts on it as a Connect platform:
+ * the account owns its Dashboard, pays Stripe's processing fees, and is
+ * responsible for its own negative balances. Those responsibilities are stored
+ * explicitly because they are an agreement, not a guess from an account type.
  */
-export const stripeConnectAccounts = pgTable(
-	"stripe_connect_accounts",
+export const connectedAccounts = pgTable(
+	"connected_accounts",
 	{
 		id: text("id")
 			.primaryKey()
@@ -39,77 +50,58 @@ export const stripeConnectAccounts = pgTable(
 			.notNull()
 			.unique()
 			.references(() => user.id, { onDelete: "cascade" }),
-		stripeAccountId: text("stripe_account_id").notNull().unique(), // acct_xxx
-		accountType: text("account_type").default("express").notNull(), // 'express', 'standard'
-		status: stripeConnectStatusEnum("status").default("pending").notNull(),
+		stripeAccountId: text("stripe_account_id").notNull().unique(),
+		onboardingMode: accountOnboardingModeEnum("onboarding_mode").notNull(),
+		status: accountStatusEnum("status").default("pending").notNull(),
+		// Agreed responsibility configuration, as requested at creation time.
+		controllerType: text("controller_type"),
+		dashboardType: text("dashboard_type"),
+		feesPayer: text("fees_payer"),
+		lossesPayments: text("losses_payments"),
+		// Stripe-reported capability state. `chargesEnabled` is the merchant
+		// capability that new sales require; payouts are the creator's business.
 		chargesEnabled: boolean("charges_enabled").default(false).notNull(),
 		payoutsEnabled: boolean("payouts_enabled").default(false).notNull(),
 		detailsSubmitted: boolean("details_submitted").default(false).notNull(),
 		country: text("country"),
 		defaultCurrency: text("default_currency"),
-		createdAt: timestamp("created_at").defaultNow().notNull(),
-		updatedAt: timestamp("updated_at")
+		// Requirement field names only; never account holder PII.
+		requirementsCurrentlyDue: jsonb("requirements_currently_due")
+			.$type<string[]>()
+			.default([])
+			.notNull(),
+		requirementsDisabledReason: text("requirements_disabled_reason"),
+		lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+		disconnectedAt: timestamp("disconnected_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
 			.defaultNow()
 			.$onUpdate(() => new Date())
 			.notNull(),
 	},
 	(table) => [
-		index("stripe_connect_user_idx").on(table.userId),
-		index("stripe_connect_account_idx").on(table.stripeAccountId),
+		index("connected_account_user_idx").on(table.userId),
+		index("connected_account_stripe_idx").on(table.stripeAccountId),
 	],
-);
-
-/**
- * Stores user's preference for payout method
- * Either 'stripe_connect' (direct payments) or 'platform_payouts' (manual payouts)
- */
-export const userPayoutPreferences = pgTable(
-	"user_payout_preferences",
-	{
-		id: text("id")
-			.primaryKey()
-			.$defaultFn(() => crypto.randomUUID()),
-		userId: text("user_id")
-			.notNull()
-			.unique()
-			.references(() => user.id, { onDelete: "cascade" }),
-		method: payoutMethodEnum("method").notNull(),
-		createdAt: timestamp("created_at").defaultNow().notNull(),
-		updatedAt: timestamp("updated_at")
-			.defaultNow()
-			.$onUpdate(() => new Date())
-			.notNull(),
-	},
-	(table) => [index("payout_pref_user_idx").on(table.userId)],
 );
 
 // Relations
 
-export const stripeConnectAccountsRelations = relations(
-	stripeConnectAccounts,
+export const connectedAccountsRelations = relations(
+	connectedAccounts,
 	({ one }) => ({
 		user: one(user, {
-			fields: [stripeConnectAccounts.userId],
+			fields: [connectedAccounts.userId],
 			references: [user.id],
 		}),
 	}),
 );
 
-export const userPayoutPreferencesRelations = relations(
-	userPayoutPreferences,
-	({ one }) => ({
-		user: one(user, {
-			fields: [userPayoutPreferences.userId],
-			references: [user.id],
-		}),
-	}),
-);
-
-// Types for use in application code
-export type StripeConnectAccount = typeof stripeConnectAccounts.$inferSelect;
-export type NewStripeConnectAccount = typeof stripeConnectAccounts.$inferInsert;
-export type StripeConnectStatus = (typeof stripeConnectStatusEnum.enumValues)[number];
-
-export type UserPayoutPreference = typeof userPayoutPreferences.$inferSelect;
-export type NewUserPayoutPreference = typeof userPayoutPreferences.$inferInsert;
-export type PayoutMethod = (typeof payoutMethodEnum.enumValues)[number];
+// Types for application code
+export type ConnectedAccount = typeof connectedAccounts.$inferSelect;
+export type NewConnectedAccount = typeof connectedAccounts.$inferInsert;
+export type AccountStatus = (typeof accountStatusEnum.enumValues)[number];
+export type AccountOnboardingMode =
+	(typeof accountOnboardingModeEnum.enumValues)[number];

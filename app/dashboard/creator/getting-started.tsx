@@ -88,7 +88,7 @@ export function GettingStarted({
 				<CardDescription>
 					{sample.loaded
 						? "You are looking at a sample plan and a sample customer. Poke around, then replace them with your own."
-						: "Three steps to your first consumed credit. Or load a filled-in example to see how everything fits together."}
+						: "Three steps from an idea to a paying customer. Or load a filled-in example to see how everything fits together."}
 				</CardDescription>
 			</CardHeader>
 
@@ -103,15 +103,15 @@ export function GettingStarted({
 						},
 						{
 							n: 2,
-							label: "Enroll a customer",
-							done: sample.loaded || totalCustomers > 0,
-							href: "/dashboard/customers",
+							label: "Connect payments",
+							done: false,
+							href: "/dashboard/payments",
 						},
 						{
 							n: 3,
-							label: "Consume a credit",
-							done: false,
-							href: "/dashboard/developers/api-keys",
+							label: "Enroll a customer",
+							done: sample.loaded || totalCustomers > 0,
+							href: "/dashboard/customers",
 						},
 					].map((step) => (
 						<li key={step.n}>
