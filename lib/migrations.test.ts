@@ -24,6 +24,7 @@ const MIGRATIONS = [
 	"drizzle/0008_s08_renewals.sql",
 	"drizzle/0009_s09_cancellation.sql",
 	"drizzle/0010_s11_invites.sql",
+	"drizzle/0011_s12_refunds.sql",
 ];
 
 /** Create a fresh database, run `body`, then always drop it. */
@@ -565,5 +566,41 @@ test("0010 stores the issued offer and comp expiry on invites", {
 			plan_version_id: "pv1",
 			comp_expires_at: new Date("2026-12-01T00:00:00.000Z"),
 		});
+	});
+});
+
+test("0011 adds refund receipts without storing a refund as new credits", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, 11));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES
+				('u1','Creator','c@example.test',true),
+				('u2','Buyer','b@example.test',true);
+			INSERT INTO plans(id,creator_id,name) VALUES ('p1','u1','Pack');
+			INSERT INTO plan_versions(id,plan_id,creator_id,status,billing_mode,currency,price,credits,version)
+			VALUES ('pv1','p1','u1','published','one_time','usd',1000,10,1);
+			INSERT INTO payments(id,creator_id,user_id,plan_id,plan_version_id,stripe_account_id,status,credits,amount_total,currency,application_fee,amount_paid)
+			VALUES ('pay1','u1','u2','p1','pv1','acct_test','paid',10,1000,'usd',20,1000);
+		`);
+		await apply(client, MIGRATIONS[11]);
+		const {
+			rows: [payment],
+		} = await client.query(
+			"select amount_refunded, refunded_at from payments where id = 'pay1'",
+		);
+		assert.deepEqual(payment, { amount_refunded: 0, refunded_at: null });
+		await client.query(`
+			INSERT INTO refunds(id,payment_id,creator_id,user_id,stripe_account_id,stripe_refund_id,amount,currency,revoked_credits)
+			VALUES ('r1','pay1','u1','u2','acct_test','re_1',400,'usd',0);
+		`);
+		// A refund above the recorded payment is refused by the constraint.
+		await assert.rejects(
+			client.query(`
+				UPDATE payments SET amount_refunded = 1200 WHERE id = 'pay1';
+			`),
+			/check constraint/,
+		);
 	});
 });

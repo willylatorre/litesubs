@@ -15,11 +15,16 @@ import {
 	getPayment,
 	markSubscriptionInvoiceFailed,
 } from "@/lib/services/purchase";
+import { applyPaymentRefund } from "@/lib/services/refunds";
 import {
 	cancellationEffectiveAt,
 	syncSubscriptionFromStripe,
 } from "@/lib/services/subscriptions";
 import { getStripe } from "@/lib/stripe";
+import {
+	connectedPaymentIdForIntent,
+	listConnectedChargeRefunds,
+} from "@/lib/stripe-refunds";
 import { retrieveConnectedSubscription } from "@/lib/stripe-subscriptions";
 
 /**
@@ -295,6 +300,20 @@ async function subscriptionInvoiceContext(
 	};
 }
 
+/**
+ * The invoice's default PaymentIntent, when Stripe exposes it. A refund on the
+ * charge carries this id, so it is the link back to the invoice receipt.
+ */
+function invoicePaymentIntentId(invoice: Stripe.Invoice) {
+	const payment = invoice.payments?.data.find(
+		(item) =>
+			item.payment.type === "payment_intent" &&
+			item.payment.payment_intent !== undefined,
+	)?.payment.payment_intent;
+	if (!payment) return null;
+	return typeof payment === "string" ? payment : payment.id;
+}
+
 async function handleInvoicePaid(
 	invoice: Stripe.Invoice,
 	eventId: string,
@@ -315,6 +334,7 @@ async function handleInvoicePaid(
 			stripeSubscriptionId: context.stripeSubscriptionId,
 			stripeAccountId: context.stripeAccountId,
 			stripeInvoiceId: invoice.id,
+			stripePaymentIntentId: invoicePaymentIntentId(invoice),
 			billingReason: context.billingReason,
 			amountPaid: invoice.amount_paid,
 			currency: invoice.currency,
@@ -561,6 +581,69 @@ async function handleApplicationDeauthorized(
 	}
 }
 
+/**
+ * The charge was refunded in the creator's Stripe Dashboard. Stripe owns the
+ * money movement; this reconciles the receipt and revokes only the unspent
+ * units attributable to that specific purchase.
+ *
+ * `amount_refunded` on the charge is cumulative, so individual refunds are
+ * listed on the owning account and deduplicated by their stable refund id.
+ * Relying on the event total alone would replay earlier refunds.
+ */
+async function handleChargeRefunded(
+	charge: Stripe.Charge,
+	eventId: string,
+	eventAccountId?: string,
+): Promise<Response> {
+	if (!eventAccountId) return new Response(null, { status: 200 });
+	if ((charge.amount_refunded ?? 0) <= 0)
+		return new Response(null, { status: 200 });
+
+	const paymentIntentId =
+		typeof charge.payment_intent === "string"
+			? charge.payment_intent
+			: (charge.payment_intent?.id ?? null);
+	try {
+		// A refund can beat the confirming webhook. The PaymentIntent metadata
+		// written at Checkout creation still identifies the local receipt.
+		const fallbackPaymentId = paymentIntentId
+			? await connectedPaymentIdForIntent({
+					stripeAccountId: eventAccountId,
+					paymentIntentId,
+				})
+			: null;
+		const list = await listConnectedChargeRefunds({
+			stripeAccountId: eventAccountId,
+			stripeChargeId: charge.id,
+		});
+		let recorded = 0;
+		for (const refund of list) {
+			if (refund.status !== "succeeded" || refund.amount <= 0) continue;
+			const result = await applyPaymentRefund({
+				stripeAccountId: eventAccountId,
+				stripeRefundId: refund.id,
+				amount: refund.amount,
+				currency: refund.currency,
+				paymentIntentId,
+				fallbackPaymentId,
+			});
+			if (result.status === "recorded") recorded += 1;
+		}
+		console.log("Reconciled charge refunds", {
+			eventId,
+			chargeId: charge.id,
+			recorded,
+		});
+		return new Response(null, { status: 200 });
+	} catch (error) {
+		console.error("Failed to reconcile refund", {
+			eventId,
+			type: error instanceof Error ? error.name : "UnknownError",
+		});
+		return new Response("Webhook Error", { status: 500 });
+	}
+}
+
 export async function POST(req: Request) {
 	const secret = process.env.STRIPE_WEBHOOK_SECRET;
 	if (!process.env.STRIPE_SECRET_KEY || !secret)
@@ -616,6 +699,12 @@ export async function POST(req: Request) {
 				event.type,
 				eventId,
 				event.livemode,
+				event.account ?? undefined,
+			);
+		case "charge.refunded":
+			return handleChargeRefunded(
+				object as Stripe.Charge,
+				eventId,
 				event.account ?? undefined,
 			);
 		case "account.updated":

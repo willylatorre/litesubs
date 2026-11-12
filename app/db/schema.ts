@@ -283,6 +283,14 @@ export const transactions = pgTable(
 		status: transactionStatusEnum("status").default("ongoing").notNull(),
 		description: text("description"),
 		stripeCheckoutId: text("stripe_checkout_id").unique(),
+		/**
+		 * The recurring invoice receipt this entry records, so a refund can find
+		 * the exact grant it must revoke instead of scanning the plan balance.
+		 */
+		subscriptionInvoiceId: text("subscription_invoice_id").references(
+			() => subscriptionInvoices.id,
+			{ onDelete: "set null" },
+		),
 		// Stripe Connect fields
 		usesStripeConnect: boolean("uses_stripe_connect").default(false),
 		stripeApplicationFee: integer("stripe_application_fee"), // Platform fee in minor units
@@ -315,6 +323,7 @@ export const transactions = pgTable(
 			.on(table.creatorId, table.idempotencyKey)
 			.where(sql`${table.idempotencyKey} is not null`),
 		index("tx_plan_version_idx").on(table.planVersionId),
+		index("tx_subscription_invoice_idx").on(table.subscriptionInvoiceId),
 	],
 );
 
@@ -405,6 +414,9 @@ export const payments = pgTable(
 		applicationFee: integer("application_fee").notNull(),
 		/** Amount actually paid, recorded at fulfillment. */
 		amountPaid: integer("amount_paid"),
+		/** Succeeded refunds applied to this receipt, cumulative. */
+		amountRefunded: integer("amount_refunded").default(0).notNull(),
+		refundedAt: timestamp("refunded_at", { withTimezone: true }),
 		fulfilledAt: timestamp("fulfilled_at", { withTimezone: true }),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
@@ -420,6 +432,61 @@ export const payments = pgTable(
 		index("payment_plan_idx").on(table.planId),
 		index("payment_status_idx").on(table.status),
 		check("payment_amounts_non_negative", sql`${table.amountTotal} >= 0`),
+		check(
+			"payment_refunded_bounded",
+			sql`${table.amountRefunded} >= 0 and (${table.amountPaid} is null or ${table.amountRefunded} <= ${table.amountPaid})`,
+		),
+	],
+);
+
+/**
+ * One successful refund against an account-scoped payment.
+ *
+ * Stripe may deliver the same refund repeatedly and out of order, so the
+ * (account, refund) pair is the idempotency boundary. The row records what was
+ * refunded and what credit effect it produced, keeping the financial and ledger
+ * histories independently traceable.
+ */
+export const refunds = pgTable(
+	"refunds",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		/** Set for a one-time pack receipt; null for a subscription invoice. */
+		paymentId: text("payment_id").references(() => payments.id, {
+			onDelete: "cascade",
+		}),
+		/** Set for a recurring invoice receipt; never for a pack refund. */
+		subscriptionInvoiceId: text("subscription_invoice_id").references(
+			() => subscriptionInvoices.id,
+			{ onDelete: "cascade" },
+		),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		stripeAccountId: text("stripe_account_id").notNull(),
+		stripeRefundId: text("stripe_refund_id").notNull(),
+		amount: integer("amount").notNull(),
+		currency: currencyEnum("currency").notNull(),
+		/** Units revoked from the payment's own grants by this refund. */
+		revokedCredits: integer("revoked_credits").default(0).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [
+		uniqueIndex("refund_account_id_unique").on(
+			table.stripeAccountId,
+			table.stripeRefundId,
+		),
+		index("refund_payment_idx").on(table.paymentId),
+		index("refund_creator_idx").on(table.creatorId),
+		check("refund_amount_positive", sql`${table.amount} > 0`),
+		check("refund_revoked_non_negative", sql`${table.revokedCredits} >= 0`),
 	],
 );
 
@@ -495,7 +562,12 @@ export const subscriptionInvoices = pgTable(
 			.references(() => subscriptions.id, { onDelete: "cascade" }),
 		stripeAccountId: text("stripe_account_id").notNull(),
 		stripeInvoiceId: text("stripe_invoice_id").notNull(),
+		/** Resolves a refund on this invoice's charge back to its receipt. */
+		stripePaymentIntentId: text("stripe_payment_intent_id"),
 		amountPaid: integer("amount_paid").notNull(),
+		/** Succeeded refunds applied to this invoice, cumulative. */
+		amountRefunded: integer("amount_refunded").default(0).notNull(),
+		refundedAt: timestamp("refunded_at", { withTimezone: true }),
 		currency: currencyEnum("currency").notNull(),
 		periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
 		periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
@@ -519,6 +591,10 @@ export const subscriptionInvoices = pgTable(
 		check(
 			"subscription_invoice_amount_non_negative",
 			sql`${table.amountPaid} >= 0`,
+		),
+		check(
+			"subscription_invoice_refunded_bounded",
+			sql`${table.amountRefunded} >= 0 and ${table.amountRefunded} <= ${table.amountPaid}`,
 		),
 		check(
 			"subscription_invoice_period_valid",
@@ -867,7 +943,7 @@ export const integrationsRelations = relations(
 	}),
 );
 
-export const paymentsRelations = relations(payments, ({ one }) => ({
+export const paymentsRelations = relations(payments, ({ one, many }) => ({
 	creator: one(user, {
 		fields: [payments.creatorId],
 		references: [user.id],
@@ -883,6 +959,22 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
 	planVersion: one(planVersions, {
 		fields: [payments.planVersionId],
 		references: [planVersions.id],
+	}),
+	refunds: many(refunds),
+}));
+
+export const refundsRelations = relations(refunds, ({ one }) => ({
+	payment: one(payments, {
+		fields: [refunds.paymentId],
+		references: [payments.id],
+	}),
+	creator: one(user, {
+		fields: [refunds.creatorId],
+		references: [user.id],
+	}),
+	customer: one(user, {
+		fields: [refunds.userId],
+		references: [user.id],
 	}),
 }));
 

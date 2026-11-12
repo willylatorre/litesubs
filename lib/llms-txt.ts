@@ -45,7 +45,9 @@ export function buildLlmsTxt(): string {
   unpublish_plan, list_customers, get_customer, enroll_customer, grant_credits,
   list_transactions.
 - Machine-key tools: consume_credits only (permission credits:consume).
-- No payout or refund tools are exposed.
+- No payout or refund tools are exposed. Refunds are issued in the creator's
+  Stripe Dashboard; Litesubs then revokes only the refunded purchase's unspent
+  credits.
 - Mutation tools request client confirmation, but that is not a security
   boundary; every operation is re-checked server-side.
 - publish_plan provisions the offer on the creator's connected Stripe account and

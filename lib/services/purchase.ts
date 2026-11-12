@@ -597,6 +597,8 @@ export async function fulfillSubscriptionInvoice(input: {
 	stripeSubscriptionId: string;
 	stripeAccountId: string;
 	stripeInvoiceId: string;
+	/** Resolves a later refund on this invoice's charge to its receipt. */
+	stripePaymentIntentId?: string | null;
 	billingReason: "subscription_create" | "subscription_cycle";
 	amountPaid: number;
 	currency: string;
@@ -706,6 +708,7 @@ export async function fulfillSubscriptionInvoice(input: {
 				subscriptionId: subscription.id,
 				stripeAccountId: input.stripeAccountId,
 				stripeInvoiceId: input.stripeInvoiceId,
+				stripePaymentIntentId: input.stripePaymentIntentId ?? null,
 				amountPaid: input.amountPaid,
 				currency: version.currency,
 				periodStart: input.periodStart,
@@ -754,6 +757,7 @@ export async function fulfillSubscriptionInvoice(input: {
 					? `Monthly allowance: ${version.credits} credits`
 					: "Paid monthly invoice; no credits granted (period expired or superseded)",
 				stripeCheckoutId: null,
+				subscriptionInvoiceId: invoice.id,
 				usesStripeConnect: true,
 				stripeApplicationFee: null,
 				stripeConnectAccountId: input.stripeAccountId,

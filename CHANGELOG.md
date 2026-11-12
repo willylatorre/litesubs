@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-01-01
 
 ### Added
+- **Refund reconciliation (S12)**:
+  - Reconcile `charge.refunded` against the owning account's receipt and revoke
+    only the unspent units attributable to that purchase.
+  - Keep partial refunds financial-only (`requiresAdjustment`) and never cancel a
+    subscription because one of its invoices was refunded.
+  - Block the fulfillment path after a refund that arrives before the purchase is
+    granted, so refunded money can never become spendable credits.
 - **Invites and credit expiry (S11)**:
   - Invites pin the published version they offered; claiming after a re-price
     fails loudly instead of silently granting the new terms.

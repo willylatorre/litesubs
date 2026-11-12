@@ -59,6 +59,10 @@ Implemented slices:
   carry an expiry (inherited from the paid period on monthly plans), and a claim
   refuses terms that were replaced after the invite was issued. See
   `drizzle/0010_s11_invites.sql`.
+- S12 — successful refunds reconcile the account-scoped receipt and revoke only
+  the remaining units of that purchase; partial refunds move money without
+  guessing credits, and refunding a monthly invoice never cancels it. See
+  `drizzle/0011_s12_refunds.sql`.
 
 ## Purpose
 
@@ -943,23 +947,23 @@ Dashboard; Litesubs does not build a competing financial-refund UI in this slice
 
 #### Acceptance criteria
 
-- [ ] Successful full refunds revoke only the remaining units attributable to that
+- [x] Successful full refunds revoke only the remaining units attributable to that
       payment, not credits from a different pack, newer period, or manual grant.
-- [ ] Consumed units stay in the ledger; zero remaining units create no negative
+- [x] Consumed units stay in the ledger; zero remaining units create no negative
       balance or fictional debt. Already-expired units are not removed twice.
-- [ ] Partial refunds update financial totals/history and visibly require a creator
+- [x] Partial refunds update financial totals/history and visibly require a creator
       credit adjustment; no guessed money-to-lessons conversion is applied.
-- [ ] Multiple successful partial refunds reaching the full payment amount trigger
+- [x] Multiple successful partial refunds reaching the full payment amount trigger
       the full-refund rule exactly once. Pending/failed refunds do not prematurely
       revoke units or report refunded money as final.
-- [ ] Duplicate/concurrent/out-of-order refund notifications and a refund racing
+- [x] Duplicate/concurrent/out-of-order refund notifications and a refund racing
       consumption cannot corrupt grant allocations or balance projections.
-- [ ] Financial receipt state and revocation commit coherently; retry after a crash
+- [x] Financial receipt state and revocation commit coherently; retry after a crash
       converges without duplicating effects. Refunds arriving before purchase
       fulfillment cannot later leave spendable refunded credits.
-- [ ] Refunding a monthly invoice does not cancel the subscription. Future paid
+- [x] Refunding a monthly invoice does not cancel the subscription. Future paid
       periods remain independent, and revocation targets the refunded period only.
-- [ ] Display actual refunded money and application-fee state; do not assume Stripe
+- [x] Display actual refunded money and application-fee state; do not assume Stripe
       automatically refunds the platform's fee in every refund operation.
 
 #### Implementation notes and relevant files
@@ -976,6 +980,13 @@ Buy two packs, spend from one, refund it fully in Stripe, and show the other pac
 untouched. Check partial refunds, cumulative full refunds, recurring invoice
 refunds, concurrent consumption, duplicate notifications, and refund-before-grant
 delivery. No new subscription cancellation should appear.
+
+**Implemented:** yes — `lib/services/refunds.ts` owns refund reconciliation and
+revocation; `charge.refunded` lists refunds on the owning account so each is
+deduplicated by its own id. Migration: `drizzle/0011_s12_refunds.sql`. Coverage:
+`lib/refunds.integration.test.ts` and `lib/migrations.test.ts` (opt-in).
+Refund receipts store the actual refunded amount; partial refunds return
+`requiresAdjustment` so a creator chooses any credit adjustment explicitly.
 
 #### Blocked by
 
