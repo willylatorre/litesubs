@@ -362,7 +362,9 @@ curl -X POST '${base}/api/v1/plans/<plan id>/unpublish' \\
 					<p>
 						For complimentary access, set <code>mode: "comp"</code> and provide
 						a reason. An existing enrollment cannot be comped again; use a
-						separate credit grant.
+						separate credit grant. Complimentary credits on a monthly plan
+						expire with the current paid period, and require{" "}
+						<code>expires_at</code> when no period is paid yet.
 					</p>
 					<p>
 						If the student has no account, the result is <code>invited</code>{" "}

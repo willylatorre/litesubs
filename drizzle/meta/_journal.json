@@ -71,6 +71,13 @@
       "when": 1794521668153,
       "tag": "0009_s09_cancellation",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794526232097,
+      "tag": "0010_s11_invites",
+      "breakpoints": true
     }
   ]
 }

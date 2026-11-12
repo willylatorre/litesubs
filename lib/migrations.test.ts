@@ -23,6 +23,7 @@ const MIGRATIONS = [
 	"drizzle/0007_s07_subscriptions.sql",
 	"drizzle/0008_s08_renewals.sql",
 	"drizzle/0009_s09_cancellation.sql",
+	"drizzle/0010_s11_invites.sql",
 ];
 
 /** Create a fresh database, run `body`, then always drop it. */
@@ -527,6 +528,42 @@ test("0009 adds cancellation metadata without changing the paid period", {
 			cancel_at: null,
 			cancellation_revision: 0,
 			paid_through_at: new Date("2026-12-01T00:00:00.000Z"),
+		});
+	});
+});
+
+test("0010 stores the issued offer and comp expiry on invites", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, 10));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES
+				('u1','Creator','c@example.test',true);
+			INSERT INTO plans(id,creator_id,name) VALUES ('p1','u1','Monthly');
+			INSERT INTO plan_versions(id,plan_id,creator_id,status,billing_mode,interval,currency,price,credits,version)
+			VALUES ('pv1','p1','u1','published','recurring','month','usd',2000,10,1);
+			INSERT INTO invites(id,creator_id,email,plan_id,token)
+			VALUES ('i1','u1','b@example.test','p1','token-1');
+		`);
+		await apply(client, MIGRATIONS[10]);
+		const {
+			rows: [row],
+		} = await client.query(
+			"select plan_version_id, comp_expires_at from invites where id = 'i1'",
+		);
+		assert.deepEqual(row, { plan_version_id: null, comp_expires_at: null });
+		await client.query(
+			"UPDATE invites SET plan_version_id = 'pv1', comp_expires_at = '2026-12-01T00:00:00Z' WHERE id = 'i1'",
+		);
+		const {
+			rows: [updated],
+		} = await client.query(
+			"select plan_version_id, comp_expires_at from invites where id = 'i1'",
+		);
+		assert.deepEqual(updated, {
+			plan_version_id: "pv1",
+			comp_expires_at: new Date("2026-12-01T00:00:00.000Z"),
 		});
 	});
 });

@@ -3,7 +3,11 @@ import { z } from "zod";
 import { db } from "@/app/db";
 import { enrollments, invites, transactions, user } from "@/app/db/schema";
 import { appUrl } from "@/lib/app-url";
-import { grantCredits } from "./credits";
+import {
+	currentPaidThrough,
+	grantCredits,
+	resolveGrantExpiry,
+} from "./credits";
 import { resolveCustomer } from "./customers";
 import { pageInput, resolvePublishedPlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
@@ -14,6 +18,8 @@ export const enrollmentInput = z.object({
 	customer: z.string().trim().min(1),
 	mode: z.enum(["invoice", "comp"]).default("invoice"),
 	reason: z.string().trim().min(1).max(1000).optional(),
+	/** Required for a complimentary recurring plan with no current paid period. */
+	expires_at: z.coerce.date().optional(),
 });
 
 export async function enrollCustomer(principal: Principal, input: unknown) {
@@ -30,12 +36,6 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 		principal.creatorId,
 		data.plan,
 	);
-	if (data.mode === "comp" && terms.billingMode === "recurring")
-		throw new ServiceError(
-			"COMP_MONTHLY_UNSUPPORTED",
-			"Complimentary monthly enrollments are not supported yet",
-			409,
-		);
 	const email = data.customer.toLowerCase();
 	// New enrollment is the only operation allowed to resolve an account that
 	// is not yet this creator's customer. Do not expose the account profile.
@@ -68,6 +68,21 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 				"Provide an email to invite a new customer",
 				404,
 			);
+		// An invite has no enrollment yet, so it cannot inherit a paid period.
+		// A recurring comp must therefore state its expiry when it is issued.
+		if (data.mode === "comp" && terms.billingMode === "recurring") {
+			if (!data.expires_at)
+				throw new ServiceError(
+					"EXPIRY_REQUIRED",
+					"A complimentary monthly invite needs an explicit expiry date",
+					409,
+				);
+			if (data.expires_at.getTime() <= Date.now())
+				throw new ServiceError(
+					"INVALID_INPUT",
+					"A credit expiry must be in the future",
+				);
+		}
 		return db.transaction(async (tx) => {
 			await tx.execute(
 				sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify([principal.creatorId, email, plan.id])}, 0))`,
@@ -82,10 +97,14 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 				),
 			});
 			const compCredits = data.mode === "comp" ? terms.credits : 0;
+			const compExpiresAt =
+				data.mode === "comp" ? (data.expires_at ?? null) : null;
 			if (
 				existing &&
 				(existing.compCredits !== compCredits ||
-					existing.compReason !== (data.reason ?? null))
+					existing.compReason !== (data.reason ?? null) ||
+					existing.planVersionId !== terms.id ||
+					existing.compExpiresAt?.getTime() !== compExpiresAt?.getTime())
 			)
 				throw new ServiceError(
 					"INVITE_CONFLICT",
@@ -101,9 +120,11 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 							creatorId: principal.creatorId,
 							email,
 							planId: plan.id,
+							planVersionId: terms.id,
 							token: crypto.randomUUID(),
 							compCredits,
 							compReason: data.reason,
+							compExpiresAt,
 						})
 						.returning()
 				)[0];
@@ -111,6 +132,7 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 				status: "invited",
 				inviteUrl: appUrl(`/invite/${invite.token}`),
 				creditsOnClaim: compCredits,
+				creditsExpireAt: compExpiresAt,
 				message: "No email was sent. Forward this link to the customer.",
 			};
 		});
@@ -118,7 +140,7 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 	if (data.mode === "comp") {
 		return db.transaction(async (tx) => {
 			// The balance starts at zero; the comp is then a real grant, so every
-			// credit has a source and an optional expiry from the beginning.
+			// credit has a source and an explicit or inherited expiry.
 			const [enrollment] = await tx
 				.insert(enrollments)
 				.values({
@@ -134,6 +156,12 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 					"Already enrolled; use grant_credits for additional credits",
 					409,
 				);
+			const expiresAt = await resolveGrantExpiry(tx, {
+				creatorId: principal.creatorId,
+				userId: customer.id,
+				planId: plan.id,
+				expiresAt: data.expires_at,
+			});
 			const [entry] = await tx
 				.insert(transactions)
 				.values({
@@ -158,8 +186,9 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 				sourceTransactionId: entry.id,
 				kind: "comp",
 				amount: terms.credits,
+				expiresAt,
 			});
-			return { status: "enrolled", enrollment };
+			return { status: "enrolled", enrollment, creditsExpireAt: expiresAt };
 		});
 	}
 	// Create the checkout before the enrollment. Stripe failures must not leave
@@ -228,7 +257,6 @@ export async function createInvite(principal: Principal, input: unknown) {
 			planId: z.string().optional(),
 		})
 		.parse(input);
-	if (data.planId) await resolvePublishedPlan(principal.creatorId, data.planId);
 	if (data.email) {
 		const existing = await db.query.invites.findFirst({
 			where: and(
@@ -241,6 +269,9 @@ export async function createInvite(principal: Principal, input: unknown) {
 		if (existing)
 			throw new ServiceError("INVITE_EXISTS", "A pending invite exists", 409);
 	}
+	const published = data.planId
+		? await resolvePublishedPlan(principal.creatorId, data.planId)
+		: undefined;
 	return (
 		await db
 			.insert(invites)
@@ -248,6 +279,9 @@ export async function createInvite(principal: Principal, input: unknown) {
 				creatorId: principal.creatorId,
 				email: data.email?.toLowerCase() || null,
 				planId: data.planId,
+				// Record the offer shown at issue time so a later draft edit cannot
+				// change what the claim actually grants.
+				planVersionId: published?.terms.id,
 				token: crypto.randomUUID(),
 			})
 			.returning()
@@ -272,12 +306,19 @@ export async function claimEnrollmentInvite(
 		)
 			throw new ServiceError("NOT_FOUND", "Invite unavailable or expired", 404);
 		if (invite.planId) {
-			// An old invite must not resurrect a draft or unpublished offer.
-			const { plan } = await resolvePublishedPlan(
+			// An old invite must not resurrect a draft, unpublished, or superseded
+			// offer. It also must not silently apply newer terms than it promised.
+			const { plan, terms } = await resolvePublishedPlan(
 				invite.creatorId,
 				invite.planId,
 				tx,
 			);
+			if (invite.planVersionId && invite.planVersionId !== terms.id)
+				throw new ServiceError(
+					"INVITE_OUTDATED",
+					"These plan terms changed after the invite was issued. Ask the creator for a new invite.",
+					409,
+				);
 			const [enrollment] = await tx
 				.insert(enrollments)
 				.values({
@@ -288,12 +329,40 @@ export async function claimEnrollmentInvite(
 				.onConflictDoNothing()
 				.returning();
 			if (enrollment && invite.compCredits > 0) {
+				// The invite's stated expiry is what was promised. A paid period that
+				// began after issue can only shorten it, never extend it.
+				if (
+					invite.compExpiresAt &&
+					invite.compExpiresAt.getTime() <= Date.now()
+				)
+					throw new ServiceError(
+						"INVITE_EXPIRED",
+						"This complimentary invite's credits were valid until a date that has passed",
+						409,
+					);
+				const paidThrough = await currentPaidThrough(tx, {
+					creatorId: invite.creatorId,
+					userId,
+					planId: plan.id,
+				});
+				const expiresAt = invite.compExpiresAt
+					? paidThrough
+						? new Date(
+								Math.min(invite.compExpiresAt.getTime(), paidThrough.getTime()),
+							)
+						: invite.compExpiresAt
+					: await resolveGrantExpiry(tx, {
+							creatorId: invite.creatorId,
+							userId,
+							planId: plan.id,
+						});
 				const [entry] = await tx
 					.insert(transactions)
 					.values({
 						creatorId: invite.creatorId,
 						userId,
 						planId: plan.id,
+						planVersionId: terms.id,
 						amount: invite.compCredits,
 						type: "manual_adjustment",
 						status: "completed",
@@ -307,15 +376,17 @@ export async function claimEnrollmentInvite(
 					creatorId: invite.creatorId,
 					userId,
 					planId: plan.id,
+					planVersionId: terms.id,
 					sourceTransactionId: entry.id,
 					kind: "comp",
 					amount: invite.compCredits,
+					expiresAt,
 				});
 			}
 		}
 		await tx
 			.update(invites)
-			.set({ status: "accepted", email })
+			.set({ status: "accepted", email, planVersionId: invite.planVersionId })
 			.where(eq(invites.id, invite.id));
 		return { success: true };
 	});

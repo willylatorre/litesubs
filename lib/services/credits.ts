@@ -1,10 +1,12 @@
-import { and, asc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/app/db";
 import {
 	creditAllocations,
 	creditGrants,
 	enrollments,
+	planVersions,
+	subscriptions,
 	transactions,
 } from "@/app/db/schema";
 import { usableBalance, usableGrantFilter } from "./credit-balance";
@@ -40,6 +42,8 @@ export const creditInput = z.object({
 	amount: z.number().int().min(1).max(1000000),
 	reason: z.string().trim().min(1).max(1000),
 	idempotency_key: z.string().trim().min(1).max(200).optional(),
+	/** Optional for one-time plans and disallowed in the past. */
+	expires_at: z.coerce.date().optional(),
 	dry_run: z.boolean().default(false),
 });
 
@@ -50,6 +54,75 @@ export type AllocationView = {
 	amount: number;
 	expiresAt: string | null;
 };
+
+/**
+ * End of the customer's currently paid period on a monthly plan, if any.
+ *
+ * This is the only correct boundary an extra grant may inherit: the paid-through
+ * date of a live subscription, never a fresh "now + one month".
+ */
+export async function currentPaidThrough(
+	client: Pick<typeof db, "query">,
+	input: { creatorId: string; userId: string; planId: string },
+): Promise<Date | null> {
+	const subscription = await client.query.subscriptions.findFirst({
+		where: and(
+			eq(subscriptions.creatorId, input.creatorId),
+			eq(subscriptions.userId, input.userId),
+			eq(subscriptions.planId, input.planId),
+			inArray(subscriptions.status, ["active", "past_due"]),
+			gt(subscriptions.paidThroughAt, new Date()),
+		),
+		orderBy: [desc(subscriptions.paidThroughAt)],
+		columns: { paidThroughAt: true },
+	});
+	return subscription?.paidThroughAt ?? null;
+}
+
+/**
+ * Expiry rule for credits a creator adds by hand (comp or manual increase).
+ *
+ * One-time packs never expire. A recurring enrollment inherits the current paid
+ * period's end, so a bonus cannot outlive the month it was granted for. Without
+ * a paid period there is nothing to inherit, so the caller must state a future
+ * expiry instead of silently creating a permanent free allowance.
+ */
+export async function resolveGrantExpiry(
+	client: Pick<typeof db, "query">,
+	input: {
+		creatorId: string;
+		userId: string;
+		planId: string;
+		expiresAt?: Date | null;
+	},
+): Promise<Date | null> {
+	if (input.expiresAt) {
+		if (input.expiresAt.getTime() <= Date.now())
+			throw new ServiceError(
+				"INVALID_INPUT",
+				"A credit expiry must be in the future",
+			);
+		return input.expiresAt;
+	}
+
+	const terms = await client.query.planVersions.findFirst({
+		where: and(
+			eq(planVersions.planId, input.planId),
+			eq(planVersions.status, "published"),
+		),
+		columns: { billingMode: true },
+	});
+	if (terms?.billingMode !== "recurring") return null;
+
+	const paidThrough = await currentPaidThrough(client, input);
+	if (!paidThrough)
+		throw new ServiceError(
+			"EXPIRY_REQUIRED",
+			"Recurring credits need an explicit expiry when there is no current paid period",
+			409,
+		);
+	return paidThrough;
+}
 
 /**
  * Deterministic spend order, stated once so every caller agrees:
@@ -245,6 +318,7 @@ export async function changeCredits(
 		type,
 		reason: data.reason,
 		key: data.idempotency_key,
+		expiresAt: type === "usage" ? null : (data.expires_at ?? null),
 		dryRun: data.dry_run,
 	});
 }
@@ -260,6 +334,8 @@ export async function adjustCredits(
 		type: "manual_adjustment" | "usage";
 		reason: string;
 		key?: string;
+		/** Absent means "derive it": never-expiring for one-time, paid period for monthly. */
+		expiresAt?: Date | null;
 		dryRun?: boolean;
 	},
 ) {
@@ -316,10 +392,19 @@ export async function adjustCredits(
 			})
 			.from(creditAllocations)
 			.where(eq(creditAllocations.transactionId, original.id));
+		const [grant] =
+			data.delta > 0
+				? await tx
+						.select({ expiresAt: creditGrants.expiresAt })
+						.from(creditGrants)
+						.where(eq(creditGrants.sourceTransactionId, original.id))
+						.limit(1)
+				: [];
 		return {
 			transactionId: original.id,
 			before: original.balanceBefore,
 			after: original.balanceAfter,
+			expiresAt: grant?.expiresAt ?? null,
 			dryRun: false,
 			replayed: true,
 			allocations,
@@ -355,11 +440,20 @@ export async function adjustCredits(
 					"INVALID_INPUT",
 					"Balance exceeds supported maximum",
 				);
+			// Resolve expiry before the dry-run return so a preview reports the
+			// same rejection a real grant would produce.
+			const expiresAt = await resolveGrantExpiry(tx, {
+				creatorId: principal.creatorId,
+				userId: enrollment.userId,
+				planId: enrollment.planId,
+				expiresAt: data.expiresAt,
+			});
 			if (data.dryRun)
 				return {
 					transactionId: null,
 					before,
 					after,
+					expiresAt,
 					dryRun: true,
 					replayed: false,
 					allocations: [],
@@ -389,11 +483,13 @@ export async function adjustCredits(
 				sourceTransactionId: entry.id,
 				kind: data.type === "usage" ? "adjustment" : "adjustment",
 				amount: data.delta,
+				expiresAt,
 			});
 			return {
 				transactionId: entry.id,
 				before,
 				after,
+				expiresAt,
 				dryRun: false,
 				replayed: false,
 				allocations: [],

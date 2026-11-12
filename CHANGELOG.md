@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-01-01
 
 ### Added
+- **Invites and credit expiry (S11)**:
+  - Invites pin the published version they offered; claiming after a re-price
+    fails loudly instead of silently granting the new terms.
+  - Complimentary and manual grants record an expiry: one-time plans keep credits,
+    while monthly plans inherit the current paid period and require an explicit
+    future date when no period is paid.
+  - Invite and enrollment views show the granted units and expiry before claiming.
 - **Customer billing portal (S10)**:
   - Provision a marked platform portal configuration with payment-method and
     invoice-history features, while disabling subscription plan changes/cancel.

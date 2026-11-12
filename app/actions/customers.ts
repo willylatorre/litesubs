@@ -55,6 +55,7 @@ export async function updateEnrollmentCredits(
 	enrollmentId: string,
 	amount: number,
 	description: string,
+	expiresAt?: string | null,
 ) {
 	return authenticatedAction(async (session) => {
 		const enrollment = await db.query.enrollments.findFirst({
@@ -65,15 +66,16 @@ export async function updateEnrollmentCredits(
 		});
 		if (!enrollment)
 			throw new ServiceError("NOT_FOUND", "Enrollment not found", 404);
-		await adjustCredits(sessionPrincipal(session.user.id), {
+		const result = await adjustCredits(sessionPrincipal(session.user.id), {
 			customerId: enrollment.userId,
 			planId: enrollment.planId,
 			delta: amount,
 			type: "manual_adjustment",
 			reason: description || "Manual adjustment",
+			expiresAt: expiresAt ? new Date(expiresAt) : undefined,
 		});
 		revalidatePath("/dashboard/customers");
-		return { success: true };
+		return { success: true, expiresAt: result.expiresAt ?? null };
 	});
 }
 

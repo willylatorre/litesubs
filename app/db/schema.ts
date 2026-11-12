@@ -671,8 +671,18 @@ export const invites = pgTable(
 		// Comp grants are snapshotted when invited and applied once on claim.
 		compCredits: integer("comp_credits").notNull().default(0),
 		compReason: text("comp_reason"),
+		/** Fixed expiry for a comp issued before any paid period exists. */
+		compExpiresAt: timestamp("comp_expires_at", { withTimezone: true }),
 		token: text("token").notNull().unique(), // unique string for the link
 		planId: text("plan_id").references(() => plans.id, {
+			onDelete: "set null",
+		}),
+		/**
+		 * The exact published terms shown when the invite was issued. Claiming
+		 * must not silently apply a newer draft, and must still refuse a version
+		 * that has since been unpublished.
+		 */
+		planVersionId: text("plan_version_id").references(() => planVersions.id, {
 			onDelete: "set null",
 		}),
 		// Invite links used to be valid forever, so a shared or leaked URL stayed

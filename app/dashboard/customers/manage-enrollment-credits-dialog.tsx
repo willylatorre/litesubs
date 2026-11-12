@@ -40,9 +40,12 @@ export function ManageEnrollmentCreditsDialog({
 	const [open, setOpen] = useState(false);
 	const [amount, setAmount] = useState("");
 	const [description, setDescription] = useState("");
+	const [expiresAt, setExpiresAt] = useState("");
 	const [isPending, startTransition] = useTransition();
 	const amountId = useId();
 	const descriptionId = useId();
+	const expiryId = useId();
+	const adding = Number.parseInt(amount, 10) > 0;
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
@@ -53,12 +56,18 @@ export function ManageEnrollmentCreditsDialog({
 		}
 
 		startTransition(async () => {
-			const res = await updateEnrollmentCredits(enrollmentId, val, description);
+			const res = await updateEnrollmentCredits(
+				enrollmentId,
+				val,
+				description,
+				val > 0 && expiresAt ? expiresAt : undefined,
+			);
 			if (res.success) {
 				toast.success("Credits updated");
 				setOpen(false);
 				setAmount("");
 				setDescription("");
+				setExpiresAt("");
 				onSuccess?.();
 			} else {
 				toast.error(res.error as string);
@@ -190,6 +199,25 @@ export function ManageEnrollmentCreditsDialog({
 									className="h-9 text-sm"
 								/>
 							</div>
+							{adding && (
+								<div className="grid gap-2">
+									<Label htmlFor={expiryId} className="text-xs font-medium">
+										Expires
+									</Label>
+									<Input
+										id={expiryId}
+										type="date"
+										value={expiresAt}
+										onChange={(e) => setExpiresAt(e.target.value)}
+										className="h-9 text-sm"
+									/>
+									<p className="text-xs text-muted-foreground">
+										One-time plans keep credits indefinitely. Monthly plans
+										inherit the paid period, and require a date when no period
+										is paid.
+									</p>
+								</div>
+							)}
 						</div>
 					</div>
 

@@ -193,9 +193,12 @@ export default async function InvitePage({
 	// Only published terms are offered. A draft cannot be resurrected by an
 	// invite that was generated earlier.
 	const published = invite.plan?.versions.find(
-		(version) => version.status === "published",
+		(version) =>
+			version.status === "published" &&
+			(!invite.planVersionId || version.id === invite.planVersionId),
 	);
 	const isProductInvite = Boolean(invite.plan && published);
+	const complimentary = invite.compCredits > 0;
 
 	// The invite email is personal data: only reveal it to the signed-in user it
 	// was addressed to, never to anyone holding the link.
@@ -219,7 +222,13 @@ export default async function InvitePage({
 				<div className="text-center space-y-2">
 					<p className="text-lg text-foreground">
 						<span className="font-semibold">{invite.creator.name}</span> has
-						invited you to {isProductInvite ? "buy their plan" : "connect"}.
+						invited you to{" "}
+						{complimentary
+							? "receive complimentary credits"
+							: isProductInvite
+								? "buy their plan"
+								: "connect"}
+						.
 					</p>
 					{canSeeInviteEmail && invite.email && (
 						<p className="text-sm text-muted-foreground">
@@ -232,28 +241,42 @@ export default async function InvitePage({
 					<PlanCard
 						product={{
 							name: invite.plan.name,
-							credits: published.credits,
-							price: published.price,
+							credits: complimentary ? invite.compCredits : published.credits,
+							price: complimentary ? 0 : published.price,
 							description: invite.plan.description,
-							badge: `Offered by ${invite.creator.name}`,
+							badge: complimentary
+								? `Complimentary · ${invite.creator.name}`
+								: `Offered by ${invite.creator.name}`,
 							currency: published.currency,
-							billingMode: published.billingMode,
-							interval: published.interval,
+							billingMode: complimentary ? undefined : published.billingMode,
+							interval: complimentary ? null : published.interval,
 							eventTypeName:
 								invite.plan.integration?.calcomIntegration?.eventTypeName,
 						}}
 						productId={invite.plan.id}
-						creditsSuffix=" credits"
+						creditsSuffix={complimentary ? " credits on claim" : " credits"}
 						session={session}
 						loginUrl={`/auth/sign-up?callbackURL=/invite/${token}`}
 						action={
-							session?.user ? (
-								<AcceptInviteButton
-									token={token}
-									label="Accept & Add to Dashboard"
-									className="w-full"
-								/>
-							) : undefined
+							<div className="flex flex-col gap-2">
+								{complimentary && invite.compExpiresAt && (
+									<p className="text-xs text-muted-foreground text-center">
+										Granted once. Usable until{" "}
+										{new Date(invite.compExpiresAt).toLocaleDateString()}.
+									</p>
+								)}
+								{session?.user ? (
+									<AcceptInviteButton
+										token={token}
+										label={
+											complimentary
+												? "Claim complimentary credits"
+												: "Accept & Add to Dashboard"
+										}
+										className="w-full"
+									/>
+								) : undefined}
+							</div>
 						}
 					/>
 				) : (

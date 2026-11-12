@@ -55,6 +55,10 @@ Implemented slices:
   while each short-lived session is created for the authenticated customer's
   mapped Customer on its owning connected account. Plan changes and cancellation
   are disabled in the portal.
+- S11 — invites pin the published version they offered, comp and manual grants
+  carry an expiry (inherited from the paid period on monthly plans), and a claim
+  refuses terms that were replaced after the invite was issued. See
+  `drizzle/0010_s11_invites.sql`.
 
 ## Purpose
 
@@ -880,19 +884,19 @@ subscriptions or hidden free recurring plans.
 
 #### Acceptance criteria
 
-- [ ] A purchase invite targets an available published offer; accepting it creates
+- [x] A purchase invite targets an available published offer; accepting it creates
       no paid allowance until the correct Checkout/invoice fulfillment occurs.
-- [ ] Comp grants require a reason, record source/expiry, and are applied exactly
+- [x] Comp grants require a reason, record source/expiry, and are applied exactly
       once on claim. Invite terms do not silently change after being issued.
-- [ ] Extra credits for a recurring enrollment with a current paid period inherit
+- [x] Extra credits for a recurring enrollment with a current paid period inherit
       its end; without a paid period, an explicit future expiry is required.
-- [ ] UI/REST/MCP expose the same expiry rules and show expiry before grant/claim.
+- [x] UI/REST/MCP expose the same expiry rules and show expiry before grant/claim.
       Complimentary enrollment does not create automatic monthly grants.
-- [ ] Manual decreases use attributable debit logic; manual increases create grants.
+- [x] Manual decreases use attributable debit logic; manual increases create grants.
       Neither mutates a Stripe invoice, subscription price, or paid-through date.
-- [ ] Existing email matching, invite expiry, tenant scoping, reason requirement,
+- [x] Existing email matching, invite expiry, tenant scoping, reason requirement,
       duplicate-claim protection, and truthful "no email sent" messaging remain.
-- [ ] Unpublished/unavailable paid offers cannot be resurrected by an old invite;
+- [x] Unpublished/unavailable paid offers cannot be resurrected by an old invite;
       comp and payment requests are clearly distinguished in the UI.
 
 #### Implementation notes and relevant files
@@ -900,7 +904,7 @@ subscriptions or hidden free recurring plans.
 Start with `lib/services/enroll.ts`, `lib/services/credits.ts`,
 `app/actions/invites.ts`, `app/invite/[token]/*`,
 `app/dashboard/creator/invite-user-dialog.tsx`,
-`app/dashboard/customers/manage-subscription-credits-dialog.tsx`, and enrollment
+`app/dashboard/customers/manage-enrollment-credits-dialog.tsx`, and enrollment
 REST/MCP contracts. Replace mutable-plan credit reads with snapshotted/versioned
 terms for issued offers. Keep invitation claim and grant ledger insertion atomic.
 
@@ -910,6 +914,12 @@ Invite an unknown email, claim once, and buy the intended offer. Separately clai
 a comp invite, grant an extra monthly unit, and show its period-bound expiry.
 Verify missing expiry is rejected without a paid period and concurrent claims
 cannot duplicate credits.
+
+**Implemented:** yes — `resolveGrantExpiry` in `lib/services/credits.ts` owns the
+expiry rule for comps and manual increases; `plan_version_id`/`comp_expires_at` on
+`invites` pin the issued offer and its stated expiry; and the claim path refuses a
+superseded version. Migration: `drizzle/0010_s11_invites.sql`. Coverage lives in
+`lib/mcp.integration.test.ts` and `lib/migrations.test.ts` (opt-in).
 
 #### Blocked by
 

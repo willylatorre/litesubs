@@ -42,6 +42,10 @@ export type InviteView = {
 		calEventTypeName?: string | null;
 	} | null;
 	creator: { name: string };
+	/** A complimentary invite grants credits on claim; it is not a purchase. */
+	compCredits: number;
+	compExpiresAt: Date | null;
+	expiresAt: Date;
 };
 
 export type DashboardView = {
@@ -96,6 +100,9 @@ export function toDashboardView(raw: {
 		id: string;
 		plan: RawPlan | null;
 		creator: { name: string };
+		compCredits: number;
+		compExpiresAt: Date | null;
+		expiresAt: Date;
 	}[];
 	subscriptions: {
 		planId: string;
@@ -156,6 +163,9 @@ export function toDashboardView(raw: {
 					}
 				: null,
 			creator: { name: invite.creator.name },
+			compCredits: invite.compCredits,
+			compExpiresAt: invite.compExpiresAt,
+			expiresAt: invite.expiresAt,
 		})),
 	};
 }

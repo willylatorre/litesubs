@@ -7,7 +7,13 @@ import {
 } from "@modelcontextprotocol/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/app/db";
-import { enrollments, planVersions, transactions, user } from "@/app/db/schema";
+import {
+	creditGrants,
+	enrollments,
+	planVersions,
+	transactions,
+	user,
+} from "@/app/db/schema";
 import { changeCredits } from "@/lib/services/credits";
 import { getCustomer, listCustomers } from "@/lib/services/customers";
 import { claimEnrollmentInvite, enrollCustomer } from "@/lib/services/enroll";
@@ -305,6 +311,141 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 						(await getCustomer(principal, invitedId)).enrollments[0].credits,
 						10,
 					);
+				} finally {
+					await db.delete(user).where(eq(user.id, invitedId));
+				}
+			},
+		);
+		await t.test(
+			"complimentary credits carry an expiry that the claim honours",
+			async () => {
+				// A recurring comp has no paid period to inherit, so it must state
+				// its expiry instead of creating a permanently free allowance.
+				const monthly = await createPlan(principal, {
+					name: "Monthly bonus",
+					terms: {
+						billingMode: "recurring",
+						interval: "month",
+						currency: "usd",
+						price: 10,
+						credits: 4,
+					},
+				});
+				await db
+					.update(planVersions)
+					.set({ status: "published", publishedAt: new Date() })
+					.where(
+						and(
+							eq(planVersions.planId, monthly.id),
+							eq(planVersions.status, "draft"),
+						),
+					);
+				await assert.rejects(
+					enrollCustomer(principal, {
+						plan: monthly.id,
+						customer: studentEmail,
+						mode: "comp",
+						reason: "No period yet",
+					}),
+					{ code: "EXPIRY_REQUIRED" },
+				);
+
+				const expiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+				const invitedId = crypto.randomUUID();
+				const email = `${invitedId}@example.test`;
+				const invite = await enrollCustomer(principal, {
+					plan: monthly.id,
+					customer: email,
+					mode: "comp",
+					reason: "Trial month",
+					expires_at: expiry,
+				});
+				assert.equal(invite.status, "invited");
+				assert.ok("inviteUrl" in invite && "creditsExpireAt" in invite);
+				const token = new URL(invite.inviteUrl).pathname.split("/").pop();
+				assert.ok(token);
+				await db.insert(user).values({ id: invitedId, name: "Trial", email });
+				try {
+					await claimEnrollmentInvite(invitedId, email, token);
+					const [enrollment] = await db
+						.select()
+						.from(enrollments)
+						.where(
+							and(
+								eq(enrollments.userId, invitedId),
+								eq(enrollments.planId, monthly.id),
+							),
+						);
+					const [grant] = await db.query.creditGrants.findMany({
+						where: eq(creditGrants.enrollmentId, enrollment.id),
+					});
+					assert.equal(grant.kind, "comp");
+					assert.equal(grant.expiresAt?.getTime(), expiry.getTime());
+				} finally {
+					await db.delete(user).where(eq(user.id, invitedId));
+				}
+			},
+		);
+		await t.test(
+			"an invite cannot claim terms that replaced the ones it offered",
+			async () => {
+				const priced = await createPlan(principal, {
+					name: "Repriced pack",
+					terms: {
+						billingMode: "one_time",
+						currency: "usd",
+						price: 10,
+						credits: 10,
+					},
+				});
+				await db
+					.update(planVersions)
+					.set({ status: "published", publishedAt: new Date() })
+					.where(
+						and(
+							eq(planVersions.planId, priced.id),
+							eq(planVersions.status, "draft"),
+						),
+					);
+				const invitedId = crypto.randomUUID();
+				const email = `${invitedId}@example.test`;
+				// `invoice` mode for an unknown email creates the purchase invite.
+				const purchaseInvite = await enrollCustomer(principal, {
+					plan: priced.id,
+					customer: email,
+				});
+				assert.equal(purchaseInvite.status, "invited");
+				if (!("inviteUrl" in purchaseInvite)) throw new Error("unreachable");
+				const token = new URL(purchaseInvite.inviteUrl).pathname
+					.split("/")
+					.pop();
+				assert.ok(token);
+				// The creator re-prices: the old version is superseded, so the
+				// invite may not silently apply the new credits.
+				await db
+					.update(planVersions)
+					.set({ status: "superseded", unpublishedAt: new Date() })
+					.where(
+						and(
+							eq(planVersions.planId, priced.id),
+							eq(planVersions.status, "published"),
+						),
+					);
+				await db.insert(planVersions).values({
+					planId: priced.id,
+					creatorId,
+					status: "published",
+					billingMode: "one_time",
+					currency: "usd",
+					price: 2000,
+					credits: 20,
+					version: 2,
+				});
+				await db.insert(user).values({ id: invitedId, name: "Buyer", email });
+				try {
+					await assert.rejects(claimEnrollmentInvite(invitedId, email, token), {
+						code: "INVITE_OUTDATED",
+					});
 				} finally {
 					await db.delete(user).where(eq(user.id, invitedId));
 				}

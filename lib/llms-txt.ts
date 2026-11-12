@@ -107,8 +107,10 @@ Errors return code, error, and optional details or fieldErrors. Status codes:
   non-expiring ones; a debit is all-or-nothing and never partially applies.
   Expired credits are unusable immediately, not when a cleanup job runs.
 - grant_credits takes an optional idempotency_key. reason is required and appears
-  in the customer ledger. dry_run previews the before/after balance without
-  writing or reserving a key.
+  in the customer ledger. One-time credits never expire; credits added to a
+  monthly plan inherit the current paid period, and expires_at is required when
+  no period is paid. dry_run previews the before/after balance, expiry included,
+  without writing or reserving a key.
 - Enrollment defaults to invoice mode: it returns a Checkout Session link and
   grants credits only after payment. Complimentary mode (comp) requires a reason
   and grants the plan's current credits once. A customer-specific purchase
