@@ -1,6 +1,6 @@
 "use server";
 
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/app/db";
 import {
@@ -71,18 +71,26 @@ export async function getPlanDetails(planId: string) {
 				where: and(
 					eq(subscriptions.planId, planId),
 					eq(subscriptions.creatorId, session.user.id),
-					inArray(subscriptions.status, [
-						"pending",
-						"incomplete",
-						"active",
-						"past_due",
-					]),
+					or(
+						inArray(subscriptions.status, [
+							"pending",
+							"incomplete",
+							"active",
+							"past_due",
+						]),
+						and(
+							eq(subscriptions.status, "canceled"),
+							isNotNull(subscriptions.stripeSubscriptionId),
+						),
+					),
 				),
 				orderBy: [desc(subscriptions.createdAt)],
 				columns: {
 					userId: true,
 					status: true,
 					paidThroughAt: true,
+					cancelAtPeriodEnd: true,
+					cancelAt: true,
 				},
 			}),
 		]);

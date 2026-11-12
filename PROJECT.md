@@ -77,7 +77,7 @@ This model establishes a direct relationship between the creator and the buyer, 
 - [ ] **Calendly Integration:** Explore allowing users to connect their account and automatically "spend" credits when booking appointments via Cal.com through a webhook.
 
 ### Subscriptions
-- [x] **Subscriptions plan (S07/S08 billing slices):** Monthly plans use Stripe subscriptions and grant one expiring allowance per paid invoice. Recurring Checkout remains sandbox-only until the live-release gate is complete. Cancel/resume actions remain a later slice.
+- [x] **Subscriptions plan (S07–S09 billing slices):** Monthly plans use Stripe subscriptions and grant one expiring allowance per paid invoice. Recurring Checkout remains sandbox-only until the live-release gate is complete. Customers can cancel at period end or resume before cancellation takes effect.
 
 ### 💻 Developer Experience (API)
 - [x] **API Key Management:** UI for creators to generate/revoke API keys for their projects. (`/dashboard/developers/api-keys`)

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-01-01
 
 ### Added
+- **Subscription cancellation (S09)**:
+  - Allow authenticated customers to cancel renewals at the paid-period end and
+    resume before cancellation takes effect.
+  - Mirror connected-account Stripe lifecycle changes without changing paid
+    credit expiry; a later purchase starts a new subscription identity.
 - **Monthly renewals (S08)**:
   - Fulfill each eligible paid cycle invoice against the original plan version,
     with one expiring allowance per service period.

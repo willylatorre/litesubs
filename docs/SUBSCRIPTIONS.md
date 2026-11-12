@@ -46,6 +46,11 @@ Implemented slices:
   periods are recorded without restoring expired credits, and customer/creator
   summaries read usable grant balances. See
   `drizzle/0008_s08_renewals.sql`.
+- S09 — authenticated customers can schedule cancellation at period end or resume
+  before it, account-scoped Stripe operations stay retry-safe, and lifecycle
+  webhooks reconcile dashboard-side changes without moving paid-through. Ended
+  subscriptions retain their history while a later purchase creates a new
+  billing identity. See `drizzle/0009_s09_cancellation.sql`.
 
 ## Purpose
 
@@ -753,19 +758,19 @@ purchase after final cancellation without reusing the dead Stripe subscription.
 
 #### Acceptance criteria
 
-- [ ] Cancel sets `cancel_at_period_end`, shows the effective date, and does not
+- [x] Cancel sets `cancel_at_period_end`, shows the effective date, and does not
       immediately revoke the paid period's remaining credits.
-- [ ] Credits still expire at the paid period end; cancellation does not turn them
+- [x] Credits still expire at the paid period end; cancellation does not turn them
       into permanent credits. No further allowance is granted without a new payment.
-- [ ] Resume before final cancellation clears the flag on the same subscription,
+- [x] Resume before final cancellation clears the flag on the same subscription,
       with no duplicate subscription, checkout, payment, or allowance.
-- [ ] After terminal cancellation, a new subscription uses a new billing identity
+- [x] After terminal cancellation, a new subscription uses a new billing identity
       while retaining the enrollment, original receipts, and expired credit history.
-- [ ] Customer ownership and account scope are enforced server-side. Retries and
+- [x] Customer ownership and account scope are enforced server-side. Retries and
       creator-side Stripe Dashboard cancellations converge to correct local state.
-- [ ] Unpublishing a plan does not cancel existing subscriptions; existing customers
+- [x] Unpublishing a plan does not cancel existing subscriptions; existing customers
       can manage them even when new purchases are unavailable.
-- [ ] An unavailable/disconnected account yields a clear failure, never a misleading
+- [x] An unavailable/disconnected account yields a clear failure, never a misleading
       successful local cancellation when Stripe was not updated.
 
 #### Implementation notes and relevant files
@@ -780,6 +785,12 @@ would otherwise reverse cancellation/resume; do not build a custom scheduler.
 Subscribe, cancel, consume during the remaining paid period, resume, and finally
 cancel through period end. Show expiry and a clean new subscription on repurchase.
 Repeat actions and attempt them as a different customer.
+
+**Implemented:** yes — see `updateCustomerSubscriptionCancellation` and
+`syncSubscriptionFromStripe` in `lib/services/subscriptions.ts`, the connected
+subscription adapter and lifecycle webhook handlers, and
+`drizzle/0009_s09_cancellation.sql`. Database-backed coverage is part of
+`lib/subscriptions.integration.test.ts` (opt-in).
 
 #### Blocked by
 

@@ -65,8 +65,10 @@ The Stripe webhook endpoint must subscribe to `checkout.session.completed`,
 `checkout.session.async_payment_succeeded`, `checkout.session.expired`, and
 `account.updated`. Subscribe to `invoice.paid`, `invoice.payment_failed`, and
 `invoice.payment_action_required` on connected accounts for the first monthly
-allowance, renewals, and overdue state. Monthly Checkout remains test-mode only
-until the live-release gate is complete. The old
+allowance, renewals, and overdue state. Also subscribe to
+`customer.subscription.updated` and `customer.subscription.deleted` to converge
+customer and creator cancel/resume state. Monthly Checkout remains test-mode
+only until the live-release gate is complete. The old
 `STRIPE_WEBHOOK_PURCHASES` variable is unused.
 
 Keep the MCP resource URL stable: it is the token audience. Development may use

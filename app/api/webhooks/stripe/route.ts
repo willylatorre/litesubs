@@ -15,7 +15,12 @@ import {
 	getPayment,
 	markSubscriptionInvoiceFailed,
 } from "@/lib/services/purchase";
+import {
+	cancellationEffectiveAt,
+	syncSubscriptionFromStripe,
+} from "@/lib/services/subscriptions";
 import { getStripe } from "@/lib/stripe";
+import { retrieveConnectedSubscription } from "@/lib/stripe-subscriptions";
 
 /**
  * Fulfil a paid one-time Checkout.
@@ -361,6 +366,99 @@ async function handleInvoicePaymentFailed(
 	}
 }
 
+async function handleSubscriptionLifecycle(
+	eventSubscription: Stripe.Subscription,
+	eventType: "customer.subscription.updated" | "customer.subscription.deleted",
+	eventId: string,
+	eventLivemode: boolean,
+	eventAccountId?: string,
+): Promise<Response> {
+	if (!eventAccountId) return new Response(null, { status: 200 });
+	const metadataSubscriptionId = eventSubscription.metadata.subscriptionId;
+	try {
+		const byStripeId = await db.query.subscriptions.findFirst({
+			where: and(
+				eq(subscriptions.stripeAccountId, eventAccountId),
+				eq(subscriptions.stripeSubscriptionId, eventSubscription.id),
+			),
+		});
+		const subscription =
+			byStripeId ??
+			(metadataSubscriptionId
+				? await db.query.subscriptions.findFirst({
+						where: and(
+							eq(subscriptions.id, metadataSubscriptionId),
+							eq(subscriptions.stripeAccountId, eventAccountId),
+						),
+					})
+				: undefined);
+		if (!subscription) return new Response(null, { status: 200 });
+		if (metadataSubscriptionId && metadataSubscriptionId !== subscription.id)
+			return new Response("Subscription metadata mismatch", { status: 400 });
+
+		const owner = await db.query.connectedAccounts.findFirst({
+			where: eq(connectedAccounts.stripeAccountId, eventAccountId),
+		});
+		if (
+			!owner ||
+			owner.userId !== subscription.creatorId ||
+			owner.livemode !== false ||
+			eventLivemode
+		)
+			return new Response("Account mismatch", { status: 400 });
+		const eventCustomerId =
+			typeof eventSubscription.customer === "string"
+				? eventSubscription.customer
+				: eventSubscription.customer.id;
+		if (eventCustomerId !== subscription.stripeCustomerId)
+			return new Response("Customer mismatch", { status: 400 });
+
+		// Updated events may arrive out of order. Retrieve current Stripe state;
+		// deleted events are already authoritative terminal snapshots.
+		const current =
+			eventType === "customer.subscription.deleted"
+				? eventSubscription
+				: await retrieveConnectedSubscription({
+						stripeAccountId: eventAccountId,
+						stripeSubscriptionId: eventSubscription.id,
+					});
+		if (
+			current.id !== eventSubscription.id ||
+			(subscription.stripeSubscriptionId &&
+				current.id !== subscription.stripeSubscriptionId)
+		)
+			return new Response("Subscription mismatch", { status: 400 });
+		const currentCustomerId =
+			typeof current.customer === "string"
+				? current.customer
+				: current.customer.id;
+		if (currentCustomerId !== subscription.stripeCustomerId)
+			return new Response("Customer mismatch", { status: 400 });
+		if (
+			current.metadata.subscriptionId &&
+			current.metadata.subscriptionId !== subscription.id
+		)
+			return new Response("Subscription metadata mismatch", { status: 400 });
+
+		await syncSubscriptionFromStripe({
+			subscriptionId: subscription.id,
+			stripeSubscriptionId: current.id,
+			stripeAccountId: eventAccountId,
+			stripeCustomerId: currentCustomerId,
+			stripeStatus: current.status,
+			cancelAtPeriodEnd: current.cancel_at_period_end,
+			cancelAt: cancellationEffectiveAt(current),
+		});
+		return new Response(null, { status: 200 });
+	} catch (error) {
+		console.error("Failed to sync Stripe subscription lifecycle", {
+			eventId,
+			type: error instanceof Error ? error.name : "UnknownError",
+		});
+		return new Response("Webhook Error", { status: 500 });
+	}
+}
+
 async function handleCheckoutExpired(
 	checkoutSession: Stripe.Checkout.Session,
 	eventId: string,
@@ -509,6 +607,15 @@ export async function POST(req: Request) {
 			return handleInvoicePaymentFailed(
 				object as Stripe.Invoice,
 				eventId,
+				event.account ?? undefined,
+			);
+		case "customer.subscription.updated":
+		case "customer.subscription.deleted":
+			return handleSubscriptionLifecycle(
+				object as Stripe.Subscription,
+				event.type,
+				eventId,
+				event.livemode,
 				event.account ?? undefined,
 			);
 		case "account.updated":

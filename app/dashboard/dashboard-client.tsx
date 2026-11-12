@@ -122,8 +122,13 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 								{allEnrollments.map((enrollment) => {
 									const isPurchased =
 										purchasedPlanId && enrollment.plan.id === purchasedPlanId;
+									const subscription = enrollment.subscription;
+									const subscriptionEnd =
+										subscription?.cancelAt ?? subscription?.paidThroughAt;
 									const terms =
-										enrollment.subscription?.terms ?? enrollment.plan.terms;
+										subscription?.status !== "canceled"
+											? (subscription?.terms ?? enrollment.plan.terms)
+											: enrollment.plan.terms;
 									const recurring = terms?.billingMode === "recurring";
 									return (
 										<PlanCard
@@ -171,34 +176,63 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 													)}
 													{recurring && (
 														<div className="flex flex-1 flex-col items-end gap-1">
-															{enrollment.subscription?.overdue ? (
+															{subscription?.overdue ? (
 																<p className="text-xs text-destructive text-right">
 																	Payment overdue
-																	{enrollment.subscription.paidThroughAt && (
+																	{subscription.paidThroughAt && (
 																		<>
 																			{" "}
 																			· paid through{" "}
 																			{new Date(
-																				enrollment.subscription.paidThroughAt,
+																				subscription.paidThroughAt,
 																			).toLocaleDateString()}
 																		</>
 																	)}
 																</p>
-															) : enrollment.subscription?.status ===
-																"active" ? (
+															) : subscription?.status === "canceled" ? (
+																<>
+																	<p className="text-xs text-muted-foreground text-right">
+																		Subscription ended
+																	</p>
+																	{terms?.billingMode === "recurring" && (
+																		<BuyButton
+																			planId={enrollment.plan.id}
+																			price={terms.price}
+																			currency={terms.currency}
+																			productName={enrollment.plan.name}
+																			billingMode="recurring"
+																			credits={terms.credits}
+																			label="Subscribe again"
+																		/>
+																	)}
+																</>
+															) : subscription?.cancelAtPeriodEnd ? (
+																<p className="text-xs text-muted-foreground text-right">
+																	Scheduled to end
+																	{subscriptionEnd && (
+																		<>
+																			{" "}
+																			·{" "}
+																			{new Date(
+																				subscriptionEnd,
+																			).toLocaleDateString()}
+																		</>
+																	)}
+																</p>
+															) : subscription?.status === "active" ? (
 																<p className="text-xs text-muted-foreground text-right">
 																	Monthly subscription active
-																	{enrollment.subscription.paidThroughAt && (
+																	{subscription.paidThroughAt && (
 																		<>
 																			{" "}
 																			· paid through{" "}
 																			{new Date(
-																				enrollment.subscription.paidThroughAt,
+																				subscription.paidThroughAt,
 																			).toLocaleDateString()}
 																		</>
 																	)}
 																</p>
-															) : enrollment.subscription ? (
+															) : subscription ? (
 																<p className="text-xs text-muted-foreground text-right">
 																	Subscription payment processing
 																</p>

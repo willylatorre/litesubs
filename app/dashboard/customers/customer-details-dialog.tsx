@@ -35,6 +35,7 @@ type CustomerEnrollmentView = {
 		status: "pending" | "incomplete" | "active" | "past_due" | "canceled";
 		paidThroughAt: Date | null;
 		cancelAtPeriodEnd: boolean;
+		cancelAt: Date | null;
 		overdue: boolean;
 	} | null;
 };
@@ -63,6 +64,7 @@ interface CustomerDetailsDialogProps {
 			status: "pending" | "incomplete" | "active" | "past_due" | "canceled";
 			paidThroughAt: Date | null;
 			cancelAtPeriodEnd: boolean;
+			cancelAt: Date | null;
 			overdue: boolean;
 		} | null;
 	}[];
@@ -168,75 +170,86 @@ export function CustomerDetailsDialog({
 									No enrollments.
 								</p>
 							) : (
-								enrollments.map((enrollment, index) => (
-									<div
-										key={enrollment.id}
-										className={`flex items-center justify-between py-3 ${
-											index < enrollments.length - 1
-												? "border-b border-border/40"
-												: ""
-										}`}
-									>
-										<div className="flex flex-col">
-											<span className="text-sm font-medium">
-												{enrollment.plan.name}
-											</span>
-											<span className="text-[10px] text-muted-foreground font-mono">
-												{enrollment.planId.substring(0, 8)}
-											</span>
-											{enrollment.billingSubscription && (
-												<span
-													className={`text-[10px] ${enrollment.billingSubscription.overdue ? "text-destructive" : "text-muted-foreground"}`}
-												>
-													{enrollment.billingSubscription.overdue
-														? "Payment overdue"
-														: enrollment.billingSubscription.status}
-													{enrollment.billingSubscription.paidThroughAt && (
-														<>
-															{" "}
-															· paid through{" "}
-															{new Date(
-																enrollment.billingSubscription.paidThroughAt,
-															).toLocaleDateString()}
-														</>
-													)}
+								enrollments.map((enrollment, index) => {
+									const billingSubscription = enrollment.billingSubscription;
+									const effectiveEnd =
+										billingSubscription?.cancelAt ??
+										billingSubscription?.paidThroughAt;
+									return (
+										<div
+											key={enrollment.id}
+											className={`flex items-center justify-between py-3 ${
+												index < enrollments.length - 1
+													? "border-b border-border/40"
+													: ""
+											}`}
+										>
+											<div className="flex flex-col">
+												<span className="text-sm font-medium">
+													{enrollment.plan.name}
 												</span>
-											)}
-										</div>
-										<div className="flex items-center gap-4">
-											<div className="flex items-baseline gap-1">
-												<span className="text-sm font-bold">
-													{enrollment.credits}
+												<span className="text-[10px] text-muted-foreground font-mono">
+													{enrollment.planId.substring(0, 8)}
 												</span>
-												<span className="text-[10px] text-muted-foreground uppercase font-bold">
-													cr
-												</span>
+												{billingSubscription && (
+													<span
+														className={`text-[10px] ${billingSubscription.overdue ? "text-destructive" : "text-muted-foreground"}`}
+													>
+														{billingSubscription.overdue
+															? "Payment overdue"
+															: billingSubscription.status === "canceled"
+																? "Subscription ended"
+																: billingSubscription.cancelAtPeriodEnd
+																	? "Scheduled to end"
+																	: billingSubscription.status}
+														{effectiveEnd && (
+															<>
+																{" "}
+																·{" "}
+																{billingSubscription.cancelAtPeriodEnd
+																	? "ends"
+																	: "paid through"}{" "}
+																{new Date(effectiveEnd).toLocaleDateString()}
+															</>
+														)}
+													</span>
+												)}
 											</div>
-											{!demoData && (
-												<div className="flex items-center gap-0.5">
-													<DecreaseCreditButton
-														enrollmentId={enrollment.id}
-														currentCredits={enrollment.credits}
-														size="sm"
-														onSuccess={handleSuccess}
-														showLabel={false}
-													/>
-													<ManageEnrollmentCreditsDialog
-														enrollmentId={enrollment.id}
-														planName={enrollment.plan.name}
-														currentCredits={enrollment.credits}
-														onSuccess={handleSuccess}
-														compact
-													/>
-													<EnrollmentMoreActions
-														customerEmail={customer.email}
-														planId={enrollment.planId}
-													/>
+											<div className="flex items-center gap-4">
+												<div className="flex items-baseline gap-1">
+													<span className="text-sm font-bold">
+														{enrollment.credits}
+													</span>
+													<span className="text-[10px] text-muted-foreground uppercase font-bold">
+														cr
+													</span>
 												</div>
-											)}
+												{!demoData && (
+													<div className="flex items-center gap-0.5">
+														<DecreaseCreditButton
+															enrollmentId={enrollment.id}
+															currentCredits={enrollment.credits}
+															size="sm"
+															onSuccess={handleSuccess}
+															showLabel={false}
+														/>
+														<ManageEnrollmentCreditsDialog
+															enrollmentId={enrollment.id}
+															planName={enrollment.plan.name}
+															currentCredits={enrollment.credits}
+															onSuccess={handleSuccess}
+															compact
+														/>
+														<EnrollmentMoreActions
+															customerEmail={customer.email}
+															planId={enrollment.planId}
+														/>
+													</div>
+												)}
+											</div>
 										</div>
-									</div>
-								))
+									);
+								})
 							)}
 						</div>
 					</div>

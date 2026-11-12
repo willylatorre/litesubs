@@ -455,6 +455,8 @@ export const subscriptions = pgTable(
 		applicationFeePercent: integer("application_fee_percent").notNull(),
 		paidThroughAt: timestamp("paid_through_at", { withTimezone: true }),
 		cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false).notNull(),
+		cancelAt: timestamp("cancel_at", { withTimezone: true }),
+		cancellationRevision: integer("cancellation_revision").default(0).notNull(),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),
@@ -473,6 +475,10 @@ export const subscriptions = pgTable(
 		check(
 			"subscription_fee_percent_positive",
 			sql`${table.applicationFeePercent} > 0 and ${table.applicationFeePercent} < 100`,
+		),
+		check(
+			"subscription_cancellation_revision_non_negative",
+			sql`${table.cancellationRevision} >= 0`,
 		),
 	],
 );

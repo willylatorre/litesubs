@@ -282,35 +282,50 @@ export function PlanDetailsDialog({
 													</TableCell>
 												</TableRow>
 											) : (
-												displayedEnrollments.map((enrollment) => (
-													<TableRow key={enrollment.id}>
-														<TableCell className="font-medium">
-															<div className="flex items-center gap-2">
-																<Avatar className="h-6 w-6">
-																	<AvatarImage
-																		src={enrollment.user.image ?? undefined}
-																		alt={enrollment.user.name}
-																	/>
-																	<AvatarFallback>
-																		{enrollment.user.name
-																			?.substring(0, 2)
-																			.toUpperCase()}
-																	</AvatarFallback>
-																</Avatar>
-																{enrollment.user.name}
-															</div>
-														</TableCell>
-														<TableCell>{enrollment.user.email}</TableCell>
-														<TableCell className="text-right font-mono">
-															{enrollment.credits}
-														</TableCell>
-														<TableCell className="text-sm text-muted-foreground">
-															{enrollment.subscription
-																? `${enrollment.subscription.overdue ? "Payment overdue" : enrollment.subscription.status}${enrollment.subscription.paidThroughAt ? ` · through ${new Date(enrollment.subscription.paidThroughAt).toLocaleDateString()}` : ""}`
-																: "—"}
-														</TableCell>
-													</TableRow>
-												))
+												displayedEnrollments.map((enrollment) => {
+													const subscription = enrollment.subscription;
+													const subscriptionLabel = subscription
+														? subscription.overdue
+															? "Payment overdue"
+															: subscription.status === "canceled"
+																? "Subscription ended"
+																: subscription.cancelAtPeriodEnd
+																	? "Scheduled to end"
+																	: subscription.status
+														: null;
+													const subscriptionEnd =
+														subscription?.cancelAt ??
+														subscription?.paidThroughAt;
+													return (
+														<TableRow key={enrollment.id}>
+															<TableCell className="font-medium">
+																<div className="flex items-center gap-2">
+																	<Avatar className="h-6 w-6">
+																		<AvatarImage
+																			src={enrollment.user.image ?? undefined}
+																			alt={enrollment.user.name}
+																		/>
+																		<AvatarFallback>
+																			{enrollment.user.name
+																				?.substring(0, 2)
+																				.toUpperCase()}
+																		</AvatarFallback>
+																	</Avatar>
+																	{enrollment.user.name}
+																</div>
+															</TableCell>
+															<TableCell>{enrollment.user.email}</TableCell>
+															<TableCell className="text-right font-mono">
+																{enrollment.credits}
+															</TableCell>
+															<TableCell className="text-sm text-muted-foreground">
+																{subscriptionLabel
+																	? `${subscriptionLabel}${subscriptionEnd ? ` · through ${new Date(subscriptionEnd).toLocaleDateString()}` : ""}`
+																	: "—"}
+															</TableCell>
+														</TableRow>
+													);
+												})
 											)}
 										</TableBody>
 									</Table>

@@ -1,6 +1,16 @@
 "use server";
 
-import { and, count, countDistinct, desc, eq, inArray, sum } from "drizzle-orm";
+import {
+	and,
+	count,
+	countDistinct,
+	desc,
+	eq,
+	inArray,
+	isNotNull,
+	or,
+	sum,
+} from "drizzle-orm";
 import { db } from "@/app/db";
 import {
 	enrollments,
@@ -44,18 +54,26 @@ export async function getUserEnrollmentDetails(enrollmentId: string) {
 			where: and(
 				eq(subscriptions.userId, session.user.id),
 				eq(subscriptions.planId, enrollment.planId),
-				inArray(subscriptions.status, [
-					"pending",
-					"incomplete",
-					"active",
-					"past_due",
-				]),
+				or(
+					inArray(subscriptions.status, [
+						"pending",
+						"incomplete",
+						"active",
+						"past_due",
+					]),
+					and(
+						eq(subscriptions.status, "canceled"),
+						isNotNull(subscriptions.stripeSubscriptionId),
+					),
+				),
 			),
 			orderBy: [desc(subscriptions.createdAt)],
 			columns: {
+				id: true,
 				status: true,
 				paidThroughAt: true,
 				cancelAtPeriodEnd: true,
+				cancelAt: true,
 			},
 			with: {
 				planVersion: {
@@ -163,19 +181,27 @@ export async function getDashboardData() {
 				db.query.subscriptions.findMany({
 					where: and(
 						eq(subscriptions.userId, session.user.id),
-						inArray(subscriptions.status, [
-							"pending",
-							"incomplete",
-							"active",
-							"past_due",
-						]),
+						or(
+							inArray(subscriptions.status, [
+								"pending",
+								"incomplete",
+								"active",
+								"past_due",
+							]),
+							and(
+								eq(subscriptions.status, "canceled"),
+								isNotNull(subscriptions.stripeSubscriptionId),
+							),
+						),
 					),
 					orderBy: [desc(subscriptions.createdAt)],
 					columns: {
+						id: true,
 						planId: true,
 						status: true,
 						paidThroughAt: true,
 						cancelAtPeriodEnd: true,
+						cancelAt: true,
 					},
 					with: {
 						planVersion: {
@@ -325,19 +351,27 @@ export async function getUserEnrollments() {
 			db.query.subscriptions.findMany({
 				where: and(
 					eq(subscriptions.userId, session.user.id),
-					inArray(subscriptions.status, [
-						"pending",
-						"incomplete",
-						"active",
-						"past_due",
-					]),
+					or(
+						inArray(subscriptions.status, [
+							"pending",
+							"incomplete",
+							"active",
+							"past_due",
+						]),
+						and(
+							eq(subscriptions.status, "canceled"),
+							isNotNull(subscriptions.stripeSubscriptionId),
+						),
+					),
 				),
 				orderBy: [desc(subscriptions.createdAt)],
 				columns: {
+					id: true,
 					planId: true,
 					status: true,
 					paidThroughAt: true,
 					cancelAtPeriodEnd: true,
+					cancelAt: true,
 				},
 			}),
 		]);

@@ -32,6 +32,11 @@ import {
 	type SubscriptionStripeAdapter,
 	startSubscription,
 } from "@/lib/services/purchase";
+import {
+	type SubscriptionManagementAdapter,
+	syncSubscriptionFromStripe,
+	updateCustomerSubscriptionCancellation,
+} from "@/lib/services/subscriptions";
 import type { PlanOfferAdapter } from "@/lib/stripe-offers";
 import { isSubscriptionOverdue } from "@/lib/subscription-state";
 
@@ -41,10 +46,12 @@ test("monthly renewals grant paid periods once and failed/late invoices do not e
 	assert.equal(process.env.DATABASE_URL, process.env.MCP_TEST_DATABASE_URL);
 	const creatorId = crypto.randomUUID();
 	const buyerId = crypto.randomUUID();
+	const strangerId = crypto.randomUUID();
 	const creator = sessionPrincipal(creatorId);
 	await db.insert(user).values([
 		{ id: creatorId, name: "Creator", email: `${creatorId}@example.test` },
 		{ id: buyerId, name: "Buyer", email: `${buyerId}@example.test` },
+		{ id: strangerId, name: "Stranger", email: `${strangerId}@example.test` },
 	]);
 	await db.insert(connectedAccounts).values({
 		userId: creatorId,
@@ -106,8 +113,8 @@ test("monthly renewals grant paid periods once and failed/late invoices do not e
 			const existing = idempotentSessions.get(key);
 			if (existing) return existing as never;
 			const session = {
-				id: `cs_${creatorId}`,
-				url: `https://checkout.stripe.test/${creatorId}`,
+				id: `cs_${creatorId}_${idempotentSessions.size + 1}`,
+				url: `https://checkout.stripe.test/${idempotentSessions.size + 1}`,
 			};
 			checkoutInputs.push(input);
 			idempotentSessions.set(key, session);
@@ -152,6 +159,7 @@ test("monthly renewals grant paid periods once and failed/late invoices do not e
 	});
 	assert.equal(localSubscription?.status, "pending");
 	assert.equal(localSubscription?.applicationFeePercent, 2);
+	assert.ok(localSubscription?.stripeCheckoutId);
 	const enrollmentBeforePayment = await db.query.enrollments.findFirst({
 		where: and(
 			eq(enrollments.userId, buyerId),
@@ -197,7 +205,7 @@ test("monthly renewals grant paid periods once and failed/late invoices do not e
 	);
 	await attachStripeSubscription({
 		subscriptionId,
-		checkoutSessionId: `cs_${creatorId}`,
+		checkoutSessionId: localSubscription?.stripeCheckoutId as string,
 		stripeSubscriptionId: `sub_${creatorId}`,
 		stripeAccountId: `acct_${creatorId}`,
 	});
@@ -390,6 +398,192 @@ test("monthly renewals grant paid periods once and failed/late invoices do not e
 	assert.ok(apiCustomer.enrollments[0].billingSubscription);
 	assert.equal(apiCustomer.enrollments[0].billingSubscription.overdue, true);
 
+	// Restore a currently paid period before exercising customer cancellation.
+	await db
+		.update(creditGrants)
+		.set({ expiresAt: renewalEnd })
+		.where(eq(creditGrants.planId, plan.id));
+	await db
+		.update(subscriptions)
+		.set({
+			status: "active",
+			paidThroughAt: renewalEnd,
+			cancelAtPeriodEnd: false,
+			cancelAt: null,
+		})
+		.where(eq(subscriptions.id, subscriptionId));
+
+	const cancelRequests: Parameters<
+		SubscriptionManagementAdapter["update"]
+	>[0][] = [];
+	const managementAdapter: SubscriptionManagementAdapter = {
+		async update(input) {
+			cancelRequests.push(input);
+			return {
+				id: input.stripeSubscriptionId,
+				customer: `cus_${buyerId}`,
+				status: "active",
+				cancel_at_period_end: input.cancelAtPeriodEnd,
+				cancel_at: input.cancelAtPeriodEnd
+					? Math.floor(renewalEnd.getTime() / 1000)
+					: null,
+				items: {
+					data: [
+						{ current_period_end: Math.floor(renewalEnd.getTime() / 1000) },
+					],
+				},
+			} as never;
+		},
+	};
+
+	await assert.rejects(
+		updateCustomerSubscriptionCancellation(
+			{
+				userId: strangerId,
+				subscriptionId,
+				cancelAtPeriodEnd: true,
+			},
+			managementAdapter,
+		),
+		{ code: "NOT_FOUND" },
+	);
+	await db
+		.update(connectedAccounts)
+		.set({ disconnectedAt: new Date() })
+		.where(eq(connectedAccounts.userId, creatorId));
+	await assert.rejects(
+		updateCustomerSubscriptionCancellation(
+			{ userId: buyerId, subscriptionId, cancelAtPeriodEnd: true },
+			managementAdapter,
+		),
+		{ code: "ACCOUNT_UNAVAILABLE" },
+	);
+	assert.equal(cancelRequests.length, 0);
+	await db
+		.update(connectedAccounts)
+		.set({ disconnectedAt: null })
+		.where(eq(connectedAccounts.userId, creatorId));
+
+	const scheduled = await updateCustomerSubscriptionCancellation(
+		{ userId: buyerId, subscriptionId, cancelAtPeriodEnd: true },
+		managementAdapter,
+	);
+	assert.equal(scheduled.status, "scheduled");
+	assert.equal(scheduled.cancelAtPeriodEnd, true);
+	assert.equal(scheduled.paidThroughAt?.getTime(), renewalEnd.getTime());
+	assert.equal(cancelRequests[0].stripeAccountId, `acct_${creatorId}`);
+	assert.equal(cancelRequests[0].stripeSubscriptionId, `sub_${creatorId}`);
+	assert.equal(cancelRequests[0].cancelAtPeriodEnd, true);
+	assert.equal(
+		scheduled.cancelAt?.getTime(),
+		Math.floor(renewalEnd.getTime() / 1000) * 1000,
+	);
+	assert.equal(
+		(
+			await updateCustomerSubscriptionCancellation(
+				{ userId: buyerId, subscriptionId, cancelAtPeriodEnd: true },
+				managementAdapter,
+			)
+		).status,
+		"already_scheduled",
+	);
+	assert.equal(cancelRequests.length, 1);
+	assert.equal(
+		(
+			await db.query.enrollments.findFirst({
+				where: eq(enrollments.id, enrollment?.id as string),
+			})
+		)?.credits,
+		24,
+	);
+	assert.notEqual(cancelRequests[0].idempotencyKey, "");
+
+	const resumed = await updateCustomerSubscriptionCancellation(
+		{ userId: buyerId, subscriptionId, cancelAtPeriodEnd: false },
+		managementAdapter,
+	);
+	assert.equal(resumed.status, "resumed");
+	assert.equal(resumed.cancelAtPeriodEnd, false);
+	assert.equal(resumed.cancelAt, null);
+	assert.equal(resumed.paidThroughAt?.getTime(), renewalEnd.getTime());
+	assert.equal(
+		(
+			await updateCustomerSubscriptionCancellation(
+				{ userId: buyerId, subscriptionId, cancelAtPeriodEnd: false },
+				managementAdapter,
+			)
+		).status,
+		"already_resumed",
+	);
+	assert.notEqual(
+		cancelRequests[0].idempotencyKey,
+		cancelRequests[1].idempotencyKey,
+	);
+	assert.equal(await usableBalance(db, enrollment?.id as string), 24);
+	assert.equal(
+		(
+			await db.query.creditGrants.findMany({
+				where: eq(creditGrants.planId, plan.id),
+			})
+		).length,
+		2,
+	);
+
+	await syncSubscriptionFromStripe({
+		subscriptionId,
+		stripeSubscriptionId: `sub_${creatorId}`,
+		stripeAccountId: `acct_${creatorId}`,
+		stripeCustomerId: `cus_${buyerId}`,
+		stripeStatus: "active",
+		cancelAtPeriodEnd: true,
+		cancelAt: renewalEnd,
+	});
+	const scheduledFromStripe = await db.query.subscriptions.findFirst({
+		where: eq(subscriptions.id, subscriptionId),
+	});
+	assert.equal(scheduledFromStripe?.cancelAtPeriodEnd, true);
+	assert.equal(
+		scheduledFromStripe?.paidThroughAt?.getTime(),
+		renewalEnd.getTime(),
+	);
+
+	await syncSubscriptionFromStripe({
+		subscriptionId,
+		stripeSubscriptionId: `sub_${creatorId}`,
+		stripeAccountId: `acct_${creatorId}`,
+		stripeCustomerId: `cus_${buyerId}`,
+		stripeStatus: "canceled",
+		cancelAtPeriodEnd: true,
+		cancelAt: renewalEnd,
+	});
+	const ended = await db.query.subscriptions.findFirst({
+		where: eq(subscriptions.id, subscriptionId),
+	});
+	assert.equal(ended?.status, "canceled");
+	assert.equal(ended?.paidThroughAt?.getTime(), renewalEnd.getTime());
+
+	const replacement = await startSubscription(
+		creator,
+		{ planId: plan.id, userId: buyerId },
+		adapter,
+	);
+	assert.notEqual(replacement.paymentId, subscriptionId);
+	assert.equal(checkoutInputs.length, 2);
+	const replacementSubscription = await db.query.subscriptions.findFirst({
+		where: eq(subscriptions.id, replacement.paymentId as string),
+	});
+	assert.ok(replacementSubscription);
+	assert.notEqual(replacementSubscription.planVersionId, ended?.planVersionId);
+	assert.equal(
+		(
+			await db.query.subscriptionInvoices.findMany({
+				where: eq(subscriptionInvoices.subscriptionId, subscriptionId),
+			})
+		).length,
+		4,
+	);
+
 	await db.delete(user).where(eq(user.id, creatorId));
 	await db.delete(user).where(eq(user.id, buyerId));
+	await db.delete(user).where(eq(user.id, strangerId));
 });

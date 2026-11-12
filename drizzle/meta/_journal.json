@@ -64,6 +64,13 @@
       "when": 1794518907231,
       "tag": "0008_s08_renewals",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794521668153,
+      "tag": "0009_s09_cancellation",
+      "breakpoints": true
     }
   ]
 }

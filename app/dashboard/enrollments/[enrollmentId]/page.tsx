@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getUserEnrollmentDetails } from "@/app/actions/dashboard";
 import { getUserTransactions } from "@/app/actions/transactions";
 import { BuyButton } from "@/components/buy-button";
+import { SubscriptionActions } from "@/components/subscription-actions";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -38,7 +39,10 @@ export default async function EnrollmentDetailPage({
 		(version) => version.status === "published",
 	);
 	const billingSubscription = enrollment.billingSubscription;
-	const terms = billingSubscription?.planVersion ?? published;
+	const terms =
+		billingSubscription?.status === "canceled"
+			? published
+			: (billingSubscription?.planVersion ?? published);
 	const recurring = terms?.billingMode === "recurring";
 	const transactionsRes = await getUserTransactions(plan.id);
 	const transactions = transactionsRes.success
@@ -66,6 +70,19 @@ export default async function EnrollmentDetailPage({
 					</div>
 				</div>
 				<div className="flex items-center gap-2">
+					{billingSubscription &&
+						(billingSubscription.status === "active" ||
+							billingSubscription.status === "past_due") && (
+							<SubscriptionActions
+								subscriptionId={billingSubscription.id}
+								cancelAtPeriodEnd={billingSubscription.cancelAtPeriodEnd}
+								effectiveAt={
+									billingSubscription.cancelAt ??
+									billingSubscription.paidThroughAt
+								}
+								paidThroughAt={billingSubscription.paidThroughAt}
+							/>
+						)}
 					{canBook &&
 						(hasCredits ? (
 							<Button size="lg" asChild>
@@ -79,18 +96,26 @@ export default async function EnrollmentDetailPage({
 							</Button>
 						))}
 					{/* Monthly plans are subscription-only in v1; no paid top-ups. */}
-					{recurring && !billingSubscription && terms && (
-						<BuyButton
-							planId={plan.id}
-							price={terms.price}
-							currency={terms.currency}
-							productName={plan.name}
-							billingMode="recurring"
-							credits={terms.credits}
-							label="Subscribe"
-							fullWidth={false}
-						/>
-					)}
+					{recurring &&
+						(!billingSubscription ||
+							billingSubscription.status === "canceled") &&
+						terms &&
+						published?.billingMode === "recurring" && (
+							<BuyButton
+								planId={plan.id}
+								price={terms.price}
+								currency={terms.currency}
+								productName={plan.name}
+								billingMode="recurring"
+								credits={terms.credits}
+								label={
+									billingSubscription?.status === "canceled"
+										? "Subscribe again"
+										: "Subscribe"
+								}
+								fullWidth={false}
+							/>
+						)}
 					{!recurring && published && (
 						<BuyButton
 							disabled={!published}
@@ -129,11 +154,15 @@ export default async function EnrollmentDetailPage({
 						</CardTitle>
 						{recurring && billingSubscription && (
 							<CardDescription>
-								{billingSubscription.overdue
-									? `Payment overdue${billingSubscription.paidThroughAt ? ` · paid through ${billingSubscription.paidThroughAt.toLocaleDateString()}` : ""}`
-									: billingSubscription.status === "active"
-										? `Subscription active${billingSubscription.paidThroughAt ? ` through ${billingSubscription.paidThroughAt.toLocaleDateString()}` : ""}`
-										: "First payment is processing"}
+								{billingSubscription.status === "canceled"
+									? `Subscription ended${billingSubscription.paidThroughAt ? ` · paid through ${billingSubscription.paidThroughAt.toLocaleDateString()}` : ""}`
+									: billingSubscription.overdue
+										? `Payment overdue${billingSubscription.paidThroughAt ? ` · paid through ${billingSubscription.paidThroughAt.toLocaleDateString()}` : ""}`
+										: billingSubscription.cancelAtPeriodEnd
+											? `Scheduled to end${(billingSubscription.cancelAt ?? billingSubscription.paidThroughAt) ? ` on ${(billingSubscription.cancelAt ?? billingSubscription.paidThroughAt)?.toLocaleDateString()}` : ""}`
+											: billingSubscription.status === "active"
+												? `Subscription active${billingSubscription.paidThroughAt ? ` through ${billingSubscription.paidThroughAt.toLocaleDateString()}` : ""}`
+												: "First payment is processing"}
 							</CardDescription>
 						)}
 					</CardHeader>

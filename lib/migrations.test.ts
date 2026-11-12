@@ -22,6 +22,7 @@ const MIGRATIONS = [
 	"drizzle/0006_s06_credit_grants.sql",
 	"drizzle/0007_s07_subscriptions.sql",
 	"drizzle/0008_s08_renewals.sql",
+	"drizzle/0009_s09_cancellation.sql",
 ];
 
 /** Create a fresh database, run `body`, then always drop it. */
@@ -497,5 +498,35 @@ test("0008 keeps overdue subscriptions unique and a service period single-grant"
 			`),
 			/duplicate key/,
 		);
+	});
+});
+
+test("0009 adds cancellation metadata without changing the paid period", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, 9));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES
+				('u1','Creator','c@example.test',true),
+				('u2','Buyer','b@example.test',true);
+			INSERT INTO plans(id,creator_id,name) VALUES ('p1','u1','Monthly');
+			INSERT INTO plan_versions(id,plan_id,creator_id,status,billing_mode,interval,currency,price,credits,version)
+			VALUES ('pv1','p1','u1','published','recurring','month','usd',2000,10,1);
+			INSERT INTO subscriptions(id,creator_id,user_id,plan_id,plan_version_id,stripe_account_id,stripe_customer_id,status,application_fee_percent,paid_through_at)
+			VALUES ('s1','u1','u2','p1','pv1','acct_test','cus_test','active',2,'2026-12-01T00:00:00Z');
+		`);
+		await apply(client, MIGRATIONS[9]);
+		const {
+			rows: [row],
+		} = await client.query(
+			"select cancel_at_period_end, cancel_at, cancellation_revision, paid_through_at from subscriptions where id = 's1'",
+		);
+		assert.deepEqual(row, {
+			cancel_at_period_end: false,
+			cancel_at: null,
+			cancellation_revision: 0,
+			paid_through_at: new Date("2026-12-01T00:00:00.000Z"),
+		});
 	});
 });

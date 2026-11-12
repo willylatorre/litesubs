@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/app/db";
 import {
@@ -81,12 +81,18 @@ export async function listCustomers(principal: Principal, input: unknown = {}) {
 					subscriptions.userId,
 					customers.map((c) => c.id),
 				),
-				inArray(subscriptions.status, [
-					"pending",
-					"incomplete",
-					"active",
-					"past_due",
-				]),
+				or(
+					inArray(subscriptions.status, [
+						"pending",
+						"incomplete",
+						"active",
+						"past_due",
+					]),
+					and(
+						eq(subscriptions.status, "canceled"),
+						isNotNull(subscriptions.stripeSubscriptionId),
+					),
+				),
 			),
 			orderBy: [desc(subscriptions.createdAt)],
 			columns: {
@@ -95,6 +101,7 @@ export async function listCustomers(principal: Principal, input: unknown = {}) {
 				status: true,
 				paidThroughAt: true,
 				cancelAtPeriodEnd: true,
+				cancelAt: true,
 			},
 		}),
 	]);
@@ -165,12 +172,18 @@ export async function getCustomer(principal: Principal, identifier: string) {
 			where: and(
 				eq(subscriptions.creatorId, principal.creatorId),
 				eq(subscriptions.userId, customer.id),
-				inArray(subscriptions.status, [
-					"pending",
-					"incomplete",
-					"active",
-					"past_due",
-				]),
+				or(
+					inArray(subscriptions.status, [
+						"pending",
+						"incomplete",
+						"active",
+						"past_due",
+					]),
+					and(
+						eq(subscriptions.status, "canceled"),
+						isNotNull(subscriptions.stripeSubscriptionId),
+					),
+				),
 			),
 			orderBy: [desc(subscriptions.createdAt)],
 			columns: {
@@ -178,6 +191,7 @@ export async function getCustomer(principal: Principal, identifier: string) {
 				status: true,
 				paidThroughAt: true,
 				cancelAtPeriodEnd: true,
+				cancelAt: true,
 			},
 		}),
 	]);

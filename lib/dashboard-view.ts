@@ -14,9 +14,11 @@ export type EnrollmentView = {
 	id: string;
 	credits: number;
 	subscription: {
+		id: string;
 		status: "pending" | "incomplete" | "active" | "past_due" | "canceled";
 		paidThroughAt: Date | null;
 		cancelAtPeriodEnd: boolean;
+		cancelAt: Date | null;
 		overdue: boolean;
 		terms: PlanTermsView;
 	} | null;
@@ -96,9 +98,11 @@ export function toDashboardView(raw: {
 	}[];
 	subscriptions: {
 		planId: string;
+		id: string;
 		status: "pending" | "incomplete" | "active" | "past_due" | "canceled";
 		paidThroughAt: Date | null;
 		cancelAtPeriodEnd: boolean;
+		cancelAt: Date | null;
 		overdue: boolean;
 		planVersion: PlanTermsView;
 	}[];
@@ -117,9 +121,11 @@ export function toDashboardView(raw: {
 				);
 				return subscription
 					? {
+							id: subscription.id,
 							status: subscription.status,
 							paidThroughAt: subscription.paidThroughAt,
 							cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+							cancelAt: subscription.cancelAt,
 							overdue: subscription.overdue,
 							terms: subscription.planVersion,
 						}
