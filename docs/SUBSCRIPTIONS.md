@@ -12,6 +12,12 @@ Implemented slices:
   platform payout/earnings system removed. See
   `drizzle/0002_connected_accounts.sql`. The sandbox journey and Stripe
   configuration check remain for the operator (this slice is HITL).
+- S03 — existing-account connection through Connect OAuth with single-use state,
+  user-bound callbacks, an account-switch guard, and a responsibility
+  compatibility check that refuses rather than silently changing an account. See
+  `drizzle/0003_connect_oauth.sql`. Verified reading of the Stripe Connect docs
+  also corrected the checkout implementation: it had been using destination
+  charges (`transfer_data`), which is now fixed to true direct charges.
 
 ## Purpose
 
@@ -25,7 +31,14 @@ Do not build a competing billing engine or a configurable policy framework in v1
 
 ## Agreed defaults
 
-- Direct charges for both one-time packs and subscriptions; no platform-charge fallback.
+- Direct charges for both one-time packs and subscriptions; no platform-charge
+  fallback. A direct charge means the Checkout Session is created **as** the
+  connected account (`Stripe-Account` request option) with only an application fee
+  attached. Adding `transfer_data` would silently make it a destination charge,
+  moving the charge, Stripe fees, refunds, and chargebacks onto the platform, so
+  the direct-charge adapter is the single place that creates these sessions.
+- The `card_payments` capability is what direct charges require; the aggregate
+  `charges_enabled` flag alone is not sufficient readiness.
 - Full Stripe Dashboard for creators, with summaries and a Dashboard link in Litesubs.
 - Stripe bills creators for processing fees and manages connected-account negative
   balance liability under the selected account configuration. Direct charges alone
@@ -160,7 +173,7 @@ billing and payment operations; do not rebuild them in Litesubs.
 
 ## Draft issue breakdown
 
-These are local issue drafts, not published tracker tickets. `S01`–`S14` are stable
+These are local issue drafts, not published tracker tickets. `S01`–`S15` are stable
 plan references; replace dependencies with real issue identifiers only after the
 breakdown is approved and tracker issues are created. Apply `needs-triage` when
 publishing. No parent tracker issue was supplied.
@@ -187,7 +200,8 @@ round of product-policy design.
 | S11 | Invite customers and grant complimentary credits | AFK | S01, S06, S08 | Creator invites customers or grants credits with explicit expiry. |
 | S12 | Reflect refunds and revoke only their unused credits | AFK | S06, S08 | Creator refunds a sale without removing unrelated credits. |
 | S13 | Show creator sales and customer credit history accurately | AFK | S05, S08, S12 | Both parties can distinguish payments, subscription state, and usable credits. |
-| S14 | Verify and launch the clean creator-owned payment flow | HITL | S03, S09, S10, S11, S13 | A new creator and customer complete the supported journeys in the configured environment. |
+| S15 | Handle disconnection while subscriptions are live | AFK | S08, S09 | Creator disconnecting Stripe never leaves customers billed for credits nobody can fulfill. |
+| S14 | Verify and launch the clean creator-owned payment flow | HITL | S03, S09, S10, S11, S13, S15 | A new creator and customer complete the supported journeys in the configured environment. |
 
 S01 and S02 can start independently. S03 can proceed alongside S04–S08 after
 S02. S09, S10, S11, and S12 can proceed independently once their own blockers land.
@@ -731,6 +745,11 @@ session on the owning creator account for the matching mapped Customer. Keep
 Cancel / Resume in Litesubs and do not offer a platform-wide portal pretending
 all creator subscriptions belong to one Stripe Customer.
 
+Per Stripe's Connect guidance, portal **configuration** is created for the
+platform and referenced by the session; the session itself is created against the
+connected account's Customer. Verify this combination in a sandbox before relying
+on per-account portal settings.
+
 #### Acceptance criteria
 
 - [ ] The portal session is created on the stored owning account for the authenticated
@@ -739,8 +758,10 @@ all creator subscriptions belong to one Stripe Customer.
       management/payment flows. Billing data from another creator is never exposed.
 - [ ] Portal configuration disables plan switching and other unsupported term
       changes so it cannot bypass published versions and credit entitlement rules.
-- [ ] Portal configuration is provisioned/reused idempotently where supported; do
-      not assume a platform portal configuration is usable on every account.
+- [ ] The portal configuration is created through the API for the platform and
+      referenced explicitly by each session, because Stripe documents that portal
+      configuration is not configured per connected account. Provisioning is
+      idempotent and does not assume a Dashboard-created configuration applies.
 - [ ] The return URL is trusted and points back to the appropriate Litesubs view.
       Missing mappings/unavailable accounts produce actionable errors.
 - [ ] UI distinguishes the customer billing portal from the creator's full Dashboard;
@@ -758,6 +779,9 @@ global platform Customer.
 
 Subscribe to two different creators and open each portal. Confirm account/customer
 isolation, card replacement, invoice access, disabled plan switching, and safe return.
+Record which portal features the platform configuration actually exposes for a
+connected-account Customer; any unsupported feature is a documented limitation
+rather than a silent gap.
 
 #### Blocked by
 
@@ -925,6 +949,63 @@ stored receipts/ledger and demonstrate tenant/customer isolation plus sample mod
 - S05 — Buy a one-time pack through direct-charge Checkout.
 - S08 — Renew monthly allowances and enforce unpaid-period expiry.
 - S12 — Reflect refunds and revoke only their unused credits.
+
+### S15 — Handle disconnection while subscriptions are live
+
+**Type:** AFK
+
+**User story:** As a customer, I am never billed by a creator whose Stripe account
+can no longer serve me, and I can see what happens to my remaining credits.
+
+#### What to build
+
+Make disconnection subscription-aware. Stripe does not cancel subscriptions when a
+platform disconnects, so Litesubs must decide and enforce what happens to live
+subscriptions on that account instead of silently keeping them billing.
+
+#### Acceptance criteria
+
+- [ ] Disconnect enumerates the creator's **live** subscriptions from Litesubs'
+      own records (not by scanning Stripe) and refuses to complete silently while
+      any remain unhandled.
+- [ ] The creator is told exactly how many subscriptions are live and given a
+      supported choice: cancel them at period end, or keep the connection until
+      they end.
+- [ ] Cancellation performed for this reason sets `cancel_at_period_end` on the
+      owning account and is recorded with its cause, so it is never confused with a
+      customer-initiated cancellation in S09.
+- [ ] Access and already-granted credits still run to the end of each paid period;
+      disconnect never revokes a paid period early or refunds it implicitly.
+- [ ] No further allowance is granted after the final paid period, and a renewal
+      that Stripe still collects (because cancellation failed) does not silently
+      grant credits.
+- [ ] A deauthorization webhook from the creator's Dashboard triggers the same
+      handling, and a failure to reach Stripe leaves a visible, retryable state
+      rather than a false "disconnected" success.
+- [ ] Customers see an honest status on their subscription instead of a renewal
+      date that will not be honoured.
+- [ ] One-time-pack purchases are unaffected: they need no cancellation, and their
+      remaining credits keep their existing expiry rules.
+
+#### Implementation notes and relevant files
+
+Extend the connected-account service and disconnect action, the subscription
+service, the Payments screen, and the deauthorization webhook. Do not build a
+scheduler: cancellation is requested at Stripe and mirrored from authoritative
+responses/events. Reuse S09's cancel/resume path rather than a second mutation
+path, and keep account-owned records bound to their original account identity.
+
+#### Verification / demo
+
+Subscribe, then disconnect with one live subscription. Show the refusal or the
+explicit cancellation choice, the period-end cancellation, remaining credits usable
+until that date, no post-period allowance, and a clean state after the webhook.
+Repeat with the creator cancelling from their own Dashboard.
+
+#### Blocked by
+
+- S08 — Renew monthly allowances and enforce unpaid-period expiry.
+- S09 — Cancel and resume a subscription at period end.
 
 ### S14 — Verify and launch the clean creator-owned payment flow
 

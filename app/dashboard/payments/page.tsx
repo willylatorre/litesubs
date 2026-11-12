@@ -32,7 +32,12 @@ export default async function PaymentsPage({
 				</p>
 			</div>
 			{readiness ? (
-				<PaymentsSetup readiness={readiness} />
+				<PaymentsSetup
+					readiness={readiness}
+					connectResult={
+						typeof sp.connect === "string" ? sp.connect : undefined
+					}
+				/>
 			) : (
 				<p className="text-sm text-destructive">
 					{statusRes.error ?? "Could not load your payment status."}

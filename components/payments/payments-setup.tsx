@@ -2,6 +2,7 @@
 
 import {
 	IconAlertCircle,
+	IconBuilding,
 	IconCheck,
 	IconClock,
 	IconExternalLink,
@@ -26,7 +27,10 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import type { PaymentReadiness } from "@/lib/services/connect";
+import {
+	COMPATIBILITY_MESSAGES,
+	type PaymentReadiness,
+} from "@/lib/connect-copy";
 
 const statusCopy: Record<
 	PaymentReadiness["status"],
@@ -50,7 +54,24 @@ function Check({ ok }: { ok: boolean }) {
 	);
 }
 
-export function PaymentsSetup({ readiness }: { readiness: PaymentReadiness }) {
+const connectResults: Record<string, string> = {
+	complete: "Stripe account connected.",
+	denied: "You cancelled the Stripe authorization. Nothing was connected.",
+	invalid: "That connection request expired or was already used. Start again.",
+	incompatible:
+		"Stripe connected, but this account's responsibilities do not match creator-owned payments. Nothing was changed. See the details below.",
+	switch_unsupported:
+		"Switching to a different Stripe account is not supported while you already have customers on one. Contact support.",
+	failed: "Stripe could not complete the connection. Nothing was changed.",
+};
+
+export function PaymentsSetup({
+	readiness,
+	connectResult,
+}: {
+	readiness: PaymentReadiness;
+	connectResult?: string;
+}) {
 	const router = useRouter();
 	const [pending, startTransition] = useTransition();
 	const status = statusCopy[readiness.status];
@@ -96,8 +117,30 @@ export function PaymentsSetup({ readiness }: { readiness: PaymentReadiness }) {
 		readiness.status === "restricted" ||
 		readiness.status === "pending";
 
+	const resultMessage = connectResult
+		? connectResults[connectResult]
+		: undefined;
+	const resultIsFailure =
+		connectResult !== undefined && connectResult !== "complete";
+
 	return (
 		<div className="grid gap-4 lg:grid-cols-3">
+			{resultMessage && (
+				<div
+					className={`lg:col-span-3 flex items-start gap-2 rounded-md border p-3 text-sm ${
+						resultIsFailure
+							? "border-destructive/30 bg-destructive/5"
+							: "border-border bg-muted/40"
+					}`}
+				>
+					{resultIsFailure ? (
+						<IconAlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+					) : (
+						<IconCheck className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+					)}
+					<p>{resultMessage}</p>
+				</div>
+			)}
 			<Card className="lg:col-span-2">
 				<CardHeader>
 					<div className="flex items-start justify-between gap-3">
@@ -175,6 +218,26 @@ export function PaymentsSetup({ readiness }: { readiness: PaymentReadiness }) {
 						</div>
 					)}
 
+					{readiness.hasAccount && !readiness.compatible && (
+						<div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+							<IconAlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+							<div className="space-y-1">
+								<p className="font-medium">
+									This account is not configured for creator-owned payments
+								</p>
+								<ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+									{readiness.compatibilityIssues.map((issue) => (
+										<li key={issue}>{COMPATIBILITY_MESSAGES[issue]}</li>
+									))}
+								</ul>
+								<p className="text-xs text-muted-foreground">
+									Litesubs will not change these settings for you, and will not
+									sell on an account with a different agreement.
+								</p>
+							</div>
+						</div>
+					)}
+
 					<div className="flex flex-wrap gap-2">
 						{needsOnboarding && (
 							<Button onClick={onboarding} disabled={pending}>
@@ -191,6 +254,14 @@ export function PaymentsSetup({ readiness }: { readiness: PaymentReadiness }) {
 								>
 									Open Stripe Dashboard
 									<IconExternalLink className="ml-2 h-4 w-4" />
+								</a>
+							</Button>
+						)}
+						{!readiness.hasAccount && readiness.existingAccountAvailable && (
+							<Button asChild variant="outline">
+								<a href="/api/connect/oauth/start">
+									<IconBuilding className="mr-2 h-4 w-4" />
+									Connect an existing Stripe account
 								</a>
 							</Button>
 						)}

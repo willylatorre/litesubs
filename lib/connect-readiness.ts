@@ -26,6 +26,12 @@ type AccountLike = {
 	charges_enabled: boolean;
 	payouts_enabled: boolean;
 	details_submitted: boolean;
+	/**
+	 * Per-capability state. `charges_enabled` is an aggregate flag; a direct
+	 * charge specifically needs `card_payments` active (Stripe only activates it
+	 * when `transfers` was requested too).
+	 */
+	capabilities?: { card_payments?: string | null } | null;
 	requirements?: {
 		currently_due?: string[] | null;
 		disabled_reason?: string | null;
@@ -36,7 +42,14 @@ export function deriveReadiness(account: AccountLike): AccountReadiness {
 	const requirements = account.requirements ?? undefined;
 	const requirementsDue = requirements?.currently_due ?? [];
 	const disabledReason = requirements?.disabled_reason ?? null;
-	const chargesEnabled = Boolean(account.charges_enabled);
+	// A direct charge needs the card_payments capability specifically. Prefer it
+	// when Stripe reports capabilities; fall back to the aggregate flag only for
+	// snapshots that omit the capability map.
+	const cardPaymentsActive =
+		account.capabilities?.card_payments === undefined
+			? Boolean(account.charges_enabled)
+			: account.capabilities.card_payments === "active";
+	const chargesEnabled = Boolean(account.charges_enabled) && cardPaymentsActive;
 	const payoutsEnabled = Boolean(account.payouts_enabled);
 	const detailsSubmitted = Boolean(account.details_submitted);
 

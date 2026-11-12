@@ -16,6 +16,7 @@ const MIGRATIONS = [
 	"drizzle/0000_init.sql",
 	"drizzle/0001_plans_enrollments.sql",
 	"drizzle/0002_connected_accounts.sql",
+	"drizzle/0003_connect_oauth.sql",
 ];
 
 /** Create a fresh database, run `body`, then always drop it. */
@@ -192,5 +193,46 @@ test("0002 carries connected accounts over and retires platform payouts", {
 			"select typname from pg_type where typname in ('payout_status','earnings_transaction_type','payout_method','payout_verification_status','stripe_connect_status')",
 		);
 		assert.deepEqual(enums, []);
+	});
+});
+
+/**
+ * S03 adds OAuth state and the flags that distinguish an authorized account
+ * from a created one. Existing rows must never look OAuth-authorized, because
+ * only an OAuth connection may be deauthorized at Stripe.
+ */
+test("0003 adds OAuth state without marking existing accounts as authorized", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, MIGRATIONS[0], MIGRATIONS[1], MIGRATIONS[2]);
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES ('u1','Creator','c@example.test',true);
+			INSERT INTO connected_accounts(id,user_id,stripe_account_id,onboarding_mode,status,charges_enabled)
+			VALUES ('ca1','u1','acct_created','created','active',true);
+		`);
+		await apply(client, MIGRATIONS[3]);
+
+		const { rows } = await client.query(
+			"select stripe_account_id, authorized_via_oauth, livemode from connected_accounts",
+		);
+		assert.deepEqual(rows, [
+			{
+				stripe_account_id: "acct_created",
+				authorized_via_oauth: false,
+				livemode: null,
+			},
+		]);
+
+		// State is unique so a replayed callback cannot be stored twice.
+		await client.query(
+			"insert into connect_oauth_states(id,state_hash,user_id,expires_at) values ('s1','h1','u1', now() + interval '10 minutes')",
+		);
+		await assert.rejects(
+			client.query(
+				"insert into connect_oauth_states(id,state_hash,user_id,expires_at) values ('s2','h1','u1', now() + interval '10 minutes')",
+			),
+			/duplicate key/,
+		);
 	});
 });

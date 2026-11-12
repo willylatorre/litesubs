@@ -10,7 +10,10 @@ import { auth } from "@/lib/auth";
 import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
 import { getPaymentReadiness } from "@/lib/services/connect";
 import { resolvePublishedPlan } from "@/lib/services/plans";
-import { getStripe } from "@/lib/stripe";
+import {
+	createDirectCheckoutSession,
+	isValidApplicationFee,
+} from "@/lib/stripe-direct-charges";
 
 /**
  * Start a direct-charge Checkout for a published plan on the creator's own
@@ -34,28 +37,23 @@ export async function createCheckoutSession(planId: string) {
 		return { error: "This creator cannot accept payments yet" };
 
 	const fee = Math.round(published.price * PLATFORM_FEE_PERCENT);
-	let checkoutSession: Awaited<
-		ReturnType<ReturnType<typeof getStripe>["checkout"]["sessions"]["create"]>
-	>;
+	if (!isValidApplicationFee(fee, published.price))
+		return { error: "This plan's fee cannot be collected on Stripe" };
+
+	let checkoutSession: Awaited<ReturnType<typeof createDirectCheckoutSession>>;
 	try {
-		checkoutSession = await getStripe().checkout.sessions.create({
-			mode: "payment",
-			line_items: [
-				{
-					price_data: {
-						currency: published.currency,
-						product_data: {
-							name: plan.name,
-							description: plan.description || undefined,
-						},
-						unit_amount: published.price,
-					},
-					quantity: 1,
-				},
-			],
-			customer_email: session.user.email,
-			success_url: `${getAppUrl()}/dashboard?success=true&planId=${plan.id}`,
-			cancel_url: `${getAppUrl()}/dashboard?canceled=true`,
+		checkoutSession = await createDirectCheckoutSession({
+			stripeAccountId: readiness.stripeAccountId,
+			lineItem: {
+				name: plan.name,
+				description: plan.description,
+				unitAmount: published.price,
+				currency: published.currency,
+			},
+			applicationFeeAmount: fee,
+			customerEmail: session.user.email,
+			successUrl: `${getAppUrl()}/dashboard?success=true&planId=${plan.id}`,
+			cancelUrl: `${getAppUrl()}/dashboard?canceled=true`,
 			metadata: {
 				userId: session.user.id,
 				planId: plan.id,
@@ -63,10 +61,6 @@ export async function createCheckoutSession(planId: string) {
 				creatorId: plan.creatorId,
 				credits: String(published.credits),
 				type: "credit_purchase",
-			},
-			payment_intent_data: {
-				application_fee_amount: fee,
-				transfer_data: { destination: readiness.stripeAccountId },
 			},
 		});
 	} catch {
@@ -107,36 +101,31 @@ export async function createCustomerCheckout(
 		};
 	}
 	const fee = Math.round(resolved.terms.price * PLATFORM_FEE_PERCENT);
+	if (!isValidApplicationFee(fee, resolved.terms.price))
+		return {
+			success: false,
+			error: "This plan's fee cannot be collected on Stripe",
+		};
 
 	try {
-		const checkout = await getStripe().checkout.sessions.create({
-			mode: "payment",
-			line_items: [
-				{
-					price_data: {
-						currency: resolved.terms.currency,
-						product_data: {
-							name: plan.name,
-							description: plan.description || undefined,
-						},
-						unit_amount: resolved.terms.price,
-					},
-					quantity: 1,
-				},
-			],
-			customer_email: customerEmail,
-			success_url: `${getAppUrl()}/dashboard?success=true&planId=${plan.id}`,
-			cancel_url: `${getAppUrl()}/dashboard?canceled=true`,
+		const checkout = await createDirectCheckoutSession({
+			stripeAccountId: readiness.stripeAccountId,
+			lineItem: {
+				name: plan.name,
+				description: plan.description,
+				unitAmount: resolved.terms.price,
+				currency: resolved.terms.currency,
+			},
+			applicationFeeAmount: fee,
+			customerEmail,
+			successUrl: `${getAppUrl()}/dashboard?success=true&planId=${plan.id}`,
+			cancelUrl: `${getAppUrl()}/dashboard?canceled=true`,
 			metadata: {
 				planId: plan.id,
 				planVersionId: resolved.terms.id,
 				creatorId: plan.creatorId,
 				credits: String(resolved.terms.credits),
 				type: "credit_purchase",
-			},
-			payment_intent_data: {
-				application_fee_amount: fee,
-				transfer_data: { destination: readiness.stripeAccountId },
 			},
 		});
 		return { success: true, url: checkout.url };

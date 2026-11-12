@@ -10,6 +10,7 @@ import {
 } from "@/app/db/schema";
 import { connectedAccounts } from "@/app/db/stripe-connect-schema";
 import { deriveReadiness } from "@/lib/connect-readiness";
+import { markAccountDeauthorized } from "@/lib/services/connect";
 import { getStripe } from "@/lib/stripe";
 
 /**
@@ -20,6 +21,7 @@ import { getStripe } from "@/lib/stripe";
 async function handleCheckoutCompleted(
 	checkoutSession: Stripe.Checkout.Session,
 	eventId: string,
+	eventAccountId?: string,
 ): Promise<Response> {
 	const metadata = checkoutSession.metadata;
 	if (!metadata?.planId || !metadata?.creatorId) {
@@ -74,9 +76,25 @@ async function handleCheckoutCompleted(
 			return new Response("Unknown plan version", { status: 400 });
 		}
 		const creditsToAdd = version.credits;
-		// The owning account is recorded at checkout creation; the session's own
-		// metadata is correlation data, never the authority for granting credits.
-		const accountId = metadata.stripeConnectAccountId || undefined;
+		// For a direct charge the event itself is scoped to the connected account,
+		// so `event.account` is authoritative. Metadata is correlation data and
+		// must not be able to point the receipt at a different account.
+		const accountId = eventAccountId ?? metadata.stripeConnectAccountId ?? null;
+		if (eventAccountId) {
+			const owner = await db.query.connectedAccounts.findFirst({
+				where: eq(connectedAccounts.stripeAccountId, eventAccountId),
+			});
+			// A direct-charge event from an account we do not have mapped to this
+			// creator is not ours to fulfil.
+			if (!owner || owner.userId !== plan.creatorId) {
+				console.error("Direct charge came from an unmapped account", {
+					eventId,
+					eventAccountId,
+					creatorId: plan.creatorId,
+				});
+				return new Response("Account mismatch", { status: 400 });
+			}
+		}
 		const applicationFee = metadata.applicationFeeAmount
 			? Number.parseInt(metadata.applicationFeeAmount, 10)
 			: null;
@@ -183,6 +201,7 @@ async function handleAccountUpdated(
 				status: readiness.status,
 				chargesEnabled: readiness.chargesEnabled,
 				payoutsEnabled: readiness.payoutsEnabled,
+				cardPaymentsStatus: account.capabilities?.card_payments ?? null,
 				detailsSubmitted: readiness.detailsSubmitted,
 				country: account.country,
 				defaultCurrency: account.default_currency,
@@ -200,6 +219,43 @@ async function handleAccountUpdated(
 		return new Response(null, { status: 200 });
 	} catch (error) {
 		console.error("Failed to process account.updated", {
+			eventId,
+			type: error instanceof Error ? error.name : "UnknownError",
+		});
+		return new Response("Webhook Error", { status: 500 });
+	}
+}
+
+/**
+ * A creator revoked Litesubs' access from their Stripe Dashboard. New sales
+ * must stop immediately, and their account identity must survive on every
+ * historical record (which is why only the connection row is updated).
+ *
+ * The event's object is an `application`, not an account, so the account comes
+ * from the event's top-level `account` field.
+ */
+async function handleApplicationDeauthorized(
+	event: Stripe.Event,
+	eventId: string,
+): Promise<Response> {
+	// `data.object` is the platform *application*, not the account. Stripe puts
+	// the deauthorized account on the event's top-level `account` field, so
+	// reading the object would silently miss every real event.
+	const target = event.account?.startsWith("acct_") ? event.account : undefined;
+	if (!target) {
+		console.error("Deauthorization event without an account id", { eventId });
+		return new Response(null, { status: 200 });
+	}
+	try {
+		const result = await markAccountDeauthorized(target);
+		console.log("Connected account deauthorized", {
+			eventId,
+			accountId: target,
+			handled: result.handled,
+		});
+		return new Response(null, { status: 200 });
+	} catch (error) {
+		console.error("Failed to process deauthorization", {
 			eventId,
 			type: error instanceof Error ? error.name : "UnknownError",
 		});
@@ -232,16 +288,20 @@ export async function POST(req: Request) {
 			return handleCheckoutCompleted(
 				object as Stripe.Checkout.Session,
 				eventId,
+				event.account ?? undefined,
 			);
 		case "checkout.session.async_payment_succeeded":
 			return handleCheckoutCompleted(
 				object as Stripe.Checkout.Session,
 				eventId,
+				event.account ?? undefined,
 			);
 		case "checkout.session.expired":
 			return handleCheckoutExpired(object as Stripe.Checkout.Session, eventId);
 		case "account.updated":
 			return handleAccountUpdated(object as Stripe.Account, eventId);
+		case "account.application.deauthorized":
+			return handleApplicationDeauthorized(event, eventId);
 		default:
 			return new Response(null, { status: 200 });
 	}

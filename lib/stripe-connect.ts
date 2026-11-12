@@ -29,7 +29,10 @@ export class StripeAccountError extends Error {
 		public code:
 			| "STRIPE_UNAVAILABLE"
 			| "STRIPE_REJECTED"
-			| "ACCOUNT_UNAVAILABLE",
+			| "ACCOUNT_UNAVAILABLE"
+			| "OAUTH_UNCONFIGURED"
+			| "OAUTH_REJECTED"
+			| "OAUTH_DENIED",
 		message: string,
 		public readonly status?: number,
 	) {
@@ -139,4 +142,98 @@ export async function createOnboardingLink(
  */
 export function dashboardUrl(stripeAccountId: string) {
 	return `https://dashboard.stripe.com/${stripeAccountId}`;
+}
+
+// Connect OAuth for accounts that already exist
+
+/**
+ * Connect OAuth is a different mechanism from account creation: it grants a
+ * platform access to an account the creator already operates. It is the only
+ * supported way to attach an existing business without creating a second one.
+ */
+export function oauthClientId() {
+	const clientId = process.env.STRIPE_CONNECT_CLIENT_ID?.trim();
+	if (!clientId)
+		throw new StripeAccountError(
+			"OAUTH_UNCONFIGURED",
+			"Existing-account connection is not configured",
+		);
+	return clientId;
+}
+
+export function isOauthConfigured() {
+	return Boolean(process.env.STRIPE_CONNECT_CLIENT_ID?.trim());
+}
+
+/**
+ * Build the Stripe-hosted authorization URL.
+ *
+ * `scope=read_write` is required for platforms; `state` is our single-use CSRF
+ * token. `redirect_uri` must exactly match one configured on the platform.
+ */
+export function authorizeUrl(input: { state: string; redirectUri: string }) {
+	const params = new URLSearchParams({
+		response_type: "code",
+		client_id: oauthClientId(),
+		scope: "read_write",
+		redirect_uri: input.redirectUri,
+		state: input.state,
+	});
+	return `https://connect.stripe.com/oauth/authorize?${params.toString()}`;
+}
+
+/**
+ * Exchange a one-time authorization code for the connected account id.
+ *
+ * The endpoint is deliberately not retried: consuming a code twice revokes the
+ * connection, so a retry would break a statement that already succeeded.
+ */
+export async function exchangeAuthorizationCode(code: string) {
+	const client = stripe();
+	try {
+		return await client.oauth.token({
+			grant_type: "authorization_code",
+			code,
+		});
+	} catch (error) {
+		throw translateOauth(error);
+	}
+}
+
+/**
+ * Revoke Litesubs' access through Stripe. Only an OAuth-authorized account can
+ * be deauthorized; a self-created account is disconnected locally instead.
+ */
+export async function deauthorizeAccount(stripeAccountId: string) {
+	const client = stripe();
+	try {
+		return await client.oauth.deauthorize({
+			client_id: oauthClientId(),
+			stripe_user_id: stripeAccountId,
+		});
+	} catch (error) {
+		throw translateOauth(error);
+	}
+}
+
+function translateOauth(error: unknown): StripeAccountError {
+	if (error instanceof StripeAccountError) return error;
+	if (typeof error === "object" && error !== null) {
+		const { code, type } = error as { code?: string; type?: string };
+		// `invalid_grant` means a used/expired code or wrong API-key mode.
+		if (code === "invalid_grant" || type === "StripeInvalidRequestError")
+			return new StripeAccountError(
+				"OAUTH_REJECTED",
+				"This authorization is no longer valid. Start the connection again.",
+			);
+		if (code === "access_denied")
+			return new StripeAccountError(
+				"OAUTH_DENIED",
+				"Stripe authorization was cancelled",
+			);
+	}
+	return new StripeAccountError(
+		"STRIPE_UNAVAILABLE",
+		"Stripe is temporarily unavailable",
+	);
 }

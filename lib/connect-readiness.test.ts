@@ -66,6 +66,33 @@ describe("deriveReadiness", () => {
 		assert.equal(readiness.status, "restricted");
 	});
 
+	it("requires the card_payments capability for direct charges", () => {
+		// The aggregate flag can be true while the capability needed for a
+		// direct charge is still pending or restricted.
+		const readiness = deriveReadiness(
+			account({
+				charges_enabled: true,
+				payouts_enabled: true,
+				details_submitted: true,
+				capabilities: { card_payments: "pending" },
+			}),
+		);
+		assert.equal(readiness.chargesEnabled, false);
+		assert.equal(readiness.canSell, false);
+	});
+
+	it("accepts an active card_payments capability", () => {
+		const readiness = deriveReadiness(
+			account({
+				charges_enabled: true,
+				payouts_enabled: true,
+				details_submitted: true,
+				capabilities: { card_payments: "active" },
+			}),
+		);
+		assert.equal(readiness.canSell, true);
+	});
+
 	it("surfaces requirement fields so the creator can fix them", () => {
 		const readiness = deriveReadiness(
 			account({

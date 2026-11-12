@@ -4,7 +4,10 @@ import { db } from "@/app/db";
 import { enrollments, invites, transactions, user } from "@/app/db/schema";
 import { appUrl } from "@/lib/app-url";
 import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
-import { getStripe } from "@/lib/stripe";
+import {
+	createDirectCheckoutSession,
+	isValidApplicationFee,
+} from "@/lib/stripe-direct-charges";
 import { getPaymentReadiness } from "./connect";
 import { resolveCustomer } from "./customers";
 import { pageInput, resolvePublishedPlan } from "./plans";
@@ -186,22 +189,24 @@ export async function checkoutUrl(
 		);
 	const stripeAccountId = readiness.stripeAccountId;
 	const fee = Math.round(terms.price * PLATFORM_FEE_PERCENT);
-	const session = await getStripe().checkout.sessions.create({
-		mode: "payment",
-		integration_identifier: `litesubs_mcp_${Array.from(crypto.getRandomValues(new Uint8Array(8)), (n) => String.fromCharCode(97 + (n % 26))).join("")}`,
-		line_items: [
-			{
-				price_data: {
-					currency: terms.currency,
-					product_data: { name: plan.name },
-					unit_amount: terms.price,
-				},
-				quantity: 1,
-			},
-		],
-		customer_email: customer.email,
-		success_url: appUrl(`/dashboard?success=true&planId=${plan.id}`),
-		cancel_url: appUrl("/dashboard?canceled=true"),
+	if (!isValidApplicationFee(fee, terms.price))
+		throw new ServiceError(
+			"CHECKOUT_UNAVAILABLE",
+			"This plan's fee cannot be collected on Stripe",
+			409,
+		);
+	// Single-use, customer-specific checkout on the creator's own account.
+	const session = await createDirectCheckoutSession({
+		stripeAccountId,
+		lineItem: {
+			name: plan.name,
+			unitAmount: terms.price,
+			currency: terms.currency,
+		},
+		applicationFeeAmount: fee,
+		customerEmail: customer.email,
+		successUrl: appUrl(`/dashboard?success=true&planId=${plan.id}`),
+		cancelUrl: appUrl("/dashboard?canceled=true"),
 		metadata: {
 			userId: customerId,
 			planId: plan.id,
@@ -209,13 +214,8 @@ export async function checkoutUrl(
 			creatorId: principal.creatorId,
 			credits: String(terms.credits),
 			type: "credit_purchase",
-			usesStripeConnect: "true",
 			stripeConnectAccountId: stripeAccountId,
 			applicationFeeAmount: String(fee),
-		},
-		payment_intent_data: {
-			application_fee_amount: fee,
-			transfer_data: { destination: stripeAccountId },
 		},
 	});
 	if (!session.url)

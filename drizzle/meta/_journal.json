@@ -22,6 +22,13 @@
       "when": 1794440000000,
       "tag": "0002_connected_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794444000000,
+      "tag": "0003_connect_oauth",
+      "breakpoints": true
     }
   ]
 }
