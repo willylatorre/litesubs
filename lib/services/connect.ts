@@ -77,6 +77,13 @@ type ControllerLike = {
 	} | null;
 };
 
+function configuredStripeLivemode(): boolean | null {
+	const key = process.env.STRIPE_SECRET_KEY;
+	if (key?.startsWith("sk_test_") || key?.startsWith("rk_test_")) return false;
+	if (key?.startsWith("sk_live_") || key?.startsWith("rk_live_")) return true;
+	return null;
+}
+
 export function checkCompatibility(account: ControllerLike): Compatibility {
 	const controller = account.controller;
 	const configuration = {
@@ -218,6 +225,7 @@ async function persistAccountSnapshot(
 			userId: (account.metadata?.litesubsUserId as string) || "",
 			stripeAccountId: account.id,
 			onboardingMode: mode,
+			livemode: configuredStripeLivemode(),
 			status: readiness.status,
 			controllerType: controller?.type ?? null,
 			dashboardType: controller?.stripe_dashboard?.type ?? null,
@@ -310,6 +318,7 @@ export async function syncConnectedAccount(
 		.update(connectedAccounts)
 		.set({
 			status: readiness.status,
+			livemode: existing.livemode ?? configuredStripeLivemode(),
 			controllerType: controller?.type ?? existing.controllerType,
 			dashboardType:
 				controller?.stripe_dashboard?.type ?? existing.dashboardType,

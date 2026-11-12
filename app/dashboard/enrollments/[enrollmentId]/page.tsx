@@ -37,7 +37,9 @@ export default async function EnrollmentDetailPage({
 	const published = plan.versions.find(
 		(version) => version.status === "published",
 	);
-	const recurring = published?.billingMode === "recurring";
+	const billingSubscription = enrollment.billingSubscription;
+	const terms = billingSubscription?.planVersion ?? published;
+	const recurring = terms?.billingMode === "recurring";
 	const transactionsRes = await getUserTransactions(plan.id);
 	const transactions = transactionsRes.success
 		? (transactionsRes.data ?? [])
@@ -77,6 +79,18 @@ export default async function EnrollmentDetailPage({
 							</Button>
 						))}
 					{/* Monthly plans are subscription-only in v1; no paid top-ups. */}
+					{recurring && !billingSubscription && terms && (
+						<BuyButton
+							planId={plan.id}
+							price={terms.price}
+							currency={terms.currency}
+							productName={plan.name}
+							billingMode="recurring"
+							credits={terms.credits}
+							label="Subscribe"
+							fullWidth={false}
+						/>
+					)}
 					{!recurring && published && (
 						<BuyButton
 							disabled={!published}
@@ -104,15 +118,24 @@ export default async function EnrollmentDetailPage({
 					<CardHeader>
 						<CardDescription>Plan</CardDescription>
 						<CardTitle className="text-lg">
-							{published
+							{terms
 								? `${new Intl.NumberFormat("en-US", {
 										style: "currency",
-										currency: published.currency.toUpperCase(),
+										currency: terms.currency.toUpperCase(),
 									}).format(
-										published.price / 100,
+										terms.price / 100,
 									)}${recurring ? " / month" : " one-time"}`
 								: "Unavailable"}
 						</CardTitle>
+						{recurring && billingSubscription && (
+							<CardDescription>
+								{billingSubscription.overdue
+									? `Payment overdue${billingSubscription.paidThroughAt ? ` · paid through ${billingSubscription.paidThroughAt.toLocaleDateString()}` : ""}`
+									: billingSubscription.status === "active"
+										? `Subscription active${billingSubscription.paidThroughAt ? ` through ${billingSubscription.paidThroughAt.toLocaleDateString()}` : ""}`
+										: "First payment is processing"}
+							</CardDescription>
+						)}
 					</CardHeader>
 				</Card>
 			</div>

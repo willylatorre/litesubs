@@ -20,13 +20,19 @@ export function useTransactionCheck({
 		// Read params on-demand inside effect to avoid subscribing to all URL changes
 		const params = new URLSearchParams(window.location.search);
 		const success = params.get("success");
+		const subscriptionSuccess = params.get("subscriptionSuccess");
 		const purchasedPlanId = params.get("planId");
 
-		if (success && purchasedPlanId) {
-			toast.info("Purchase successful! Your credits are being updated...");
+		if ((success || subscriptionSuccess) && purchasedPlanId) {
+			toast.info(
+				subscriptionSuccess
+					? "Subscription started. Your monthly credits are being updated..."
+					: "Purchase successful! Your credits are being updated...",
+			);
 
 			// Clear URL params
 			params.delete("success");
+			params.delete("subscriptionSuccess");
 			params.delete("planId");
 			const newQueryString = params.toString();
 			window.history.replaceState(
@@ -43,7 +49,10 @@ export function useTransactionCheck({
 
 				const checkCondition = async () => {
 					attempts++;
-					const result = await checkTransactionStatus(purchasedPlanId);
+					const result = await checkTransactionStatus(
+						purchasedPlanId,
+						Boolean(subscriptionSuccess),
+					);
 
 					if (result?.status === "completed") {
 						// Use startTransition for non-urgent updates to maintain UI responsiveness
@@ -52,7 +61,11 @@ export function useTransactionCheck({
 								onSuccessRef.current();
 							}
 						});
-						toast.success("Credits updated successfully!");
+						toast.success(
+							subscriptionSuccess
+								? "Monthly credits are ready!"
+								: "Credits updated successfully!",
+						);
 						return true;
 					}
 

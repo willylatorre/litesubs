@@ -1,13 +1,20 @@
 "use server";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/app/db";
-import { enrollments, plans, planVersions } from "@/app/db/schema";
+import {
+	enrollments,
+	plans,
+	planVersions,
+	subscriptions,
+} from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
+import { usableBalances } from "@/lib/services/credits";
 import { createPlan, listPlans, updatePlan } from "@/lib/services/plans";
 import { sessionPrincipal } from "@/lib/services/principal";
 import { publishPlan, unpublishPlan } from "@/lib/services/publish";
+import { isSubscriptionOverdue } from "@/lib/subscription-state";
 
 export async function createPlanAction(
 	_prevState: unknown,
@@ -49,19 +56,63 @@ export async function getPlanDetails(planId: string) {
 			},
 		});
 		if (!plan) return { success: false, error: "Plan not found" };
-		const enrolled = await db.query.enrollments.findMany({
-			where: and(
-				eq(enrollments.planId, planId),
-				eq(enrollments.creatorId, session.user.id),
-			),
-			with: {
-				user: { columns: { id: true, name: true, email: true, image: true } },
-			},
-			orderBy: [desc(enrollments.updatedAt)],
-		});
+		const [enrolled, billingSubscriptions] = await Promise.all([
+			db.query.enrollments.findMany({
+				where: and(
+					eq(enrollments.planId, planId),
+					eq(enrollments.creatorId, session.user.id),
+				),
+				with: {
+					user: { columns: { id: true, name: true, email: true, image: true } },
+				},
+				orderBy: [desc(enrollments.updatedAt)],
+			}),
+			db.query.subscriptions.findMany({
+				where: and(
+					eq(subscriptions.planId, planId),
+					eq(subscriptions.creatorId, session.user.id),
+					inArray(subscriptions.status, [
+						"pending",
+						"incomplete",
+						"active",
+						"past_due",
+					]),
+				),
+				orderBy: [desc(subscriptions.createdAt)],
+				columns: {
+					userId: true,
+					status: true,
+					paidThroughAt: true,
+				},
+			}),
+		]);
+		const balances = await usableBalances(
+			db,
+			enrolled.map((enrollment) => enrollment.id),
+		);
 		return {
 			success: true,
-			data: { plan, enrollments: enrolled },
+			data: {
+				plan,
+				enrollments: enrolled.map((enrollment) => {
+					const subscription = billingSubscriptions.find(
+						(row) => row.userId === enrollment.userId,
+					);
+					return {
+						...enrollment,
+						credits: balances.get(enrollment.id) ?? 0,
+						subscription: subscription
+							? {
+									...subscription,
+									overdue: isSubscriptionOverdue(
+										subscription.status,
+										subscription.paidThroughAt,
+									),
+								}
+							: null,
+					};
+				}),
+			},
 		};
 	});
 }

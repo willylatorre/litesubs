@@ -50,6 +50,20 @@
       "when": 1794499756614,
       "tag": "0006_s06_credit_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794514782849,
+      "tag": "0007_s07_subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794518907231,
+      "tag": "0008_s08_renewals",
+      "breakpoints": true
     }
   ]
 }

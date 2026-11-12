@@ -1,9 +1,17 @@
 "use server";
 
-import { and, count, countDistinct, eq, sum } from "drizzle-orm";
+import { and, count, countDistinct, desc, eq, inArray, sum } from "drizzle-orm";
 import { db } from "@/app/db";
-import { enrollments, invites, plans, transactions } from "@/app/db/schema";
+import {
+	enrollments,
+	invites,
+	plans,
+	subscriptions,
+	transactions,
+} from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
+import { usableBalance, usableBalances } from "@/lib/services/credits";
+import { isSubscriptionOverdue } from "@/lib/subscription-state";
 
 export async function getUserEnrollmentDetails(enrollmentId: string) {
 	return authenticatedAction(async (session) => {
@@ -32,88 +40,177 @@ export async function getUserEnrollmentDetails(enrollmentId: string) {
 		if (!enrollment) {
 			return { success: false, error: "Enrollment not found" };
 		}
+		const billingSubscription = await db.query.subscriptions.findFirst({
+			where: and(
+				eq(subscriptions.userId, session.user.id),
+				eq(subscriptions.planId, enrollment.planId),
+				inArray(subscriptions.status, [
+					"pending",
+					"incomplete",
+					"active",
+					"past_due",
+				]),
+			),
+			orderBy: [desc(subscriptions.createdAt)],
+			columns: {
+				status: true,
+				paidThroughAt: true,
+				cancelAtPeriodEnd: true,
+			},
+			with: {
+				planVersion: {
+					columns: {
+						billingMode: true,
+						interval: true,
+						currency: true,
+						price: true,
+						credits: true,
+					},
+				},
+			},
+		});
 
-		return { success: true, data: enrollment };
+		return {
+			success: true,
+			data: {
+				...enrollment,
+				credits: await usableBalance(db, enrollment.id),
+				billingSubscription: billingSubscription
+					? {
+							...billingSubscription,
+							overdue: isSubscriptionOverdue(
+								billingSubscription.status,
+								billingSubscription.paidThroughAt,
+							),
+						}
+					: null,
+			},
+		};
 	});
 }
 
 export async function getDashboardData() {
 	return authenticatedAction(async (session) => {
-		const [statsResult, enrollmentResult, invitesResult] = await Promise.all([
-			// Consumer Stats
-			(async () => {
-				const [spentResult] = await db
-					.select({ value: sum(transactions.amountMoney) })
-					.from(transactions)
-					.where(
-						and(
-							eq(transactions.userId, session.user.id),
-							eq(transactions.type, "purchase"),
-							eq(transactions.status, "completed"),
-						),
-					);
+		const [statsResult, enrollmentResult, invitesResult, subscriptionsResult] =
+			await Promise.all([
+				// Consumer Stats
+				(async () => {
+					const [spentResult] = await db
+						.select({ value: sum(transactions.amountMoney) })
+						.from(transactions)
+						.where(
+							and(
+								eq(transactions.userId, session.user.id),
+								eq(transactions.type, "purchase"),
+								eq(transactions.status, "completed"),
+							),
+						);
 
-				const [enrollmentCountResult] = await db
-					.select({ count: count() })
-					.from(enrollments)
-					.where(eq(enrollments.userId, session.user.id));
+					const [enrollmentCountResult] = await db
+						.select({ count: count() })
+						.from(enrollments)
+						.where(eq(enrollments.userId, session.user.id));
 
-				return {
-					totalSpent: Number(spentResult?.value || 0),
-					enrollmentCount: Number(enrollmentCountResult?.count || 0),
-				};
-			})(),
+					return {
+						totalSpent: Number(spentResult?.value || 0),
+						enrollmentCount: Number(enrollmentCountResult?.count || 0),
+					};
+				})(),
 
-			// User enrollments
-			db.query.enrollments.findMany({
-				where: eq(enrollments.userId, session.user.id),
-				with: {
-					creator: true,
-					plan: {
-						with: {
-							versions: {
-								orderBy: (version, { desc }) => [desc(version.version)],
-							},
-							integration: {
-								with: {
-									calcomIntegration: true,
+				// User enrollments
+				db.query.enrollments.findMany({
+					where: eq(enrollments.userId, session.user.id),
+					with: {
+						creator: true,
+						plan: {
+							with: {
+								versions: {
+									orderBy: (version, { desc }) => [desc(version.version)],
+								},
+								integration: {
+									with: {
+										calcomIntegration: true,
+									},
 								},
 							},
 						},
 					},
-				},
-			}),
+				}),
 
-			// Pending Invites
-			db.query.invites.findMany({
-				where: and(
-					eq(invites.email, session.user.email),
-					eq(invites.status, "pending"),
-				),
-				with: {
-					creator: true,
-					plan: {
-						with: {
-							versions: {
-								orderBy: (version, { desc }) => [desc(version.version)],
-							},
-							integration: {
-								with: {
-									calcomIntegration: true,
+				// Pending Invites
+				db.query.invites.findMany({
+					where: and(
+						eq(invites.email, session.user.email),
+						eq(invites.status, "pending"),
+					),
+					with: {
+						creator: true,
+						plan: {
+							with: {
+								versions: {
+									orderBy: (version, { desc }) => [desc(version.version)],
+								},
+								integration: {
+									with: {
+										calcomIntegration: true,
+									},
 								},
 							},
 						},
 					},
-				},
-			}),
-		]);
+				}),
 
+				db.query.subscriptions.findMany({
+					where: and(
+						eq(subscriptions.userId, session.user.id),
+						inArray(subscriptions.status, [
+							"pending",
+							"incomplete",
+							"active",
+							"past_due",
+						]),
+					),
+					orderBy: [desc(subscriptions.createdAt)],
+					columns: {
+						planId: true,
+						status: true,
+						paidThroughAt: true,
+						cancelAtPeriodEnd: true,
+					},
+					with: {
+						planVersion: {
+							columns: {
+								billingMode: true,
+								interval: true,
+								currency: true,
+								price: true,
+								credits: true,
+							},
+						},
+					},
+				}),
+			]);
+
+		const balances = await usableBalances(
+			db,
+			enrollmentResult.map((enrollment) => enrollment.id),
+		);
 		return {
 			success: true,
 			data: {
 				stats: statsResult,
-				enrollments: enrollmentResult,
+				enrollments: enrollmentResult.map((enrollment) => ({
+					...enrollment,
+					credits: balances.get(enrollment.id) ?? 0,
+				})),
 				pendingInvites: invitesResult,
+				subscriptions: subscriptionsResult.map((subscription) => ({
+					...subscription,
+					overdue: isSubscriptionOverdue(
+						subscription.status,
+						subscription.paidThroughAt,
+					),
+				})),
 			},
 		};
 	}).then(
@@ -122,6 +219,7 @@ export async function getDashboardData() {
 				stats: { totalSpent: 0, enrollmentCount: 0 },
 				enrollments: [],
 				pendingInvites: [],
+				subscriptions: [],
 			},
 	);
 }
@@ -205,25 +303,74 @@ export async function getConsumerStats() {
 
 export async function getUserEnrollments() {
 	return authenticatedAction(async (session) => {
-		const rows = await db.query.enrollments.findMany({
-			where: eq(enrollments.userId, session.user.id),
-			with: {
-				creator: true,
-				plan: {
-					with: {
-						versions: {
-							orderBy: (version, { desc }) => [desc(version.version)],
-						},
-						integration: {
-							with: {
-								calcomIntegration: true,
+		const [rows, billingSubscriptions] = await Promise.all([
+			db.query.enrollments.findMany({
+				where: eq(enrollments.userId, session.user.id),
+				with: {
+					creator: true,
+					plan: {
+						with: {
+							versions: {
+								orderBy: (version, { desc }) => [desc(version.version)],
+							},
+							integration: {
+								with: {
+									calcomIntegration: true,
+								},
 							},
 						},
 					},
 				},
-			},
-		});
-
-		return { success: true, data: rows };
+			}),
+			db.query.subscriptions.findMany({
+				where: and(
+					eq(subscriptions.userId, session.user.id),
+					inArray(subscriptions.status, [
+						"pending",
+						"incomplete",
+						"active",
+						"past_due",
+					]),
+				),
+				orderBy: [desc(subscriptions.createdAt)],
+				columns: {
+					planId: true,
+					status: true,
+					paidThroughAt: true,
+					cancelAtPeriodEnd: true,
+				},
+			}),
+		]);
+		const balances = await usableBalances(
+			db,
+			rows.map((row) => row.id),
+		);
+		const currentSubscriptions = new Map<
+			string,
+			(typeof billingSubscriptions)[number]
+		>();
+		for (const subscription of billingSubscriptions) {
+			if (!currentSubscriptions.has(subscription.planId))
+				currentSubscriptions.set(subscription.planId, subscription);
+		}
+		return {
+			success: true,
+			data: rows.map((row) => ({
+				...row,
+				credits: balances.get(row.id) ?? 0,
+				billingSubscription: (() => {
+					const subscription = currentSubscriptions.get(row.planId);
+					return subscription
+						? {
+								...subscription,
+								overdue: isSubscriptionOverdue(
+									subscription.status,
+									subscription.paidThroughAt,
+								),
+							}
+						: null;
+				})(),
+			})),
+		};
 	}).then((res) => res.data || []);
 }

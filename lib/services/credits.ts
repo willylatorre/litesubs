@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/app/db";
 import {
@@ -7,9 +7,12 @@ import {
 	enrollments,
 	transactions,
 } from "@/app/db/schema";
+import { usableBalance, usableGrantFilter } from "./credit-balance";
 import { resolveCustomer } from "./customers";
 import { resolvePublishedPlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
+
+export { usableBalance, usableBalances } from "./credit-balance";
 
 /**
  * The credit ledger: the only code allowed to change a balance.
@@ -64,29 +67,6 @@ function spendOrder() {
 		asc(creditGrants.createdAt),
 		asc(creditGrants.id),
 	];
-}
-
-function usableGrantFilter() {
-	return and(
-		gt(creditGrants.remaining, 0),
-		or(isNull(creditGrants.expiresAt), gt(creditGrants.expiresAt, new Date())),
-	);
-}
-
-/** Sum of spendable units right now, ignoring expired leftovers. */
-export async function usableBalance(
-	client: Pick<typeof db, "select">,
-	enrollmentId: string,
-) {
-	const [row] = await client
-		.select({
-			total: sql<number>`coalesce(sum(${creditGrants.remaining}), 0)::int`,
-		})
-		.from(creditGrants)
-		.where(
-			and(eq(creditGrants.enrollmentId, enrollmentId), usableGrantFilter()),
-		);
-	return row?.total ?? 0;
 }
 
 /**

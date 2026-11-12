@@ -2,11 +2,29 @@
 
 import { and, desc, eq, gt } from "drizzle-orm";
 import { db } from "@/app/db";
-import { transactions } from "@/app/db/schema";
+import { subscriptions, transactions } from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
 
-export async function checkTransactionStatus(planId: string) {
+export async function checkTransactionStatus(
+	planId: string,
+	forSubscription = false,
+) {
 	return authenticatedAction(async (session) => {
+		if (forSubscription) {
+			const subscription = await db.query.subscriptions.findFirst({
+				where: and(
+					eq(subscriptions.userId, session.user.id),
+					eq(subscriptions.planId, planId),
+					eq(subscriptions.status, "active"),
+					gt(subscriptions.paidThroughAt, new Date()),
+				),
+				orderBy: [desc(subscriptions.createdAt)],
+			});
+			return {
+				success: true,
+				data: { status: subscription ? "completed" : "pending" },
+			};
+		}
 		// Look for a recent payment for this user and plan. The return page never
 		// grants credits; it only observes what fulfillment already recorded.
 		const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
