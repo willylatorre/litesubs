@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-01-01
 
 ### Added
+- **Customer billing portal (S10)**:
+  - Provision a marked platform portal configuration with payment-method and
+    invoice-history features, while disabling subscription plan changes/cancel.
+  - Create short-lived sessions against each customer's mapped Stripe Customer
+    on the subscription's owning connected account; URLs are not persisted.
 - **Subscription cancellation (S09)**:
   - Allow authenticated customers to cancel renewals at the paid-period end and
     resume before cancellation takes effect.

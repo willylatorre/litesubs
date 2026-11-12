@@ -71,6 +71,7 @@ export async function getUserEnrollmentDetails(enrollmentId: string) {
 			columns: {
 				id: true,
 				status: true,
+				stripeSubscriptionId: true,
 				paidThroughAt: true,
 				cancelAtPeriodEnd: true,
 				cancelAt: true,
@@ -87,21 +88,26 @@ export async function getUserEnrollmentDetails(enrollmentId: string) {
 				},
 			},
 		});
+		const billingSubscriptionView = billingSubscription
+			? (() => {
+					const { stripeSubscriptionId, ...billingState } = billingSubscription;
+					return {
+						...billingState,
+						canManageBilling: Boolean(stripeSubscriptionId),
+						overdue: isSubscriptionOverdue(
+							billingSubscription.status,
+							billingSubscription.paidThroughAt,
+						),
+					};
+				})()
+			: null;
 
 		return {
 			success: true,
 			data: {
 				...enrollment,
 				credits: await usableBalance(db, enrollment.id),
-				billingSubscription: billingSubscription
-					? {
-							...billingSubscription,
-							overdue: isSubscriptionOverdue(
-								billingSubscription.status,
-								billingSubscription.paidThroughAt,
-							),
-						}
-					: null,
+				billingSubscription: billingSubscriptionView,
 			},
 		};
 	});
@@ -199,6 +205,7 @@ export async function getDashboardData() {
 						id: true,
 						planId: true,
 						status: true,
+						stripeSubscriptionId: true,
 						paidThroughAt: true,
 						cancelAtPeriodEnd: true,
 						cancelAt: true,
@@ -230,13 +237,17 @@ export async function getDashboardData() {
 					credits: balances.get(enrollment.id) ?? 0,
 				})),
 				pendingInvites: invitesResult,
-				subscriptions: subscriptionsResult.map((subscription) => ({
-					...subscription,
-					overdue: isSubscriptionOverdue(
-						subscription.status,
-						subscription.paidThroughAt,
-					),
-				})),
+				subscriptions: subscriptionsResult.map((subscription) => {
+					const { stripeSubscriptionId, ...billingState } = subscription;
+					return {
+						...billingState,
+						canManageBilling: Boolean(stripeSubscriptionId),
+						overdue: isSubscriptionOverdue(
+							subscription.status,
+							subscription.paidThroughAt,
+						),
+					};
+				}),
 			},
 		};
 	}).then(
@@ -369,6 +380,7 @@ export async function getUserEnrollments() {
 					id: true,
 					planId: true,
 					status: true,
+					stripeSubscriptionId: true,
 					paidThroughAt: true,
 					cancelAtPeriodEnd: true,
 					cancelAt: true,
@@ -394,17 +406,58 @@ export async function getUserEnrollments() {
 				credits: balances.get(row.id) ?? 0,
 				billingSubscription: (() => {
 					const subscription = currentSubscriptions.get(row.planId);
-					return subscription
-						? {
-								...subscription,
-								overdue: isSubscriptionOverdue(
-									subscription.status,
-									subscription.paidThroughAt,
-								),
-							}
-						: null;
+					if (!subscription) return null;
+					const { stripeSubscriptionId, ...billingState } = subscription;
+					return {
+						...billingState,
+						canManageBilling: Boolean(stripeSubscriptionId),
+						overdue: isSubscriptionOverdue(
+							subscription.status,
+							subscription.paidThroughAt,
+						),
+					};
 				})(),
 			})),
 		};
 	}).then((res) => res.data || []);
+}
+
+/** Customer-owned Stripe billing identities for the Account page. */
+export async function getUserBillingRelationships() {
+	return authenticatedAction(async (session) => {
+		const rows = await db.query.subscriptions.findMany({
+			where: and(
+				eq(subscriptions.userId, session.user.id),
+				isNotNull(subscriptions.stripeSubscriptionId),
+			),
+			orderBy: [desc(subscriptions.createdAt)],
+			columns: {
+				id: true,
+				status: true,
+				paidThroughAt: true,
+				cancelAtPeriodEnd: true,
+				cancelAt: true,
+			},
+			with: {
+				creator: { columns: { name: true } },
+				plan: { columns: { id: true, name: true } },
+				planVersion: {
+					columns: {
+						billingMode: true,
+						interval: true,
+						currency: true,
+						price: true,
+						credits: true,
+					},
+				},
+			},
+		});
+		return {
+			success: true,
+			data: rows.map((row) => ({
+				...row,
+				overdue: isSubscriptionOverdue(row.status, row.paidThroughAt),
+			})),
+		};
+	}).then((result) => result.data ?? []);
 }

@@ -4,7 +4,8 @@
  * the contract under test is one pending subscription, followed by one paid,
  * period-bound grant even when invoice and Checkout events arrive out of order.
  *
- * Opt-in: set MCP_TEST_DATABASE_URL to a disposable, migrated PostgreSQL database.
+ * Stripe/portal HTTP adapters are substituted; DB-backed coverage is opt-in via
+ * MCP_TEST_DATABASE_URL against a disposable, migrated PostgreSQL database.
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -20,6 +21,10 @@ import {
 	user,
 } from "@/app/db/schema";
 import { connectedAccounts } from "@/app/db/stripe-connect-schema";
+import {
+	type BillingPortalAdapter,
+	createCustomerBillingPortalSession,
+} from "@/lib/services/billing-portal";
 import { usableBalance } from "@/lib/services/credits";
 import { getCustomer, listCustomers } from "@/lib/services/customers";
 import { createPlan, updatePlan } from "@/lib/services/plans";
@@ -45,17 +50,40 @@ test("monthly renewals grant paid periods once and failed/late invoices do not e
 }, async () => {
 	assert.equal(process.env.DATABASE_URL, process.env.MCP_TEST_DATABASE_URL);
 	const creatorId = crypto.randomUUID();
+	const secondCreatorId = crypto.randomUUID();
 	const buyerId = crypto.randomUUID();
 	const strangerId = crypto.randomUUID();
 	const creator = sessionPrincipal(creatorId);
 	await db.insert(user).values([
 		{ id: creatorId, name: "Creator", email: `${creatorId}@example.test` },
+		{
+			id: secondCreatorId,
+			name: "Second creator",
+			email: `${secondCreatorId}@example.test`,
+		},
 		{ id: buyerId, name: "Buyer", email: `${buyerId}@example.test` },
 		{ id: strangerId, name: "Stranger", email: `${strangerId}@example.test` },
 	]);
 	await db.insert(connectedAccounts).values({
 		userId: creatorId,
 		stripeAccountId: `acct_${creatorId}`,
+		onboardingMode: "connected",
+		authorizedViaOauth: true,
+		livemode: false,
+		status: "active",
+		controllerType: "account",
+		dashboardType: "full",
+		feesPayer: "account",
+		lossesPayments: "stripe",
+		chargesEnabled: true,
+		payoutsEnabled: true,
+		cardPaymentsStatus: "active",
+		detailsSubmitted: true,
+		requirementsCurrentlyDue: [],
+	});
+	await db.insert(connectedAccounts).values({
+		userId: secondCreatorId,
+		stripeAccountId: `acct_${secondCreatorId}`,
 		onboardingMode: "connected",
 		authorizedViaOauth: true,
 		livemode: false,
@@ -562,6 +590,111 @@ test("monthly renewals grant paid periods once and failed/late invoices do not e
 	assert.equal(ended?.status, "canceled");
 	assert.equal(ended?.paidThroughAt?.getTime(), renewalEnd.getTime());
 
+	const portalRequests: Parameters<BillingPortalAdapter["createSession"]>[0][] =
+		[];
+	const portalAdapter: BillingPortalAdapter = {
+		async ensureConfiguration() {
+			return { id: "bpc_platform" } as never;
+		},
+		async createSession(input) {
+			portalRequests.push(input);
+			return {
+				id: "bps_short_lived",
+				url: "https://billing.stripe.com/session/test-session",
+			} as never;
+		},
+	};
+	const portalSession = await createCustomerBillingPortalSession(
+		buyerId,
+		subscriptionId,
+		portalAdapter,
+	);
+	assert.equal(
+		portalSession.url,
+		"https://billing.stripe.com/session/test-session",
+	);
+	assert.equal(portalRequests[0].stripeAccountId, `acct_${creatorId}`);
+	assert.equal(portalRequests[0].stripeCustomerId, `cus_${buyerId}`);
+	assert.equal(portalRequests[0].configurationId, "bpc_platform");
+	const safeReturnUrl = new URL(portalRequests[0].returnUrl);
+	assert.equal(
+		safeReturnUrl.pathname,
+		`/dashboard/enrollments/${enrollment?.id}`,
+	);
+	await assert.rejects(
+		createCustomerBillingPortalSession(
+			strangerId,
+			subscriptionId,
+			portalAdapter,
+		),
+		{ code: "NOT_FOUND" },
+	);
+	await db
+		.update(connectedAccounts)
+		.set({ disconnectedAt: new Date() })
+		.where(eq(connectedAccounts.userId, creatorId));
+	await assert.rejects(
+		createCustomerBillingPortalSession(buyerId, subscriptionId, portalAdapter),
+		{ code: "ACCOUNT_UNAVAILABLE" },
+	);
+	await db
+		.update(connectedAccounts)
+		.set({ disconnectedAt: null })
+		.where(eq(connectedAccounts.userId, creatorId));
+
+	// The same customer has a distinct Stripe Customer and account for a second
+	// creator. Portal sessions must never reuse the first creator's mapping.
+	const secondCreator = sessionPrincipal(secondCreatorId);
+	const secondPlan = await createPlan(secondCreator, {
+		name: "Second creator plan",
+		terms: {
+			billingMode: "recurring",
+			interval: "month",
+			currency: "eur",
+			price: 2500,
+			credits: 5,
+		},
+	});
+	await publishPlan(secondCreator, { plan: secondPlan.id }, planAdapter);
+	const secondSubscriptionId = crypto.randomUUID();
+	await db.insert(creatorCustomers).values({
+		creatorId: secondCreatorId,
+		userId: buyerId,
+		stripeAccountId: `acct_${secondCreatorId}`,
+		stripeCustomerId: `cus_${secondCreatorId}_${buyerId}`,
+		status: "ready",
+		email: `${buyerId}@example.test`,
+	});
+	await db.insert(enrollments).values({
+		creatorId: secondCreatorId,
+		userId: buyerId,
+		planId: secondPlan.id,
+	});
+	await db.insert(subscriptions).values({
+		id: secondSubscriptionId,
+		creatorId: secondCreatorId,
+		userId: buyerId,
+		planId: secondPlan.id,
+		planVersionId: secondPlan.terms?.id as string,
+		stripeAccountId: `acct_${secondCreatorId}`,
+		stripeCustomerId: `cus_${secondCreatorId}_${buyerId}`,
+		stripeSubscriptionId: `sub_${secondCreatorId}`,
+		status: "active",
+		applicationFeePercent: 2,
+		paidThroughAt: renewalEnd,
+	});
+	await createCustomerBillingPortalSession(
+		buyerId,
+		secondSubscriptionId,
+		portalAdapter,
+	);
+	assert.equal(portalRequests[1].stripeAccountId, `acct_${secondCreatorId}`);
+	assert.equal(portalRequests[1].configurationId, "bpc_platform");
+	assert.equal(
+		portalRequests[1].stripeCustomerId,
+		`cus_${secondCreatorId}_${buyerId}`,
+	);
+
 	const replacement = await startSubscription(
 		creator,
 		{ planId: plan.id, userId: buyerId },
@@ -586,4 +719,5 @@ test("monthly renewals grant paid periods once and failed/late invoices do not e
 	await db.delete(user).where(eq(user.id, creatorId));
 	await db.delete(user).where(eq(user.id, buyerId));
 	await db.delete(user).where(eq(user.id, strangerId));
+	await db.delete(user).where(eq(user.id, secondCreatorId));
 });

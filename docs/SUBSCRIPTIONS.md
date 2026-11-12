@@ -51,6 +51,10 @@ Implemented slices:
   webhooks reconcile dashboard-side changes without moving paid-through. Ended
   subscriptions retain their history while a later purchase creates a new
   billing identity. See `drizzle/0009_s09_cancellation.sql`.
+- S10 — customer billing portal configuration is provisioned on the platform,
+  while each short-lived session is created for the authenticated customer's
+  mapped Customer on its owning connected account. Plan changes and cancellation
+  are disabled in the portal.
 
 ## Purpose
 
@@ -817,19 +821,19 @@ on per-account portal settings.
 
 #### Acceptance criteria
 
-- [ ] The portal session is created on the stored owning account for the authenticated
+- [x] The portal session is created on the stored owning account for the authenticated
       subscriber's mapped Customer, not the platform or another creator's account.
-- [ ] Customers can update payment methods and use Stripe's supported invoice
+- [x] Customers can update payment methods and use Stripe's supported invoice
       management/payment flows. Billing data from another creator is never exposed.
-- [ ] Portal configuration disables plan switching and other unsupported term
+- [x] Portal configuration disables plan switching and other unsupported term
       changes so it cannot bypass published versions and credit entitlement rules.
-- [ ] The portal configuration is created through the API for the platform and
+- [x] The portal configuration is created through the API for the platform and
       referenced explicitly by each session, because Stripe documents that portal
       configuration is not configured per connected account. Provisioning is
       idempotent and does not assume a Dashboard-created configuration applies.
-- [ ] The return URL is trusted and points back to the appropriate Litesubs view.
+- [x] The return URL is trusted and points back to the appropriate Litesubs view.
       Missing mappings/unavailable accounts produce actionable errors.
-- [ ] UI distinguishes the customer billing portal from the creator's full Dashboard;
+- [x] UI distinguishes the customer billing portal from the creator's full Dashboard;
       no card data or sensitive portal URLs are logged or stored unnecessarily.
 
 #### Implementation notes and relevant files
@@ -847,6 +851,13 @@ isolation, card replacement, invoice access, disabled plan switching, and safe r
 Record which portal features the platform configuration actually exposes for a
 connected-account Customer; any unsupported feature is a documented limitation
 rather than a silent gap.
+
+**Implemented:** yes — see `lib/stripe-billing-portal.ts`,
+`lib/services/billing-portal.ts`, `app/actions/subscriptions.ts`, and the Account
+and enrollment detail views. PostgreSQL-backed account-isolation coverage extends
+`lib/subscriptions.integration.test.ts` (opt-in). The actual Connect portal
+configuration/session combination still needs sandbox verification before live
+release.
 
 #### Blocked by
 

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getUserEnrollmentDetails } from "@/app/actions/dashboard";
 import { getUserTransactions } from "@/app/actions/transactions";
 import { BuyButton } from "@/components/buy-button";
+import { ManageBillingButton } from "@/components/manage-billing-button";
 import { SubscriptionActions } from "@/components/subscription-actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,6 +71,9 @@ export default async function EnrollmentDetailPage({
 					</div>
 				</div>
 				<div className="flex items-center gap-2">
+					{billingSubscription?.canManageBilling && (
+						<ManageBillingButton subscriptionId={billingSubscription.id} />
+					)}
 					{billingSubscription &&
 						(billingSubscription.status === "active" ||
 							billingSubscription.status === "past_due") && (

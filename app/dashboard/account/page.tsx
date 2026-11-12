@@ -1,6 +1,7 @@
 "use client";
 
 import { Settings } from "@/components/auth/settings/settings";
+import { BillingRelationships } from "@/components/billing-relationships";
 
 export default function AccountPage() {
 	return (
@@ -10,6 +11,7 @@ export default function AccountPage() {
 				Billing is managed per creator: each plan you buy is billed by that
 				creator&apos;s Stripe account, from its own invoice history.
 			</p>
+			<BillingRelationships />
 			<Settings view="account" />
 		</div>
 	);

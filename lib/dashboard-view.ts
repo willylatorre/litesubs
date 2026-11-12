@@ -19,6 +19,7 @@ export type EnrollmentView = {
 		paidThroughAt: Date | null;
 		cancelAtPeriodEnd: boolean;
 		cancelAt: Date | null;
+		canManageBilling: boolean;
 		overdue: boolean;
 		terms: PlanTermsView;
 	} | null;
@@ -103,6 +104,7 @@ export function toDashboardView(raw: {
 		paidThroughAt: Date | null;
 		cancelAtPeriodEnd: boolean;
 		cancelAt: Date | null;
+		canManageBilling: boolean;
 		overdue: boolean;
 		planVersion: PlanTermsView;
 	}[];
@@ -126,6 +128,7 @@ export function toDashboardView(raw: {
 							paidThroughAt: subscription.paidThroughAt,
 							cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
 							cancelAt: subscription.cancelAt,
+							canManageBilling: subscription.canManageBilling,
 							overdue: subscription.overdue,
 							terms: subscription.planVersion,
 						}

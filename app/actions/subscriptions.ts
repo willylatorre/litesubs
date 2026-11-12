@@ -1,8 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { z } from "zod";
+import { auth } from "@/lib/auth";
 import { authenticatedAction } from "@/lib/safe-action";
+import { createCustomerBillingPortalSession } from "@/lib/services/billing-portal";
 import { ServiceError } from "@/lib/services/principal";
 import { updateCustomerSubscriptionCancellation } from "@/lib/services/subscriptions";
 
@@ -43,4 +47,31 @@ export async function setSubscriptionCancellation(
 			};
 		}
 	});
+}
+
+/** Create a short-lived, account-scoped Customer Portal session on demand. */
+export async function openCustomerBillingPortal(subscriptionId: string) {
+	const session = await auth.api.getSession({ headers: await headers() });
+	if (!session?.user) return { error: "Unauthorized" };
+
+	let portalUrl: string;
+	try {
+		const input = z.string().trim().min(1).max(200).parse(subscriptionId);
+		({ url: portalUrl } = await createCustomerBillingPortalSession(
+			session.user.id,
+			input,
+		));
+	} catch (error) {
+		return {
+			error:
+				error instanceof ServiceError
+					? error.message
+					: error instanceof z.ZodError
+						? "Invalid subscription"
+						: "Could not open billing management",
+		};
+	}
+	// Redirect is outside the try block because Next.js implements it as a
+	// framework control-flow exception.
+	redirect(portalUrl);
 }
