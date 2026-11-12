@@ -15,8 +15,30 @@ concurrency:
 
 jobs:
   verify:
-    name: Typecheck, build and audit
+    name: Typecheck, test, build and audit
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: litesubs_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/litesubs_test
+      MCP_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/litesubs_test
+      # The migration test drops and recreates this database itself, so it must
+      # never point at DATABASE_URL.
+      MIGRATION_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/litesubs_migration_test
+      BETTER_AUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      MCP_RESOURCE_URL: http://localhost:3000/api/mcp
 
     steps:
       - name: Checkout
@@ -31,11 +53,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Migrate
+        run: npm run db:migrate
+
       - name: Typecheck
         run: npx tsc --noEmit
 
       - name: Test
         run: npm test
+        env:
+          NODE_ENV: test
 
       - name: Build
         run: npm run build

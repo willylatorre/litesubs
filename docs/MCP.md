@@ -299,7 +299,15 @@ DATABASE_URL=<test DB> MCP_TEST_DATABASE_URL=<same test DB> \
 ```
 
 `MIGRATION_TEST_DATABASE_URL` is dropped and recreated by the migration test, so
-point it at a disposable database only. Without it those cases skip.
+point it at a disposable database only. Without it those cases skip. CI sets all
+three from a single Postgres service, which is why the migration tests do run
+there.
+
+CI is one workflow (`.github/workflows/ci.yml`): install, migrate, typecheck,
+test, build and audit run once per push or pull request against a Postgres
+service. Do not add a second workflow that re-runs `npm test` without a
+database; its integration tests would only skip and the job would duplicate
+work.
 
 Tests cover concurrent retry receipts, overdraft prevention, dry-run persistence,
 tenant and credential boundaries, once-only comp claims, HTTP API-key auth,

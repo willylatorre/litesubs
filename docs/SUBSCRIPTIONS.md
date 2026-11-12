@@ -1054,7 +1054,7 @@ not a ticket to postpone every other slice's tests or rewrite the billing engine
 Start with `scripts/smoke-sandbox-checkout.mjs`, `scripts/reset-app-db.mjs`,
 `scripts/check-migration-baseline.mjs`, `drizzle/*`,
 `.github/workflows/ci.yml`, `.github/workflows/drizzle-migrate.yml`,
-`.github/workflows/mcp-tests.yml`, `README.md`, `PROJECT.md`, `FAQ.md`,
+`README.md`, `PROJECT.md`, `FAQ.md`,
 `app/dashboard/faq/page.tsx`, and `docs/MCP.md`. Keep baseline tooling deliberate;
 do not remove its safety checks just to bypass an old hash. Confirm external
 Stripe configuration rather than claiming source-code changes configured it.
