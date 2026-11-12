@@ -43,6 +43,14 @@ export type CreateDirectCheckoutInput = {
 	idempotencyKey?: string;
 };
 
+export type CreateSubscriptionCheckoutInput = Omit<
+	CreateDirectCheckoutInput,
+	"applicationFeeAmount"
+> & {
+	/** Stripe's subscription application fee is a percentage, not minor units. */
+	applicationFeePercent: number;
+};
+
 /**
  * The application fee must be strictly positive and less than the charge; a
  * zero or full-price fee is rejected by Stripe rather than silently ignored.
@@ -98,6 +106,46 @@ export async function createDirectCheckoutSession(
 		},
 		{
 			// The connected account this session belongs to.
+			stripeAccount: input.stripeAccountId,
+			...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
+		},
+	);
+}
+
+/**
+ * Create a monthly subscription through direct-charge Checkout. The request is
+ * scoped to the creator account; the platform fee is attached as a percentage
+ * to the Stripe subscription so it applies to each successful invoice.
+ */
+export async function createDirectSubscriptionCheckoutSession(
+	input: CreateSubscriptionCheckoutInput,
+) {
+	if (!input.lineItem.stripePriceId)
+		throw new Error("A published Stripe Price is required for subscriptions");
+	const stripe = getStripe();
+	return stripe.checkout.sessions.create(
+		{
+			mode: "subscription",
+			line_items: [
+				{
+					price: input.lineItem.stripePriceId,
+					quantity: 1,
+				},
+			],
+			...(input.stripeCustomerId
+				? { customer: input.stripeCustomerId }
+				: input.customerEmail
+					? { customer_email: input.customerEmail }
+					: {}),
+			success_url: input.successUrl,
+			cancel_url: input.cancelUrl,
+			metadata: input.metadata,
+			subscription_data: {
+				application_fee_percent: input.applicationFeePercent,
+				metadata: input.metadata,
+			},
+		},
+		{
 			stripeAccount: input.stripeAccountId,
 			...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
 		},

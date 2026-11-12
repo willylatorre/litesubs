@@ -19,7 +19,11 @@ import { appUrl } from "@/lib/app-url";
 import { auth } from "@/lib/auth";
 import { resolvePublishedPlan } from "@/lib/services/plans";
 import { sessionPrincipal } from "@/lib/services/principal";
-import { redeemCheckoutToken, startPurchase } from "@/lib/services/purchase";
+import {
+	redeemCheckoutToken,
+	startPurchase,
+	startSubscription,
+} from "@/lib/services/purchase";
 
 function hashToken(token: string) {
 	return createHash("sha256").update(token).digest("hex");
@@ -108,7 +112,9 @@ export default async function PayPage({
 				token,
 				userId: current.user.id,
 			});
-			const purchase = await startPurchase(sessionPrincipal(creatorId), {
+			const start =
+				terms.billingMode === "recurring" ? startSubscription : startPurchase;
+			const purchase = await start(sessionPrincipal(creatorId), {
 				planId,
 				userId: current.user.id,
 			});
@@ -140,20 +146,25 @@ export default async function PayPage({
 						<span className="font-mono">{terms.credits}</span>
 					</div>
 					<div className="flex items-baseline justify-between">
-						<span className="text-muted-foreground text-sm">Total</span>
+						<span className="text-muted-foreground text-sm">
+							{terms.billingMode === "recurring" ? "Monthly" : "Total"}
+						</span>
 						<span className="text-xl font-bold">
 							{formatMoney(terms.price, terms.currency)}
 						</span>
 					</div>
 					<p className="text-muted-foreground text-xs">
-						You are paying the creator directly. Credits are added only after
-						payment is confirmed.
+						{terms.billingMode === "recurring"
+							? "Your payment renews monthly. Each paid month grants this allowance; unused credits do not roll over and expire at the end of the paid month."
+							: "You are paying the creator directly. Credits are added only after payment is confirmed."}
 					</p>
 				</CardContent>
 				<CardFooter className="flex-col gap-2">
 					<form action={pay} className="w-full">
 						<Button type="submit" className="w-full">
-							Pay {formatMoney(terms.price, terms.currency)}
+							{terms.billingMode === "recurring" ? "Subscribe" : "Pay"}{" "}
+							{formatMoney(terms.price, terms.currency)}
+							{terms.billingMode === "recurring" ? " / month" : ""}
 						</Button>
 					</form>
 					<Button variant="ghost" size="sm" asChild>

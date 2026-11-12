@@ -66,6 +66,13 @@ export const grantKindEnum = pgEnum("grant_kind", [
 	"adjustment",
 	"period",
 ]);
+export const subscriptionStatusEnum = pgEnum("subscription_status", [
+	"pending",
+	"incomplete",
+	"active",
+	"past_due",
+	"canceled",
+]);
 
 // Tables
 
@@ -218,7 +225,7 @@ export const planVersions = pgTable(
 
 /**
  * A customer's relationship with one plan and its credit balance projection.
- * This is not recurring billing: Stripe subscriptions arrive in a later slice.
+ * Recurring billing identities are separate rows in `subscriptions`.
  */
 export const enrollments = pgTable(
 	"enrollments",
@@ -413,6 +420,104 @@ export const payments = pgTable(
 		index("payment_plan_idx").on(table.planId),
 		index("payment_status_idx").on(table.status),
 		check("payment_amounts_non_negative", sql`${table.amountTotal} >= 0`),
+	],
+);
+
+/**
+ * Stripe billing identity for a monthly plan. Stripe remains authoritative for
+ * recurring billing; the local row records the owning account, purchased terms,
+ * and the paid-through boundary needed to expire the current allowance.
+ */
+export const subscriptions = pgTable(
+	"subscriptions",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		planId: text("plan_id")
+			.notNull()
+			.references(() => plans.id, { onDelete: "cascade" }),
+		planVersionId: text("plan_version_id")
+			.notNull()
+			.references(() => planVersions.id, { onDelete: "restrict" }),
+		stripeAccountId: text("stripe_account_id").notNull(),
+		stripeCustomerId: text("stripe_customer_id").notNull(),
+		stripeCheckoutId: text("stripe_checkout_id").unique(),
+		stripeSubscriptionId: text("stripe_subscription_id").unique(),
+		status: subscriptionStatusEnum("status").default("pending").notNull(),
+		/** Stored as percent (2 means 2%), not a fraction. */
+		applicationFeePercent: integer("application_fee_percent").notNull(),
+		paidThroughAt: timestamp("paid_through_at", { withTimezone: true }),
+		cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("subscription_creator_idx").on(table.creatorId),
+		index("subscription_user_idx").on(table.userId),
+		index("subscription_plan_idx").on(table.planId),
+		uniqueIndex("subscription_one_live_per_customer_plan_idx")
+			.on(table.creatorId, table.userId, table.planId)
+			.where(sql`${table.status} <> 'canceled'`),
+		check(
+			"subscription_fee_percent_positive",
+			sql`${table.applicationFeePercent} > 0 and ${table.applicationFeePercent} < 100`,
+		),
+	],
+);
+
+/** Paid invoice receipt and idempotency boundary for a monthly allowance. */
+export const subscriptionInvoices = pgTable(
+	"subscription_invoices",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		subscriptionId: text("subscription_id")
+			.notNull()
+			.references(() => subscriptions.id, { onDelete: "cascade" }),
+		stripeAccountId: text("stripe_account_id").notNull(),
+		stripeInvoiceId: text("stripe_invoice_id").notNull(),
+		amountPaid: integer("amount_paid").notNull(),
+		currency: currencyEnum("currency").notNull(),
+		periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+		periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+		paidAt: timestamp("paid_at", { withTimezone: true }).notNull(),
+		creditedAt: timestamp("credited_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [
+		uniqueIndex("subscription_invoice_account_id_unique").on(
+			table.stripeAccountId,
+			table.stripeInvoiceId,
+		),
+		uniqueIndex("subscription_invoice_period_unique").on(
+			table.subscriptionId,
+			table.periodStart,
+			table.periodEnd,
+		),
+		index("subscription_invoice_subscription_idx").on(table.subscriptionId),
+		check(
+			"subscription_invoice_amount_non_negative",
+			sql`${table.amountPaid} >= 0`,
+		),
+		check(
+			"subscription_invoice_period_valid",
+			sql`${table.periodEnd} > ${table.periodStart}`,
+		),
 	],
 );
 
@@ -764,6 +869,39 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
 		references: [planVersions.id],
 	}),
 }));
+
+export const subscriptionsRelations = relations(
+	subscriptions,
+	({ one, many }) => ({
+		creator: one(user, {
+			fields: [subscriptions.creatorId],
+			references: [user.id],
+		}),
+		customer: one(user, {
+			fields: [subscriptions.userId],
+			references: [user.id],
+		}),
+		plan: one(plans, {
+			fields: [subscriptions.planId],
+			references: [plans.id],
+		}),
+		planVersion: one(planVersions, {
+			fields: [subscriptions.planVersionId],
+			references: [planVersions.id],
+		}),
+		invoices: many(subscriptionInvoices),
+	}),
+);
+
+export const subscriptionInvoicesRelations = relations(
+	subscriptionInvoices,
+	({ one }) => ({
+		subscription: one(subscriptions, {
+			fields: [subscriptionInvoices.subscriptionId],
+			references: [subscriptions.id],
+		}),
+	}),
+);
 
 export const creatorCustomersRelations = relations(
 	creatorCustomers,

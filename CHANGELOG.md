@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-01-01
 
 ### Added
+- **Monthly renewals (S08)**:
+  - Fulfill each eligible paid cycle invoice against the original plan version,
+    with one expiring allowance per service period.
+  - Record failed invoices as overdue without extending paid-through or granting
+    credits; successful retries and out-of-order events remain idempotent.
+  - Return usable grant balances and overdue billing state in customer summaries.
+- **Monthly subscriptions (S07 first-period slice)**:
+  - Added creator-account monthly Checkout with a persisted 2% recurring fee rate.
+  - Fulfill the first monthly allowance only from the verified, account-scoped
+    paid invoice; grants expire at the subscription line's paid-period end.
+  - Keep duplicate/concurrent starts and invoice delivery idempotent. Monthly
+    Checkout remains test-mode only until the live-release gate is complete.
 - **Landing Page & SEO**:
   - Improved the landing page with a minimalist 3-step "How it works" demo.
   - Added comprehensive metadata (OpenGraph/Twitter/Canonical) and JSON-LD structured data.

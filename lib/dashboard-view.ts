@@ -13,6 +13,13 @@ export type PlanTermsView = {
 export type EnrollmentView = {
 	id: string;
 	credits: number;
+	subscription: {
+		status: "pending" | "incomplete" | "active" | "past_due" | "canceled";
+		paidThroughAt: Date | null;
+		cancelAtPeriodEnd: boolean;
+		overdue: boolean;
+		terms: PlanTermsView;
+	} | null;
 	plan: {
 		id: string;
 		name: string;
@@ -87,6 +94,14 @@ export function toDashboardView(raw: {
 		plan: RawPlan | null;
 		creator: { name: string };
 	}[];
+	subscriptions: {
+		planId: string;
+		status: "pending" | "incomplete" | "active" | "past_due" | "canceled";
+		paidThroughAt: Date | null;
+		cancelAtPeriodEnd: boolean;
+		overdue: boolean;
+		planVersion: PlanTermsView;
+	}[];
 }): DashboardView {
 	return {
 		stats: {
@@ -96,6 +111,20 @@ export function toDashboardView(raw: {
 		enrollments: raw.enrollments.map((enrollment) => ({
 			id: enrollment.id,
 			credits: enrollment.credits,
+			subscription: (() => {
+				const subscription = raw.subscriptions.find(
+					(item) => item.planId === enrollment.plan.id,
+				);
+				return subscription
+					? {
+							status: subscription.status,
+							paidThroughAt: subscription.paidThroughAt,
+							cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+							overdue: subscription.overdue,
+							terms: subscription.planVersion,
+						}
+					: null;
+			})(),
 			plan: {
 				id: enrollment.plan.id,
 				name: enrollment.plan.name,

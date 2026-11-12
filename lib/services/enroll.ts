@@ -7,7 +7,7 @@ import { grantCredits } from "./credits";
 import { resolveCustomer } from "./customers";
 import { pageInput, resolvePublishedPlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
-import { startPurchase } from "./purchase";
+import { startPurchase, startSubscription } from "./purchase";
 
 export const enrollmentInput = z.object({
 	plan: z.string().trim().min(1),
@@ -30,6 +30,12 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 		principal.creatorId,
 		data.plan,
 	);
+	if (data.mode === "comp" && terms.billingMode === "recurring")
+		throw new ServiceError(
+			"COMP_MONTHLY_UNSUPPORTED",
+			"Complimentary monthly enrollments are not supported yet",
+			409,
+		);
 	const email = data.customer.toLowerCase();
 	// New enrollment is the only operation allowed to resolve an account that
 	// is not yet this creator's customer. Do not expose the account profile.
@@ -188,7 +194,10 @@ export async function checkoutUrl(
 	customerId: string,
 	planId: string,
 ) {
-	const result = await startPurchase(principal, {
+	const { terms } = await resolvePublishedPlan(principal.creatorId, planId);
+	const start =
+		terms.billingMode === "recurring" ? startSubscription : startPurchase;
+	const result = await start(principal, {
 		planId,
 		userId: customerId,
 	});

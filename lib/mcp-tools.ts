@@ -32,7 +32,7 @@ import {
  */
 const instructions = `Litesubs manages credit plans. A plan is a service with commercial terms: credits at a price, either one-time or monthly. An enrollment ties one customer to one plan and holds that customer's balance for it. Typical order: create_plan, enroll_customer, then grant_credits if needed.
 
-Rules worth repeating: a new plan starts as a draft with no published terms, and a draft cannot be enrolled or purchased. Publishing requires a payment-ready connected Stripe account; use publish_plan (or the dashboard) and it provisions the Product/Price on the creator's account. Publishing new terms supersedes the previous version while existing customers keep theirs; unpublish_plan stops new sales and needs confirm: true. Plan prices in create_plan/update_plan are major units (10 means $10), while responses return minor units (cents). Published terms are immutable: editing terms replaces the draft only, and already-sold credits do not change. consume_credits requires an idempotency_key built from the business event, not a timestamp, and is unavailable to OAuth connections (it needs an API key). enroll_customer defaults to invoice mode and returns a payment link; credits arrive only after payment, and no email is sent, so forward the link yourself. Comp enrollment requires a reason and cannot be repeated for an existing enrollment. No payout, refund, or billing-charge tools exist.`;
+Rules worth repeating: a new plan starts as a draft with no published terms, and a draft cannot be enrolled or purchased. Publishing requires a payment-ready connected Stripe account; use publish_plan (or the dashboard) and it provisions the Product/Price on the creator's account. Publishing new terms supersedes the previous version while existing customers keep theirs; unpublish_plan stops new sales and needs confirm: true. Plan prices in create_plan/update_plan are major units (10 means $10), while responses return minor units (cents). Published terms are immutable: editing terms replaces the draft only, and already-sold credits do not change. Monthly plans are subscriptions, not top-ups: the customer authorizes the monthly price and each confirmed paid invoice grants a non-rolling allowance. Monthly Checkout remains test-mode only until the live-release gate is complete. consume_credits requires an idempotency_key built from the business event, not a timestamp, and is unavailable to OAuth connections (it needs an API key). enroll_customer defaults to invoice mode and returns a payment link; credits arrive only after payment, and no email is sent, so forward the link yourself. Comp enrollment requires a reason and cannot be repeated for an existing enrollment; complimentary monthly enrollment is not supported. No payout, refund, or billing-charge tools exist.`;
 
 export function createServer(principal: Principal) {
 	const server = new McpServer(
@@ -143,21 +143,21 @@ export function createServer(principal: Principal) {
 	);
 	register(
 		"list_customers",
-		"List only customers enrolled with you, with per-plan credit balances. Paginate with limit/offset.",
+		"List only customers enrolled with you, with per-plan usable credit balances and monthly subscription status/paid-through data where applicable. Paginate with limit/offset.",
 		pageInput,
 		true,
 		(input) => listCustomers(principal, input),
 	);
 	register(
 		"get_customer",
-		"Get your enrolled customer by ID, email, or exact name. Ambiguous names return candidates; never guess.",
+		"Get your enrolled customer by ID, email, or exact name, with usable per-plan credits and monthly subscription overdue/paid-through state. Ambiguous names return candidates; never guess.",
 		z.object({ customer: z.string().min(1) }),
 		true,
 		({ customer }) => getCustomer(principal, customer),
 	);
 	register(
 		"enroll_customer",
-		"Enroll a customer in a published plan. Default invoice returns a checkout link (credits only after payment). Explicit comp grants the published terms' credits and requires reason; repeat comps are rejected. If no account exists, returns invited plus a claim link, not a completed enrollment. NO EMAIL IS SENT: the creator must forward the link.",
+		"Enroll a customer in a published plan. Default invoice returns a Checkout link (one-time payment or monthly subscription; credits are granted only after the signed Stripe fulfillment event). Monthly subscriptions remain test-mode only until the live-release gate is complete. Explicit comp grants one-time plan terms and requires a reason; recurring plans cannot be comped. If no account exists, returns invited plus a claim link, not a completed enrollment. NO EMAIL IS SENT: the creator must forward the link.",
 		enrollmentInput,
 		false,
 		(input) => enrollCustomer(principal, input),

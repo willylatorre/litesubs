@@ -63,7 +63,11 @@ STRIPE_WEBHOOK_SECRET=<signing secret for /api/webhooks/stripe>
 
 The Stripe webhook endpoint must subscribe to `checkout.session.completed`,
 `checkout.session.async_payment_succeeded`, `checkout.session.expired`, and
-`account.updated`. The old `STRIPE_WEBHOOK_PURCHASES` variable is unused.
+`account.updated`. Subscribe to `invoice.paid`, `invoice.payment_failed`, and
+`invoice.payment_action_required` on connected accounts for the first monthly
+allowance, renewals, and overdue state. Monthly Checkout remains test-mode only
+until the live-release gate is complete. The old
+`STRIPE_WEBHOOK_PURCHASES` variable is unused.
 
 Keep the MCP resource URL stable: it is the token audience. Development may use
 `http://localhost:3000/api/mcp`; non-loopback resources require HTTPS. Never derive
@@ -190,8 +194,11 @@ A **plan** holds editable service identity (name, description, booking link).
 Its commercial terms live in **plan versions**: a creator edits a `draft` until
 it is published, and a `published` version is immutable so existing customers
 keep the price and credits they bought. An **enrollment** is the unique
-customer/plan row in `enrollments` holding the credit balance projection.
-Neither is recurring Stripe billing yet.
+customer/plan row in `enrollments` holding the credit balance projection. A
+monthly plan also has a separate Stripe subscription record; the enrollment is
+still the customer's credit balance, not the billing identity.
+Customer read APIs return usable grant balances alongside subscription status
+and paid-through dates; an overdue status never extends the last paid period.
 
 Only published plans are sellable. Creating a plan creates local draft terms and
 never contacts Stripe. Enrollment, invites, credit grants, and consumption all
@@ -204,8 +211,11 @@ guessing. Enrollment may resolve a new account by exact email/ID, but never
 searches other creators' customers by name or creates bare accounts.
 
 `enroll_customer` defaults to `invoice`. Existing users receive a single-use
-Checkout Session URL and zero initial credits. `comp` requires a reason and grants
-the published version's credits. Re-comping an existing enrollment is rejected.
+Checkout Session URL and zero initial credits; monthly plans use subscription
+Checkout and grant only after the first paid invoice. Monthly Checkout is
+test-mode only until the live-release gate is complete. `comp` requires a reason
+and grants one-time plan credits; monthly complimentary enrollment is not
+supported. Re-comping an existing enrollment is rejected.
 
 Unknown emails receive an expiring invite and a URL to forward. Comp invites
 snapshot the credit grant/reason and grant once on claim, with a row lock and

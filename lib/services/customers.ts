@@ -1,7 +1,14 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/app/db";
-import { enrollments, transactions, user } from "@/app/db/schema";
+import {
+	enrollments,
+	subscriptions,
+	transactions,
+	user,
+} from "@/app/db/schema";
+import { isSubscriptionOverdue } from "@/lib/subscription-state";
+import { usableBalances } from "./credit-balance";
 import { pageInput, resolvePlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
 
@@ -56,18 +63,74 @@ export async function listCustomers(principal: Principal, input: unknown = {}) {
 		.limit(page.limit)
 		.offset(page.offset);
 	if (!customers.length) return [];
-	const rows = await db.query.enrollments.findMany({
-		where: and(
-			eq(enrollments.creatorId, principal.creatorId),
-			inArray(
-				enrollments.userId,
-				customers.map((c) => c.id),
+	const [rows, subscriptionRows] = await Promise.all([
+		db.query.enrollments.findMany({
+			where: and(
+				eq(enrollments.creatorId, principal.creatorId),
+				inArray(
+					enrollments.userId,
+					customers.map((c) => c.id),
+				),
 			),
-		),
-		with: { plan: true },
+			with: { plan: true },
+		}),
+		db.query.subscriptions.findMany({
+			where: and(
+				eq(subscriptions.creatorId, principal.creatorId),
+				inArray(
+					subscriptions.userId,
+					customers.map((c) => c.id),
+				),
+				inArray(subscriptions.status, [
+					"pending",
+					"incomplete",
+					"active",
+					"past_due",
+				]),
+			),
+			orderBy: [desc(subscriptions.createdAt)],
+			columns: {
+				userId: true,
+				planId: true,
+				status: true,
+				paidThroughAt: true,
+				cancelAtPeriodEnd: true,
+			},
+		}),
+	]);
+	const balances = await usableBalances(
+		db,
+		rows.map((row) => row.id),
+	);
+	const currentSubscriptions = new Map<
+		string,
+		(typeof subscriptionRows)[number]
+	>();
+	for (const subscription of subscriptionRows) {
+		const key = JSON.stringify([subscription.userId, subscription.planId]);
+		if (!currentSubscriptions.has(key))
+			currentSubscriptions.set(key, subscription);
+	}
+	const viewRows = rows.map((row) => {
+		const subscription = currentSubscriptions.get(
+			JSON.stringify([row.userId, row.planId]),
+		);
+		return {
+			...row,
+			credits: balances.get(row.id) ?? 0,
+			billingSubscription: subscription
+				? {
+						...subscription,
+						overdue: isSubscriptionOverdue(
+							subscription.status,
+							subscription.paidThroughAt,
+						),
+					}
+				: null,
+		};
 	});
 	return customers.map((customer) => {
-		const owned = rows.filter((row) => row.userId === customer.id);
+		const owned = viewRows.filter((row) => row.userId === customer.id);
 		return {
 			id: customer.id,
 			userId: customer.id,
@@ -78,6 +141,7 @@ export async function listCustomers(principal: Principal, input: unknown = {}) {
 				name: row.plan.name,
 				enrollmentId: row.id,
 				credits: row.credits,
+				billingSubscription: row.billingSubscription,
 			})),
 			updatedAt: new Date(
 				Math.max(...owned.map((row) => row.updatedAt.getTime())),
@@ -89,14 +153,65 @@ export async function listCustomers(principal: Principal, input: unknown = {}) {
 export async function getCustomer(principal: Principal, identifier: string) {
 	requireScope(principal, "customers:read");
 	const customer = await resolveCustomer(principal, identifier);
-	const rows = await db.query.enrollments.findMany({
-		where: and(
-			eq(enrollments.creatorId, principal.creatorId),
-			eq(enrollments.userId, customer.id),
-		),
-		with: { plan: true },
-	});
-	return { customer, enrollments: rows };
+	const [rows, subscriptionRows] = await Promise.all([
+		db.query.enrollments.findMany({
+			where: and(
+				eq(enrollments.creatorId, principal.creatorId),
+				eq(enrollments.userId, customer.id),
+			),
+			with: { plan: true },
+		}),
+		db.query.subscriptions.findMany({
+			where: and(
+				eq(subscriptions.creatorId, principal.creatorId),
+				eq(subscriptions.userId, customer.id),
+				inArray(subscriptions.status, [
+					"pending",
+					"incomplete",
+					"active",
+					"past_due",
+				]),
+			),
+			orderBy: [desc(subscriptions.createdAt)],
+			columns: {
+				planId: true,
+				status: true,
+				paidThroughAt: true,
+				cancelAtPeriodEnd: true,
+			},
+		}),
+	]);
+	const balances = await usableBalances(
+		db,
+		rows.map((row) => row.id),
+	);
+	const currentSubscriptions = new Map<
+		string,
+		(typeof subscriptionRows)[number]
+	>();
+	for (const subscription of subscriptionRows) {
+		if (!currentSubscriptions.has(subscription.planId))
+			currentSubscriptions.set(subscription.planId, subscription);
+	}
+	return {
+		customer,
+		enrollments: rows.map((row) => {
+			const subscription = currentSubscriptions.get(row.planId);
+			return {
+				...row,
+				credits: balances.get(row.id) ?? 0,
+				billingSubscription: subscription
+					? {
+							...subscription,
+							overdue: isSubscriptionOverdue(
+								subscription.status,
+								subscription.paidThroughAt,
+							),
+						}
+					: null,
+			};
+		}),
+	};
 }
 
 export async function listTransactions(

@@ -122,7 +122,8 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 								{allEnrollments.map((enrollment) => {
 									const isPurchased =
 										purchasedPlanId && enrollment.plan.id === purchasedPlanId;
-									const terms = enrollment.plan.terms;
+									const terms =
+										enrollment.subscription?.terms ?? enrollment.plan.terms;
 									const recurring = terms?.billingMode === "recurring";
 									return (
 										<PlanCard
@@ -166,6 +167,52 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 																productName={enrollment.plan.name}
 																label="Top up"
 															/>
+														</div>
+													)}
+													{recurring && (
+														<div className="flex flex-1 flex-col items-end gap-1">
+															{enrollment.subscription?.overdue ? (
+																<p className="text-xs text-destructive text-right">
+																	Payment overdue
+																	{enrollment.subscription.paidThroughAt && (
+																		<>
+																			{" "}
+																			· paid through{" "}
+																			{new Date(
+																				enrollment.subscription.paidThroughAt,
+																			).toLocaleDateString()}
+																		</>
+																	)}
+																</p>
+															) : enrollment.subscription?.status ===
+																"active" ? (
+																<p className="text-xs text-muted-foreground text-right">
+																	Monthly subscription active
+																	{enrollment.subscription.paidThroughAt && (
+																		<>
+																			{" "}
+																			· paid through{" "}
+																			{new Date(
+																				enrollment.subscription.paidThroughAt,
+																			).toLocaleDateString()}
+																		</>
+																	)}
+																</p>
+															) : enrollment.subscription ? (
+																<p className="text-xs text-muted-foreground text-right">
+																	Subscription payment processing
+																</p>
+															) : terms ? (
+																<BuyButton
+																	planId={enrollment.plan.id}
+																	price={terms.price}
+																	currency={terms.currency}
+																	productName={enrollment.plan.name}
+																	billingMode="recurring"
+																	credits={terms.credits}
+																	label="Subscribe"
+																/>
+															) : null}
 														</div>
 													)}
 												</div>

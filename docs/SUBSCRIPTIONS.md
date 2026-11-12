@@ -36,6 +36,16 @@ Implemented slices:
   record the split, and the enrollment balance is a projection updated in the
   same transaction. Expiry is enforced on read. See
   `drizzle/0006_s06_credit_grants.sql`.
+- S07 — monthly direct-charge Checkout with a creator-scoped Customer, persisted
+  subscription identity/fee rate, and an idempotent first paid-invoice receipt
+  that grants one allowance expiring at the Stripe line-item period boundary.
+  Checkout/invoice event reordering is supported. See
+  `drizzle/0007_s07_subscriptions.sql`.
+- S08 — cycle invoice fulfillment grants one source-linked allowance per paid
+  period, failed invoices mark overdue without extending paid-through, late
+  periods are recorded without restoring expired credits, and customer/creator
+  summaries read usable grant balances. See
+  `drizzle/0008_s08_renewals.sql`.
 
 ## Purpose
 
@@ -97,6 +107,7 @@ when there is evidence they are needed.
 | `enrollments` | Customer-to-plan relationship and credit balance projection. Not recurring billing. |
 | `creator_customers` | Local user to Stripe Customer mapping scoped to the connected account. |
 | `subscriptions` | Stripe subscription identity, purchased version, fee rate, lifecycle state, and paid-through information. |
+| `subscription_invoices` | Account-scoped invoice receipt/idempotency key, paid amount, and the exact service period credited. |
 | `payments` | Financial receipts and payment/refund state, with account-scoped Stripe references and actual application fees. |
 | `credit_grants` | Granted units, remaining units, source payment or manual adjustment, and expiry. |
 | `credit_ledger` | Append-only grants, consumption, expiry, and adjustments; consumption allocations identify the affected grants. |
@@ -623,24 +634,24 @@ usable credits, payment state, and paid-through date in creator/customer views.
 
 #### Acceptance criteria
 
-- [ ] Monthly publication creates an account-scoped recurring Stripe Price; customers
+- [x] Monthly publication creates an account-scoped recurring Stripe Price; customers
       see `/month`, the credit allowance, automatic renewal, and no-rollover expiry
       before authorizing payment.
-- [ ] Checkout uses `mode: subscription`, the creator-scoped Customer, and a 2%
+- [x] Checkout uses `mode: subscription`, the creator-scoped Customer, and a 2%
       application-fee percentage; persist the agreed rate on the subscription.
-- [ ] First invoice fulfillment grants exactly one allowance for the subscription
+- [x] First invoice fulfillment grants exactly one allowance for the subscription
       item's service period. Checkout completion alone does not also grant credits.
-- [ ] Failed/incomplete startup grants no allowance. A later paid first invoice can
+- [x] Failed/incomplete startup grants no allowance. A later paid first invoice can
       recover the same intended subscription without duplicate grants.
-- [ ] Repeated/concurrent start requests do not create multiple live subscriptions
+- [x] Repeated/concurrent start requests do not create multiple live subscriptions
       for the same customer/plan, including the window before webhooks arrive.
-- [ ] Recurring pages do not offer paid top-ups. A caller cannot bypass this by
+- [x] Recurring pages do not offer paid top-ups. A caller cannot bypass this by
       invoking a one-time checkout endpoint with a recurring plan ID.
-- [ ] The subscription stores reported Stripe state separately from its actually
+- [x] The subscription stores reported Stripe state separately from its actually
       paid/granted period. Its first allowance expires at that period's end using
       the shared credit service, even before renewal delivery exists.
-- [ ] Existing one-time purchase flows remain unchanged. Monthly sales stay sandbox-
-      only/unavailable in live mode until S08 and the release gate are complete.
+- [x] Existing one-time purchase flows remain unchanged. Monthly sales stay sandbox-
+      only/unavailable in live mode until the release gate is complete.
 
 #### Implementation notes and relevant files
 
@@ -657,6 +668,10 @@ paid invoice solely because Stripe reports no new cash collected.
 Publish a monthly offer, subscribe in the sandbox, and show one creator-owned
 subscription plus one period grant. Deliver Checkout and invoice events in either
 order, and retry concurrent starts. Verify no top-up path and first-period expiry.
+
+**Implemented:** yes — see `lib/services/purchase.ts`, the Stripe webhook
+dispatcher, and `drizzle/0007_s07_subscriptions.sql`. Deterministic PostgreSQL
+coverage is in `lib/subscriptions.integration.test.ts` (opt-in).
 
 #### Blocked by
 
@@ -680,21 +695,21 @@ and expose paid-through/overdue information through UI and APIs.
 
 #### Acceptance criteria
 
-- [ ] A paid renewal creates a new period grant for the purchased version's credits;
+- [x] A paid renewal creates a new period grant for the purchased version's credits;
       old unused units expire rather than accumulating.
-- [ ] Current Stripe billing-state updates cannot advance entitlement before an
+- [x] Current Stripe billing-state updates cannot advance entitlement before an
       invoice is actually fulfilled. Access is based on paid, usable grants.
-- [ ] Failure grants nothing and does not extend the previous paid-through date.
+- [x] Failure grants nothing and does not extend the previous paid-through date.
       Stripe—not a custom cron—owns payment retries and terminal billing state.
-- [ ] A successful retry grants the original invoice period once, with its original
+- [x] A successful retry grants the original invoice period once, with its original
       end; a payment received after that end records financial truth but creates
       no spendable expired allowance.
-- [ ] Duplicate, concurrent, and out-of-order invoice delivery cannot wipe newer
+- [x] Duplicate, concurrent, and out-of-order invoice delivery cannot wipe newer
       credits, reopen an expired period, or grant the same period twice. Invoices
       for unrelated items or unsupported proration changes do not add allowances.
-- [ ] New plan versions affect only new subscriptions. Existing subscribers renew
+- [x] New plan versions affect only new subscriptions. Existing subscribers renew
       with their original price/credits and agreed application-fee rate.
-- [ ] UI, read APIs, consumption, and billing summaries agree about overdue state and
+- [x] UI, read APIs, consumption, and billing summaries agree about overdue state and
       usable units without needing timely cleanup or lifecycle webhook delivery.
 
 #### Implementation notes and relevant files
@@ -711,6 +726,12 @@ Advance a sandbox/test clock through a successful renewal, a failed renewal, and
 a successful retry. Check missing/delayed/out-of-order events, a late payment for
 an already-expired period, and a price/credit edit while an old subscriber renews.
 Verify the actual service/database outcomes, not only helper calculations.
+
+**Implemented:** yes — see `markSubscriptionInvoiceFailed` and
+`fulfillSubscriptionInvoice` in `lib/services/purchase.ts`, connected invoice
+handling in `app/api/webhooks/stripe/route.ts`, and
+`drizzle/0008_s08_renewals.sql`. Database-backed coverage extends
+`lib/subscriptions.integration.test.ts` (opt-in).
 
 #### Blocked by
 

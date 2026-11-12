@@ -26,6 +26,27 @@ import { DecreaseCreditButton } from "./decrease-credit-button";
 import { EnrollmentMoreActions } from "./enrollment-more-actions";
 import { ManageEnrollmentCreditsDialog } from "./manage-enrollment-credits-dialog";
 
+type CustomerEnrollmentView = {
+	id: string;
+	credits: number;
+	planId: string;
+	plan: { name: string };
+	billingSubscription?: {
+		status: "pending" | "incomplete" | "active" | "past_due" | "canceled";
+		paidThroughAt: Date | null;
+		cancelAtPeriodEnd: boolean;
+		overdue: boolean;
+	} | null;
+};
+
+type CustomerTransactionView = {
+	id: string;
+	createdAt: Date | string;
+	type: string;
+	amount: number;
+	description?: string | null;
+};
+
 interface CustomerDetailsDialogProps {
 	customerId: string;
 	customer: {
@@ -38,12 +59,18 @@ interface CustomerDetailsDialogProps {
 		name: string;
 		enrollmentId: string;
 		credits: number;
+		billingSubscription?: {
+			status: "pending" | "incomplete" | "active" | "past_due" | "canceled";
+			paidThroughAt: Date | null;
+			cancelAtPeriodEnd: boolean;
+			overdue: boolean;
+		} | null;
 	}[];
 	children?: React.ReactNode;
 	demoData?: {
 		totalSpent: number;
-		enrollments: any[];
-		transactions: any[];
+		enrollments: CustomerEnrollmentView[];
+		transactions: CustomerTransactionView[];
 	};
 }
 
@@ -70,12 +97,13 @@ export function CustomerDetailsDialog({
 	const data = demoData || fetchedData;
 	const isLoading = !demoData && isQueryLoading;
 
-	const enrollments = isLoading
+	const enrollments: CustomerEnrollmentView[] = isLoading
 		? initialEnrollments.map((enrollment) => ({
 				id: enrollment.enrollmentId,
 				credits: enrollment.credits,
 				plan: { name: enrollment.name },
 				planId: enrollment.id,
+				billingSubscription: enrollment.billingSubscription,
 			}))
 		: (data?.enrollments ?? []);
 
@@ -140,7 +168,7 @@ export function CustomerDetailsDialog({
 									No enrollments.
 								</p>
 							) : (
-								enrollments.map((enrollment: any, index: number) => (
+								enrollments.map((enrollment, index) => (
 									<div
 										key={enrollment.id}
 										className={`flex items-center justify-between py-3 ${
@@ -156,6 +184,24 @@ export function CustomerDetailsDialog({
 											<span className="text-[10px] text-muted-foreground font-mono">
 												{enrollment.planId.substring(0, 8)}
 											</span>
+											{enrollment.billingSubscription && (
+												<span
+													className={`text-[10px] ${enrollment.billingSubscription.overdue ? "text-destructive" : "text-muted-foreground"}`}
+												>
+													{enrollment.billingSubscription.overdue
+														? "Payment overdue"
+														: enrollment.billingSubscription.status}
+													{enrollment.billingSubscription.paidThroughAt && (
+														<>
+															{" "}
+															· paid through{" "}
+															{new Date(
+																enrollment.billingSubscription.paidThroughAt,
+															).toLocaleDateString()}
+														</>
+													)}
+												</span>
+											)}
 										</div>
 										<div className="flex items-center gap-4">
 											<div className="flex items-baseline gap-1">
@@ -216,19 +262,23 @@ export function CustomerDetailsDialog({
 										<TableRow>
 											<TableHead className="h-8 text-[10px]">Date</TableHead>
 											<TableHead className="h-8 text-[10px]">Type</TableHead>
+											<TableHead className="h-8 text-[10px]">Details</TableHead>
 											<TableHead className="h-8 text-[10px] text-right">
 												Amount
 											</TableHead>
 										</TableRow>
 									</TableHeader>
 									<TableBody>
-										{data?.transactions?.map((tx: any) => (
+										{data?.transactions?.map((tx: CustomerTransactionView) => (
 											<TableRow key={tx.id} className="h-8">
 												<TableCell className="py-1 text-xs text-muted-foreground">
 													{new Date(tx.createdAt).toLocaleDateString()}
 												</TableCell>
 												<TableCell className="py-1 text-xs capitalize">
 													{tx.type.replace("_", " ")}
+												</TableCell>
+												<TableCell className="py-1 text-xs text-muted-foreground">
+													{tx.description || "—"}
 												</TableCell>
 												<TableCell
 													className={`py-1 text-xs text-right font-mono ${

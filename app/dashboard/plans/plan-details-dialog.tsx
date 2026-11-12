@@ -268,13 +268,14 @@ export function PlanDetailsDialog({
 												<TableHead className="text-right">
 													Credits Left
 												</TableHead>
+												<TableHead>Subscription</TableHead>
 											</TableRow>
 										</TableHeader>
 										<TableBody>
 											{displayedEnrollments.length === 0 ? (
 												<TableRow>
 													<TableCell
-														colSpan={3}
+														colSpan={4}
 														className="text-center h-24 text-muted-foreground"
 													>
 														No enrollments yet.
@@ -302,6 +303,11 @@ export function PlanDetailsDialog({
 														<TableCell>{enrollment.user.email}</TableCell>
 														<TableCell className="text-right font-mono">
 															{enrollment.credits}
+														</TableCell>
+														<TableCell className="text-sm text-muted-foreground">
+															{enrollment.subscription
+																? `${enrollment.subscription.overdue ? "Payment overdue" : enrollment.subscription.status}${enrollment.subscription.paidThroughAt ? ` · through ${new Date(enrollment.subscription.paidThroughAt).toLocaleDateString()}` : ""}`
+																: "—"}
 														</TableCell>
 													</TableRow>
 												))

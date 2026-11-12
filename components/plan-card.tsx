@@ -27,7 +27,7 @@ interface PlanCardProps {
 	onCreditsHover?: (hovering: boolean) => void;
 	onPriceHover?: (hovering: boolean) => void;
 	creditsSuffix?: string;
-	session?: any; // better-auth session
+	session?: unknown; // Only truthiness is used to decide whether to show login.
 	loginUrl?: string;
 	action?: React.ReactNode;
 	creatorName?: string;
@@ -73,7 +73,8 @@ export function PlanCard({
 		if (readOnly) {
 			return (
 				<Button size="lg" className="w-full pointer-events-none opacity-80">
-					Buy {formattedPrice}
+					{recurring ? "Subscribe" : "Buy"} {formattedPrice}
+					{recurring ? " / month" : ""}
 				</Button>
 			);
 		}
@@ -86,9 +87,6 @@ export function PlanCard({
 			);
 		}
 
-		// Monthly plans are subscription-only in v1: no paid top-ups.
-		if (recurring) return null;
-
 		return (
 			<BuyButton
 				disabled={!productId}
@@ -96,7 +94,9 @@ export function PlanCard({
 				price={finalPrice}
 				currency={currency}
 				productName={name}
-				label="Purchase credits"
+				billingMode={product.billingMode}
+				credits={credits}
+				label={recurring ? "Subscribe" : "Purchase credits"}
 			/>
 		);
 	};
@@ -138,6 +138,10 @@ export function PlanCard({
 					{description && (
 						<p className="text-sm text-muted-foreground mt-1">{description}</p>
 					)}
+					<p className="mt-2 text-sm font-semibold">
+						{formattedPrice}
+						{recurring ? " / month" : " one-time"}
+					</p>
 					{eventTypeName && (
 						<p className="text-xs text-muted-foreground mt-1">
 							Cal.com · {eventTypeName}

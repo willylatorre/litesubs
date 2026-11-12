@@ -9,7 +9,11 @@ import { appUrl } from "@/lib/app-url";
 import { auth } from "@/lib/auth";
 import { resolvePublishedPlan } from "@/lib/services/plans";
 import { sessionPrincipal } from "@/lib/services/principal";
-import { issueCheckoutToken, startPurchase } from "@/lib/services/purchase";
+import {
+	issueCheckoutToken,
+	startPurchase,
+	startSubscription,
+} from "@/lib/services/purchase";
 
 /**
  * Self-service purchase of a published plan. The shared purchase service owns
@@ -25,7 +29,12 @@ export async function createCheckoutSession(planId: string) {
 
 	let result: Awaited<ReturnType<typeof startPurchase>>;
 	try {
-		result = await startPurchase(sessionPrincipal(plan.creatorId), {
+		const published = await resolvePublishedPlan(plan.creatorId, planId);
+		const start =
+			published.terms.billingMode === "recurring"
+				? startSubscription
+				: startPurchase;
+		result = await start(sessionPrincipal(plan.creatorId), {
 			planId,
 			userId: session.user.id,
 		});

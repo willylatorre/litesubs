@@ -1,14 +1,19 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import type { Stripe } from "stripe";
 import { db } from "@/app/db";
+import { planVersions, subscriptions } from "@/app/db/schema";
 import { connectedAccounts } from "@/app/db/stripe-connect-schema";
 import { deriveReadiness } from "@/lib/connect-readiness";
 import { markAccountDeauthorized } from "@/lib/services/connect";
 import {
+	attachStripeSubscription,
 	closePayment,
+	closeSubscriptionCheckout,
 	fulfillPayment,
+	fulfillSubscriptionInvoice,
 	getPayment,
+	markSubscriptionInvoiceFailed,
 } from "@/lib/services/purchase";
 import { getStripe } from "@/lib/stripe";
 
@@ -24,6 +29,12 @@ async function handleCheckoutCompleted(
 	eventId: string,
 	eventAccountId?: string,
 ): Promise<Response> {
+	if (checkoutSession.mode === "subscription")
+		return handleSubscriptionCheckoutCompleted(
+			checkoutSession,
+			eventId,
+			eventAccountId,
+		);
 	const metadata = checkoutSession.metadata;
 	if (!metadata?.paymentId || !metadata?.creatorId) {
 		console.error("Webhook received with missing metadata", { eventId });
@@ -101,12 +112,262 @@ async function handleCheckoutCompleted(
 	}
 }
 
+async function handleSubscriptionCheckoutCompleted(
+	checkoutSession: Stripe.Checkout.Session,
+	eventId: string,
+	eventAccountId?: string,
+): Promise<Response> {
+	const localId = checkoutSession.metadata?.subscriptionId;
+	if (!localId) return new Response(null, { status: 200 });
+	if (checkoutSession.livemode)
+		return new Response("Monthly subscriptions are test-mode only", {
+			status: 400,
+		});
+	const stripeSubscriptionId =
+		typeof checkoutSession.subscription === "string"
+			? checkoutSession.subscription
+			: (checkoutSession.subscription?.id ?? null);
+	if (!stripeSubscriptionId) {
+		console.error("Subscription Checkout missing correlation data", {
+			eventId,
+		});
+		return new Response("Missing subscription metadata", { status: 400 });
+	}
+	try {
+		const subscription = await db.query.subscriptions.findFirst({
+			where: and(
+				eq(subscriptions.id, localId),
+				eq(subscriptions.stripeCheckoutId, checkoutSession.id),
+			),
+		});
+		if (!subscription)
+			return new Response("Unknown subscription", { status: 400 });
+		const accountId = eventAccountId ?? subscription.stripeAccountId;
+		if (accountId !== subscription.stripeAccountId)
+			return new Response("Account mismatch", { status: 400 });
+		const owner = await db.query.connectedAccounts.findFirst({
+			where: eq(connectedAccounts.stripeAccountId, accountId),
+		});
+		if (
+			!owner ||
+			owner.userId !== subscription.creatorId ||
+			owner.livemode !== false
+		)
+			return new Response("Account mismatch", { status: 400 });
+		const customerId =
+			typeof checkoutSession.customer === "string"
+				? checkoutSession.customer
+				: (checkoutSession.customer?.id ?? null);
+		if (customerId !== subscription.stripeCustomerId)
+			return new Response("Customer mismatch", { status: 400 });
+
+		await attachStripeSubscription({
+			subscriptionId: localId,
+			checkoutSessionId: checkoutSession.id,
+			stripeSubscriptionId,
+			stripeAccountId: accountId,
+		});
+		return new Response(null, { status: 200 });
+	} catch (error) {
+		console.error("Failed to attach Stripe subscription", {
+			eventId,
+			type: error instanceof Error ? error.name : "UnknownError",
+		});
+		return new Response("Webhook Error", { status: 500 });
+	}
+}
+
+type SubscriptionInvoiceContext = {
+	localSubscriptionId: string;
+	stripeSubscriptionId: string;
+	stripeAccountId: string;
+	periodStart: Date;
+	periodEnd: Date;
+	billingReason: "subscription_create" | "subscription_cycle";
+};
+
+/** Resolve only the exact immutable monthly Price line for a Litesubs subscription. */
+async function subscriptionInvoiceContext(
+	invoice: Stripe.Invoice,
+	eventId: string,
+	eventAccountId?: string,
+): Promise<SubscriptionInvoiceContext | null | Response> {
+	const billingReason = invoice.billing_reason;
+	if (
+		billingReason !== "subscription_create" &&
+		billingReason !== "subscription_cycle"
+	)
+		return null;
+	const supportedBillingReason = billingReason as
+		| "subscription_create"
+		| "subscription_cycle";
+	const details = invoice.parent?.subscription_details;
+	const stripeSubscriptionId = details
+		? typeof details.subscription === "string"
+			? details.subscription
+			: details.subscription.id
+		: null;
+	const localId = details?.metadata?.subscriptionId;
+	// This connected account may also create subscriptions outside Litesubs.
+	if (!localId) return null;
+	if (invoice.livemode)
+		return new Response("Monthly subscriptions are test-mode only", {
+			status: 400,
+		});
+	if (!stripeSubscriptionId)
+		return new Response("Missing subscription metadata", { status: 400 });
+
+	const subscription = await db.query.subscriptions.findFirst({
+		where: eventAccountId
+			? and(
+					eq(subscriptions.id, localId),
+					eq(subscriptions.stripeAccountId, eventAccountId),
+				)
+			: eq(subscriptions.id, localId),
+	});
+	// invoice.paid can arrive before checkout.session.completed; returning 500
+	// asks Stripe to retry until the local subscription can be reconciled.
+	if (!subscription) {
+		console.error("Invoice has no matching local subscription", {
+			eventId,
+			stripeSubscriptionId,
+		});
+		return new Response("Unknown subscription", { status: 500 });
+	}
+	const accountId = eventAccountId ?? subscription.stripeAccountId;
+	if (accountId !== subscription.stripeAccountId)
+		return new Response("Account mismatch", { status: 400 });
+	const owner = await db.query.connectedAccounts.findFirst({
+		where: eq(connectedAccounts.stripeAccountId, accountId),
+	});
+	if (
+		!owner ||
+		owner.userId !== subscription.creatorId ||
+		owner.livemode !== false
+	)
+		return new Response("Account mismatch", { status: 400 });
+	const customerId =
+		typeof invoice.customer === "string"
+			? invoice.customer
+			: (invoice.customer?.id ?? null);
+	if (customerId !== subscription.stripeCustomerId)
+		return new Response("Customer mismatch", { status: 400 });
+
+	const version = await db.query.planVersions.findFirst({
+		where: eq(planVersions.id, subscription.planVersionId),
+	});
+	if (!version?.stripePriceId || !version.stripeAccountId)
+		return new Response("Plan price missing", { status: 400 });
+	const matchingLines = invoice.lines.data.filter((line) => {
+		const parent = line.parent;
+		if (
+			parent?.type !== "subscription_item_details" ||
+			parent.subscription_item_details?.proration ||
+			parent.subscription_item_details?.subscription !== stripeSubscriptionId
+		)
+			return false;
+		const price = line.pricing?.price_details?.price;
+		return (
+			(typeof price === "string" ? price : price?.id) === version.stripePriceId
+		);
+	});
+	if (version.stripeAccountId !== accountId || matchingLines.length !== 1)
+		return new Response("Invoice does not match the published plan", {
+			status: 400,
+		});
+	const line = matchingLines[0];
+	if (line.period.end <= line.period.start)
+		return new Response("Invalid invoice period", { status: 400 });
+	if (invoice.currency !== version.currency)
+		return new Response("Invoice currency mismatch", { status: 400 });
+	return {
+		localSubscriptionId: localId,
+		stripeSubscriptionId,
+		stripeAccountId: accountId,
+		periodStart: new Date(line.period.start * 1000),
+		periodEnd: new Date(line.period.end * 1000),
+		billingReason: supportedBillingReason,
+	};
+}
+
+async function handleInvoicePaid(
+	invoice: Stripe.Invoice,
+	eventId: string,
+	eventAccountId?: string,
+): Promise<Response> {
+	if (invoice.status !== "paid")
+		return new Response("Invoice not paid", { status: 200 });
+	try {
+		const context = await subscriptionInvoiceContext(
+			invoice,
+			eventId,
+			eventAccountId,
+		);
+		if (!context) return new Response(null, { status: 200 });
+		if (context instanceof Response) return context;
+		await fulfillSubscriptionInvoice({
+			subscriptionId: context.localSubscriptionId,
+			stripeSubscriptionId: context.stripeSubscriptionId,
+			stripeAccountId: context.stripeAccountId,
+			stripeInvoiceId: invoice.id,
+			billingReason: context.billingReason,
+			amountPaid: invoice.amount_paid,
+			currency: invoice.currency,
+			periodStart: context.periodStart,
+			periodEnd: context.periodEnd,
+			paidAt: new Date(
+				(invoice.status_transitions.paid_at ?? Date.now() / 1000) * 1000,
+			),
+		});
+		return new Response(null, { status: 200 });
+	} catch (error) {
+		console.error("Failed to process subscription invoice", {
+			eventId,
+			type: error instanceof Error ? error.name : "UnknownError",
+		});
+		return new Response("Webhook Error", { status: 500 });
+	}
+}
+
+async function handleInvoicePaymentFailed(
+	invoice: Stripe.Invoice,
+	eventId: string,
+	eventAccountId?: string,
+): Promise<Response> {
+	try {
+		const context = await subscriptionInvoiceContext(
+			invoice,
+			eventId,
+			eventAccountId,
+		);
+		if (!context) return new Response(null, { status: 200 });
+		if (context instanceof Response) return context;
+		await markSubscriptionInvoiceFailed({
+			subscriptionId: context.localSubscriptionId,
+			stripeSubscriptionId: context.stripeSubscriptionId,
+			stripeAccountId: context.stripeAccountId,
+			stripeInvoiceId: invoice.id,
+			billingReason: context.billingReason,
+			periodStart: context.periodStart,
+			periodEnd: context.periodEnd,
+		});
+		return new Response(null, { status: 200 });
+	} catch (error) {
+		console.error("Failed to process failed subscription invoice", {
+			eventId,
+			type: error instanceof Error ? error.name : "UnknownError",
+		});
+		return new Response("Webhook Error", { status: 500 });
+	}
+}
+
 async function handleCheckoutExpired(
 	checkoutSession: Stripe.Checkout.Session,
 	eventId: string,
 ): Promise<Response> {
 	try {
 		await closePayment(checkoutSession.id, "expired");
+		await closeSubscriptionCheckout(checkoutSession.id);
 		console.log("Checkout session expired", { eventId });
 		return new Response(null, { status: 200 });
 	} catch (error) {
@@ -121,6 +382,7 @@ async function handleCheckoutExpired(
 async function handleAccountUpdated(
 	account: Stripe.Account,
 	eventId: string,
+	livemode: boolean,
 ): Promise<Response> {
 	try {
 		const existingAccount = await db.query.connectedAccounts.findFirst({
@@ -136,6 +398,7 @@ async function handleAccountUpdated(
 			.update(connectedAccounts)
 			.set({
 				status: readiness.status,
+				livemode,
 				chargesEnabled: readiness.chargesEnabled,
 				payoutsEnabled: readiness.payoutsEnabled,
 				cardPaymentsStatus: account.capabilities?.card_payments ?? null,
@@ -235,8 +498,25 @@ export async function POST(req: Request) {
 			);
 		case "checkout.session.expired":
 			return handleCheckoutExpired(object as Stripe.Checkout.Session, eventId);
+		case "invoice.paid":
+			return handleInvoicePaid(
+				object as Stripe.Invoice,
+				eventId,
+				event.account ?? undefined,
+			);
+		case "invoice.payment_failed":
+		case "invoice.payment_action_required":
+			return handleInvoicePaymentFailed(
+				object as Stripe.Invoice,
+				eventId,
+				event.account ?? undefined,
+			);
 		case "account.updated":
-			return handleAccountUpdated(object as Stripe.Account, eventId);
+			return handleAccountUpdated(
+				object as Stripe.Account,
+				eventId,
+				event.livemode,
+			);
 		case "account.application.deauthorized":
 			return handleApplicationDeauthorized(event, eventId);
 		default:

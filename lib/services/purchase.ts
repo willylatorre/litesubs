@@ -1,23 +1,28 @@
 import { createHash } from "node:crypto";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/app/db";
 import {
 	checkoutTokens,
 	creatorCustomers,
 	enrollments,
 	payments,
+	planVersions,
+	subscriptionInvoices,
+	subscriptions,
 	transactions,
 	user as userTable,
 } from "@/app/db/schema";
+import { connectedAccounts } from "@/app/db/stripe-connect-schema";
 import { appUrl } from "@/lib/app-url";
 import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
 import {
 	createConnectedCustomer,
 	createDirectCheckoutSession,
+	createDirectSubscriptionCheckoutSession,
 	isValidApplicationFee,
 } from "@/lib/stripe-direct-charges";
 import { getPaymentReadiness } from "./connect";
-import { grantCredits } from "./credits";
+import { grantCredits, usableBalance } from "./credits";
 import { resolvePublishedPlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
 
@@ -46,9 +51,19 @@ export type PurchaseStripeAdapter = {
 	createDirectCheckoutSession: typeof createDirectCheckoutSession;
 };
 
+export type SubscriptionStripeAdapter = {
+	createConnectedCustomer: typeof createConnectedCustomer;
+	createDirectSubscriptionCheckoutSession: typeof createDirectSubscriptionCheckoutSession;
+};
+
 export const defaultPurchaseAdapter: PurchaseStripeAdapter = {
 	createConnectedCustomer,
 	createDirectCheckoutSession,
+};
+
+export const defaultSubscriptionAdapter: SubscriptionStripeAdapter = {
+	createConnectedCustomer,
+	createDirectSubscriptionCheckoutSession,
 };
 
 export type PurchaseResult = {
@@ -84,7 +99,10 @@ export async function ensureCreatorCustomer(
 		name?: string | null;
 		stripeAccountId: string;
 	},
-	adapter: PurchaseStripeAdapter = defaultPurchaseAdapter,
+	adapter: Pick<
+		PurchaseStripeAdapter,
+		"createConnectedCustomer"
+	> = defaultPurchaseAdapter,
 ) {
 	const find = () =>
 		db.query.creatorCustomers.findFirst({
@@ -203,7 +221,7 @@ export async function startPurchase(
 	if (terms.billingMode !== "one_time")
 		throw new ServiceError(
 			"UNSUPPORTED_BILLING_MODE",
-			"Monthly plans are not purchasable yet",
+			"Monthly plans must be started as a subscription",
 			409,
 		);
 	// A published version always carries the objects it sells; a row without
@@ -324,6 +342,519 @@ export async function startPurchase(
 		.where(eq(payments.id, payment.id));
 
 	return { status: "checkout", paymentId: payment.id, url: session.url };
+}
+
+/**
+ * Start a monthly Checkout on the plan owner's connected account. Monthly sales
+ * are intentionally restricted to sandbox-connected accounts until the monthly
+ * live-release gate is complete. A partial unique index and a creator/customer/plan lock
+ * ensure duplicate requests reuse one pending Checkout instead of creating
+ * multiple subscriptions.
+ */
+export async function startSubscription(
+	principal: Principal,
+	input: PurchaseInput,
+	adapter: SubscriptionStripeAdapter = defaultSubscriptionAdapter,
+): Promise<PurchaseResult> {
+	requireScope(principal, "customers:write");
+	const { plan, terms } = await resolvePublishedPlan(
+		principal.creatorId,
+		input.planId,
+	);
+	if (terms.billingMode !== "recurring" || terms.interval !== "month")
+		throw new ServiceError(
+			"UNSUPPORTED_BILLING_MODE",
+			"This plan is not a monthly subscription",
+			409,
+		);
+	if (!terms.stripePriceId || !terms.stripeAccountId)
+		throw new ServiceError(
+			"PLAN_NOT_PROVISIONED",
+			"This plan is not ready to sell. Republish it.",
+			409,
+		);
+	const stripePriceId = terms.stripePriceId;
+	const stripeAccountId = terms.stripeAccountId;
+
+	const readiness = await getPaymentReadiness(principal.creatorId);
+	if (!readiness.canSell || readiness.stripeAccountId !== stripeAccountId)
+		throw new ServiceError(
+			"PAYMENTS_NOT_READY",
+			"This creator cannot accept payments yet",
+			409,
+		);
+	const account = await db.query.connectedAccounts.findFirst({
+		where: and(
+			eq(connectedAccounts.userId, principal.creatorId),
+			eq(connectedAccounts.stripeAccountId, stripeAccountId),
+			isNull(connectedAccounts.disconnectedAt),
+		),
+		columns: { livemode: true },
+	});
+	if (account?.livemode !== false)
+		throw new ServiceError(
+			"SUBSCRIPTIONS_SANDBOX_ONLY",
+			"Monthly subscriptions are available in Stripe test mode only until the live-release gate is complete",
+			409,
+		);
+
+	const user = await db.query.user.findFirst({
+		where: eq(userTable.id, input.userId),
+		columns: { id: true, email: true, name: true },
+	});
+	if (!user)
+		throw new ServiceError("NOT_FOUND", "Customer account not found", 404);
+
+	const customer = await ensureCreatorCustomer(
+		{
+			creatorId: principal.creatorId,
+			userId: user.id,
+			email: user.email,
+			name: user.name,
+			stripeAccountId,
+		},
+		adapter,
+	);
+
+	const state = await db.transaction(async (tx) => {
+		await tx.execute(
+			sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify([principal.creatorId, user.id, plan.id, "subscription"])}, 0))`,
+		);
+		let existing = await tx.query.subscriptions.findFirst({
+			where: and(
+				eq(subscriptions.creatorId, principal.creatorId),
+				eq(subscriptions.userId, user.id),
+				eq(subscriptions.planId, plan.id),
+				inArray(subscriptions.status, [
+					"pending",
+					"incomplete",
+					"active",
+					"past_due",
+				]),
+			),
+		});
+		// A Checkout session expires after 24 hours. Allow a fresh attempt after a
+		// safety margin if its `checkout.session.expired` webhook was missed; the
+		// old Checkout can no longer create a second live Stripe subscription.
+		if (
+			existing?.status === "pending" &&
+			existing.createdAt.getTime() < Date.now() - 25 * 60 * 60 * 1000
+		) {
+			await tx
+				.update(subscriptions)
+				.set({ status: "canceled" })
+				.where(eq(subscriptions.id, existing.id));
+			existing = undefined;
+		}
+		if (existing) {
+			if (existing.status !== "pending" || existing.stripeSubscriptionId)
+				throw new ServiceError(
+					"SUBSCRIPTION_EXISTS",
+					"A subscription for this plan is already being processed or is active",
+					409,
+				);
+			return existing;
+		}
+		const subscriptionValues = {
+			creatorId: principal.creatorId,
+			userId: user.id,
+			planId: plan.id,
+			planVersionId: terms.id,
+			stripeAccountId,
+			stripeCustomerId: customer.stripeCustomerId as string,
+			applicationFeePercent: PLATFORM_FEE_PERCENT * 100,
+			status: "pending" as const,
+		} satisfies typeof subscriptions.$inferInsert;
+		const [created] = await tx
+			.insert(subscriptions)
+			.values(subscriptionValues)
+			.returning();
+		await tx
+			.insert(enrollments)
+			.values({
+				creatorId: principal.creatorId,
+				userId: user.id,
+				planId: plan.id,
+			})
+			.onConflictDoNothing({
+				target: [enrollments.userId, enrollments.planId],
+			});
+		return created;
+	});
+
+	let session: Awaited<
+		ReturnType<typeof createDirectSubscriptionCheckoutSession>
+	>;
+	try {
+		session = await adapter.createDirectSubscriptionCheckoutSession({
+			stripeAccountId,
+			lineItem: {
+				name: plan.name,
+				description: plan.description,
+				unitAmount: terms.price,
+				currency: terms.currency,
+				stripePriceId,
+			},
+			applicationFeePercent: PLATFORM_FEE_PERCENT * 100,
+			stripeCustomerId: customer.stripeCustomerId,
+			customerEmail: user.email,
+			successUrl: appUrl(
+				`/dashboard?subscriptionSuccess=true&planId=${plan.id}`,
+			),
+			cancelUrl: appUrl("/dashboard?subscriptionCanceled=true"),
+			metadata: {
+				subscriptionId: state.id,
+				creatorId: principal.creatorId,
+				userId: user.id,
+				planId: plan.id,
+				planVersionId: terms.id,
+				stripeAccountId,
+			},
+			idempotencyKey: `litesubs:subscription-checkout:${state.id}`,
+		});
+	} catch {
+		// Keep the pending row: if Stripe created the session but its response was
+		// lost, a retry with the same key must recover that exact Checkout.
+		throw new ServiceError(
+			"CHECKOUT_UNAVAILABLE",
+			"Stripe could not start this subscription checkout",
+			502,
+		);
+	}
+	if (!session.url)
+		throw new ServiceError(
+			"CHECKOUT_UNAVAILABLE",
+			"No checkout URL was returned",
+			502,
+		);
+	await db
+		.update(subscriptions)
+		.set({ stripeCheckoutId: session.id })
+		.where(eq(subscriptions.id, state.id));
+	return { status: "checkout", paymentId: state.id, url: session.url };
+}
+
+/** Bind Checkout to the Stripe subscription without granting any credits. */
+export async function attachStripeSubscription(input: {
+	subscriptionId: string;
+	checkoutSessionId: string;
+	stripeSubscriptionId: string;
+	stripeAccountId: string;
+}) {
+	const [updated] = await db
+		.update(subscriptions)
+		.set({
+			stripeSubscriptionId: input.stripeSubscriptionId,
+			status: "incomplete",
+		})
+		.where(
+			and(
+				eq(subscriptions.id, input.subscriptionId),
+				eq(subscriptions.stripeCheckoutId, input.checkoutSessionId),
+				eq(subscriptions.stripeAccountId, input.stripeAccountId),
+				eq(subscriptions.status, "pending"),
+			),
+		)
+		.returning();
+	if (updated) return updated;
+
+	const existing = await db.query.subscriptions.findFirst({
+		where: eq(subscriptions.id, input.subscriptionId),
+	});
+	if (
+		existing?.stripeAccountId === input.stripeAccountId &&
+		existing?.stripeCheckoutId === input.checkoutSessionId &&
+		existing?.stripeSubscriptionId === input.stripeSubscriptionId
+	)
+		return existing;
+	throw new ServiceError(
+		"SUBSCRIPTION_MISMATCH",
+		"Checkout does not match the expected subscription",
+		409,
+	);
+}
+
+export async function closeSubscriptionCheckout(checkoutSessionId: string) {
+	await db
+		.update(subscriptions)
+		.set({ status: "canceled" })
+		.where(
+			and(
+				eq(subscriptions.stripeCheckoutId, checkoutSessionId),
+				eq(subscriptions.status, "pending"),
+			),
+		);
+}
+
+/**
+ * Fulfil a paid subscription invoice exactly once. Metadata links can recover
+ * the subscription if invoice.paid beats checkout.session.completed; account
+ * scope, immutable plan version, and the invoice line's Price are validated by
+ * the webhook before it calls this transaction.
+ */
+export async function fulfillSubscriptionInvoice(input: {
+	subscriptionId: string;
+	stripeSubscriptionId: string;
+	stripeAccountId: string;
+	stripeInvoiceId: string;
+	billingReason: "subscription_create" | "subscription_cycle";
+	amountPaid: number;
+	currency: string;
+	periodStart: Date;
+	periodEnd: Date;
+	paidAt: Date;
+}): Promise<{ status: "fulfilled" | "already_fulfilled"; credits: number }> {
+	if (
+		input.billingReason !== "subscription_create" &&
+		input.billingReason !== "subscription_cycle"
+	)
+		throw new ServiceError(
+			"UNSUPPORTED_INVOICE",
+			"This invoice does not represent a monthly billing period",
+			409,
+		);
+	if (input.periodEnd <= input.periodStart || input.amountPaid < 0)
+		throw new ServiceError("INVALID_INVOICE", "Invoice period is invalid", 400);
+	return db.transaction(async (tx) => {
+		const [subscription] = await tx
+			.select()
+			.from(subscriptions)
+			.where(
+				and(
+					eq(subscriptions.id, input.subscriptionId),
+					eq(subscriptions.stripeAccountId, input.stripeAccountId),
+				),
+			)
+			.for("update");
+		if (!subscription)
+			throw new ServiceError("NOT_FOUND", "Subscription not found", 404);
+		if (
+			subscription.stripeSubscriptionId &&
+			subscription.stripeSubscriptionId !== input.stripeSubscriptionId
+		)
+			throw new ServiceError(
+				"SUBSCRIPTION_MISMATCH",
+				"Invoice belongs to a different Stripe subscription",
+				409,
+			);
+
+		const existing = await tx.query.subscriptionInvoices.findFirst({
+			where: and(
+				eq(subscriptionInvoices.stripeAccountId, input.stripeAccountId),
+				eq(subscriptionInvoices.stripeInvoiceId, input.stripeInvoiceId),
+			),
+		});
+		if (existing) {
+			if (existing.subscriptionId !== subscription.id)
+				throw new ServiceError(
+					"INVOICE_SUBSCRIPTION_MISMATCH",
+					"Invoice was already recorded for another subscription",
+					409,
+				);
+			return {
+				status: "already_fulfilled" as const,
+				credits: existing.creditedAt
+					? ((
+							await tx.query.planVersions.findFirst({
+								where: eq(planVersions.id, subscription.planVersionId),
+								columns: { credits: true },
+							})
+						)?.credits ?? 0)
+					: 0,
+			};
+		}
+		const version = await tx.query.planVersions.findFirst({
+			where: eq(planVersions.id, subscription.planVersionId),
+		});
+		if (version?.billingMode !== "recurring" || version.interval !== "month")
+			throw new ServiceError(
+				"INVALID_SUBSCRIPTION_TERMS",
+				"Subscription does not reference a monthly plan version",
+				409,
+			);
+		if (input.currency !== version.currency)
+			throw new ServiceError(
+				"INVOICE_CURRENCY_MISMATCH",
+				"Invoice currency does not match the purchased plan",
+				409,
+			);
+		const periodReceipt = await tx.query.subscriptionInvoices.findFirst({
+			where: and(
+				eq(subscriptionInvoices.subscriptionId, subscription.id),
+				eq(subscriptionInvoices.periodStart, input.periodStart),
+				eq(subscriptionInvoices.periodEnd, input.periodEnd),
+			),
+		});
+		if (periodReceipt)
+			return {
+				status: "already_fulfilled" as const,
+				credits: periodReceipt.creditedAt ? version.credits : 0,
+			};
+
+		const now = new Date();
+		const startsAfterPaidBoundary =
+			!subscription.paidThroughAt ||
+			input.periodStart >= subscription.paidThroughAt;
+		const advancesPaidBoundary =
+			startsAfterPaidBoundary &&
+			(!subscription.paidThroughAt ||
+				input.periodEnd > subscription.paidThroughAt);
+		const canGrant = advancesPaidBoundary && input.periodEnd > now;
+		const [invoice] = await tx
+			.insert(subscriptionInvoices)
+			.values({
+				subscriptionId: subscription.id,
+				stripeAccountId: input.stripeAccountId,
+				stripeInvoiceId: input.stripeInvoiceId,
+				amountPaid: input.amountPaid,
+				currency: version.currency,
+				periodStart: input.periodStart,
+				periodEnd: input.periodEnd,
+				paidAt: input.paidAt,
+				creditedAt: canGrant ? now : null,
+			})
+			.returning();
+		if (!invoice)
+			throw new ServiceError(
+				"INVOICE_CONFLICT",
+				"Invoice was already recorded",
+				409,
+			);
+
+		const [enrollment] = await tx
+			.insert(enrollments)
+			.values({
+				userId: subscription.userId,
+				planId: subscription.planId,
+				creatorId: subscription.creatorId,
+			})
+			.onConflictDoUpdate({
+				target: [enrollments.userId, enrollments.planId],
+				set: { updatedAt: now },
+			})
+			.returning();
+		const balanceBefore = await usableBalance(tx, enrollment.id);
+		await tx
+			.update(enrollments)
+			.set({ credits: balanceBefore })
+			.where(eq(enrollments.id, enrollment.id));
+		const [entry] = await tx
+			.insert(transactions)
+			.values({
+				userId: subscription.userId,
+				creatorId: subscription.creatorId,
+				planId: subscription.planId,
+				planVersionId: subscription.planVersionId,
+				amount: canGrant ? version.credits : 0,
+				amountMoney: input.amountPaid,
+				currency: version.currency,
+				type: "purchase",
+				status: "completed",
+				description: canGrant
+					? `Monthly allowance: ${version.credits} credits`
+					: "Paid monthly invoice; no credits granted (period expired or superseded)",
+				stripeCheckoutId: null,
+				usesStripeConnect: true,
+				stripeApplicationFee: null,
+				stripeConnectAccountId: input.stripeAccountId,
+				balanceBefore,
+				balanceAfter: canGrant
+					? balanceBefore + version.credits
+					: balanceBefore,
+			})
+			.returning({ id: transactions.id });
+
+		if (canGrant) {
+			await grantCredits(tx, {
+				enrollmentId: enrollment.id,
+				creatorId: subscription.creatorId,
+				userId: subscription.userId,
+				planId: subscription.planId,
+				planVersionId: subscription.planVersionId,
+				sourceTransactionId: entry.id,
+				kind: "period",
+				amount: version.credits,
+				expiresAt: input.periodEnd,
+			});
+		}
+
+		await tx
+			.update(subscriptions)
+			.set({
+				stripeSubscriptionId: input.stripeSubscriptionId,
+				...(advancesPaidBoundary
+					? {
+							status:
+								subscription.status === "canceled" ? "canceled" : "active",
+							paidThroughAt: input.periodEnd,
+						}
+					: {}),
+			})
+			.where(eq(subscriptions.id, subscription.id));
+		return {
+			status: "fulfilled" as const,
+			credits: canGrant ? version.credits : 0,
+		};
+	});
+}
+
+/** Record an unpaid renewal state without changing the paid-through boundary. */
+export async function markSubscriptionInvoiceFailed(input: {
+	subscriptionId: string;
+	stripeSubscriptionId: string;
+	stripeAccountId: string;
+	stripeInvoiceId: string;
+	billingReason: "subscription_create" | "subscription_cycle";
+	periodStart: Date;
+	periodEnd: Date;
+}): Promise<"past_due" | "incomplete" | "already_paid" | "stale"> {
+	if (input.periodEnd <= input.periodStart)
+		throw new ServiceError("INVALID_INVOICE", "Invoice period is invalid", 400);
+	return db.transaction(async (tx) => {
+		const [subscription] = await tx
+			.select()
+			.from(subscriptions)
+			.where(
+				and(
+					eq(subscriptions.id, input.subscriptionId),
+					eq(subscriptions.stripeAccountId, input.stripeAccountId),
+				),
+			)
+			.for("update");
+		if (!subscription)
+			throw new ServiceError("NOT_FOUND", "Subscription not found", 404);
+		if (
+			subscription.stripeSubscriptionId &&
+			subscription.stripeSubscriptionId !== input.stripeSubscriptionId
+		)
+			throw new ServiceError(
+				"SUBSCRIPTION_MISMATCH",
+				"Invoice belongs to a different Stripe subscription",
+				409,
+			);
+		const paidInvoice = await tx.query.subscriptionInvoices.findFirst({
+			where: and(
+				eq(subscriptionInvoices.stripeAccountId, input.stripeAccountId),
+				eq(subscriptionInvoices.stripeInvoiceId, input.stripeInvoiceId),
+			),
+			columns: { id: true },
+		});
+		if (paidInvoice) return "already_paid";
+		if (subscription.status === "canceled") return "stale";
+		if (
+			subscription.paidThroughAt &&
+			input.periodEnd <= subscription.paidThroughAt
+		)
+			return "stale";
+
+		const status =
+			input.billingReason === "subscription_create" ? "incomplete" : "past_due";
+		await tx
+			.update(subscriptions)
+			.set({ stripeSubscriptionId: input.stripeSubscriptionId, status })
+			.where(eq(subscriptions.id, subscription.id));
+		return status;
+	});
 }
 
 /**
