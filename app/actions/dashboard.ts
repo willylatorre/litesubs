@@ -9,18 +9,12 @@ import {
 	inArray,
 	isNotNull,
 	or,
-	sum,
 } from "drizzle-orm";
 import { db } from "@/app/db";
-import {
-	enrollments,
-	invites,
-	plans,
-	subscriptions,
-	transactions,
-} from "@/app/db/schema";
+import { enrollments, invites, plans, subscriptions } from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
 import { usableBalance, usableBalances } from "@/lib/services/credits";
+import { moneyByCurrency } from "@/lib/services/reporting";
 import { isSubscriptionOverdue } from "@/lib/subscription-state";
 
 export async function getUserEnrollmentDetails(enrollmentId: string) {
@@ -107,6 +101,12 @@ export async function getUserEnrollmentDetails(enrollmentId: string) {
 			data: {
 				...enrollment,
 				credits: await usableBalance(db, enrollment.id),
+				money: await moneyByCurrency({
+					kind: "customer",
+					id: session.user.id,
+					creatorId: enrollment.creatorId,
+					planId: enrollment.planId,
+				}),
 				billingSubscription: billingSubscriptionView,
 			},
 		};
@@ -117,18 +117,12 @@ export async function getDashboardData() {
 	return authenticatedAction(async (session) => {
 		const [statsResult, enrollmentResult, invitesResult, subscriptionsResult] =
 			await Promise.all([
-				// Consumer Stats
+				// Consumer money comes from receipts, never credit-ledger rows.
 				(async () => {
-					const [spentResult] = await db
-						.select({ value: sum(transactions.amountMoney) })
-						.from(transactions)
-						.where(
-							and(
-								eq(transactions.userId, session.user.id),
-								eq(transactions.type, "purchase"),
-								eq(transactions.status, "completed"),
-							),
-						);
+					const money = await moneyByCurrency({
+						kind: "customer",
+						id: session.user.id,
+					});
 
 					const [enrollmentCountResult] = await db
 						.select({ count: count() })
@@ -136,7 +130,7 @@ export async function getDashboardData() {
 						.where(eq(enrollments.userId, session.user.id));
 
 					return {
-						totalSpent: Number(spentResult?.value || 0),
+						money,
 						enrollmentCount: Number(enrollmentCountResult?.count || 0),
 					};
 				})(),
@@ -253,7 +247,7 @@ export async function getDashboardData() {
 	}).then(
 		(res) =>
 			res.data || {
-				stats: { totalSpent: 0, enrollmentCount: 0 },
+				stats: { money: [], enrollmentCount: 0 },
 				enrollments: [],
 				pendingInvites: [],
 				subscriptions: [],
@@ -263,33 +257,23 @@ export async function getDashboardData() {
 
 export async function getCreatorStats() {
 	return authenticatedAction(async (session) => {
-		// Run all independent queries in parallel for ~3x faster response
-		const [[revenueResult], [plansResult], [customersResult]] =
-			await Promise.all([
-				db
-					.select({ value: sum(transactions.amountMoney) })
-					.from(transactions)
-					.where(
-						and(
-							eq(transactions.creatorId, session.user.id),
-							eq(transactions.type, "purchase"),
-							eq(transactions.status, "completed"),
-						),
-					),
-				db
-					.select({ count: count() })
-					.from(plans)
-					.where(eq(plans.creatorId, session.user.id)),
-				db
-					.select({ count: countDistinct(enrollments.userId) })
-					.from(enrollments)
-					.where(eq(enrollments.creatorId, session.user.id)),
-			]);
+		// Receipts own the money definitions; plans/customers stay counts.
+		const [money, [plansResult], [customersResult]] = await Promise.all([
+			moneyByCurrency({ kind: "creator", id: session.user.id }),
+			db
+				.select({ count: count() })
+				.from(plans)
+				.where(eq(plans.creatorId, session.user.id)),
+			db
+				.select({ count: countDistinct(enrollments.userId) })
+				.from(enrollments)
+				.where(eq(enrollments.creatorId, session.user.id)),
+		]);
 
 		return {
 			success: true,
 			data: {
-				totalRevenue: Number(revenueResult?.value || 0),
+				money,
 				totalPlans: Number(plansResult?.count || 0),
 				totalCustomers: Number(customersResult?.count || 0),
 			},
@@ -297,7 +281,7 @@ export async function getCreatorStats() {
 	}).then(
 		(res) =>
 			res.data || {
-				totalRevenue: 0,
+				money: [],
 				totalPlans: 0,
 				totalCustomers: 0,
 			},
@@ -306,33 +290,25 @@ export async function getCreatorStats() {
 
 export async function getConsumerStats() {
 	return authenticatedAction(async (session) => {
-		const [spentResult] = await db
-			.select({ value: sum(transactions.amountMoney) })
-			.from(transactions)
-			.where(
-				and(
-					eq(transactions.userId, session.user.id),
-					eq(transactions.type, "purchase"),
-					eq(transactions.status, "completed"),
-				),
-			);
-
-		const [enrollmentsResult] = await db
-			.select({ count: count() })
-			.from(enrollments)
-			.where(eq(enrollments.userId, session.user.id));
+		const [money, [enrollmentsResult]] = await Promise.all([
+			moneyByCurrency({ kind: "customer", id: session.user.id }),
+			db
+				.select({ count: count() })
+				.from(enrollments)
+				.where(eq(enrollments.userId, session.user.id)),
+		]);
 
 		return {
 			success: true,
 			data: {
-				totalSpent: Number(spentResult?.value || 0),
+				money,
 				enrollmentCount: Number(enrollmentsResult?.count || 0),
 			},
 		};
 	}).then(
 		(res) =>
 			res.data || {
-				totalSpent: 0,
+				money: [],
 				enrollmentCount: 0,
 			},
 	);

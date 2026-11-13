@@ -8,6 +8,7 @@ import {
 	creditGrants,
 	enrollments,
 	invites,
+	payments,
 	plans,
 	planVersions,
 	transactions,
@@ -192,6 +193,28 @@ export async function createSampleWorkspace(): Promise<
 					target: creditAllocations.id,
 				});
 
+			// A real sale needs a receipt, or reporting would legitimately show no
+			// money while the sample ledger claims a purchase happened.
+			await tx
+				.insert(payments)
+				.values({
+					id: ids.payment,
+					creatorId,
+					userId: ids.customer,
+					planId: ids.plan,
+					planVersionId: ids.planVersion,
+					stripeAccountId: `acct_sample_${ids.plan}`,
+					stripeCustomerId: `cus_sample_${ids.customer}`,
+					status: "paid",
+					credits: SAMPLE_PLAN.credits,
+					amountTotal: SAMPLE_PLAN.price,
+					currency: SAMPLE_PLAN.currency,
+					applicationFee: Math.round(SAMPLE_PLAN.price * 0.02),
+					amountPaid: SAMPLE_PLAN.price,
+					fulfilledAt: new Date(),
+				})
+				.onConflictDoNothing({ target: payments.id });
+
 			await tx
 				.insert(invites)
 				.values({
@@ -226,6 +249,13 @@ export async function removeSampleWorkspace(): Promise<
 		const ids = sampleIds(creatorId);
 
 		await db.transaction(async (tx) => {
+			// The sample receipt is money: remove it before its plan so reporting
+			// never counts a sale for a workspace the creator deleted.
+			await tx
+				.delete(payments)
+				.where(
+					and(eq(payments.creatorId, creatorId), eq(payments.id, ids.payment)),
+				);
 			// Only ledger rows for the sample plan belong to the sample workspace.
 			// If the creator enrolled the sample customer in one of their own plans,
 			// that traffic must survive.

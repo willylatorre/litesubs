@@ -49,9 +49,17 @@ export type InviteView = {
 };
 
 export type DashboardView = {
-	stats: { totalSpent: number; enrollmentCount: number };
+	stats: { money: MoneyView[]; enrollmentCount: number };
 	enrollments: EnrollmentView[];
 	pendingInvites: InviteView[];
+};
+
+/** Money is always grouped by currency; never a single blended total. */
+export type MoneyView = {
+	currency: string;
+	gross: number;
+	refunded: number;
+	net: number;
 };
 
 export type PlanVersionRow = {
@@ -89,7 +97,7 @@ type RawPlan = {
 };
 
 export function toDashboardView(raw: {
-	stats: { totalSpent: number; enrollmentCount: number };
+	stats: { money: MoneyView[]; enrollmentCount: number };
 	enrollments: {
 		id: string;
 		credits: number;
@@ -118,7 +126,7 @@ export function toDashboardView(raw: {
 }): DashboardView {
 	return {
 		stats: {
-			totalSpent: raw.stats.totalSpent,
+			money: raw.stats.money,
 			enrollmentCount: raw.stats.enrollmentCount,
 		},
 		enrollments: raw.enrollments.map((enrollment) => ({

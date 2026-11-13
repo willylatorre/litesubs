@@ -32,7 +32,7 @@ async function CreatorOverview() {
 				/>
 			)}
 			<SectionCards
-				totalRevenue={stats.totalRevenue}
+				money={stats.money}
 				totalPlans={stats.totalPlans}
 				totalCustomers={stats.totalCustomers}
 				includesSample={sampleLoaded}

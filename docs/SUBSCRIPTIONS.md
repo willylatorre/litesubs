@@ -63,6 +63,9 @@ Implemented slices:
   the remaining units of that purchase; partial refunds move money without
   guessing credits, and refunding a monthly invoice never cancels it. See
   `drizzle/0011_s12_refunds.sql`.
+- S13 — creator and customer money reporting is receipt-derived, grouped per
+  currency with gross/refunded/net, while counts, subscriptions, and usable
+  credits stay separate concepts.
 
 ## Purpose
 
@@ -1009,21 +1012,21 @@ Include useful empty/setup states and preserve isolated sample/demo data.
 
 #### Acceptance criteria
 
-- [ ] Creator sales and customer spending derive from confirmed payments and refunds,
+- [x] Creator sales and customer spending derive from confirmed payments and refunds,
       not current plan prices or counts of credit-ledger entries. Pending Checkout
       and manual grants do not inflate sales.
-- [ ] Mixed currencies are grouped or clearly separated; USD and EUR are never added
+- [x] Mixed currencies are grouped or clearly separated; USD and EUR are never added
       into a single unlabeled monetary total. Fees and gross/net/refunded values
       are labeled rather than presented as a fictional Litesubs payout balance.
-- [ ] Enrollment counts, active Stripe subscriptions, scheduled cancellations,
+- [x] Enrollment counts, active Stripe subscriptions, scheduled cancellations,
       payment failures, and usable credit totals remain separate concepts.
-- [ ] History distinguishes payment receipts from credit grants, usage, expiry,
+- [x] History distinguishes payment receipts from credit grants, usage, expiry,
       and revocation; users can relate a credit effect to its originating purchase.
-- [ ] Monthly prices/allowances/expiry dates and grandfathered purchased terms are
+- [x] Monthly prices/allowances/expiry dates and grandfathered purchased terms are
       shown correctly even after a new version is published or the plan is unlisted.
-- [ ] Creator Dashboard access and customer Manage billing links point to their
+- [x] Creator Dashboard access and customer Manage billing links point to their
       respective Stripe contexts; restricted/disconnected state is visible.
-- [ ] REST/MCP read contracts and sample/demo screens reflect the same vocabulary
+- [x] REST/MCP read contracts and sample/demo screens reflect the same vocabulary
       and accounting definitions without leaking another tenant's/customer's data.
 
 #### Implementation notes and relevant files
@@ -1040,6 +1043,13 @@ here on the coherent cross-flow overview and historical reporting experience.
 Use a dataset with two currencies, packs, a grandfathered subscription, renewal,
 refund, manual grant, and scheduled cancellation. Trace displayed totals to the
 stored receipts/ledger and demonstrate tenant/customer isolation plus sample mode.
+
+**Implemented:** yes — `lib/services/reporting.ts` is the single money read model
+over `payments` and `subscription_invoices` (gross, refunded, net, platform fees,
+grouped per currency). Creator, customer, plan-detail, and customer-detail views
+use it; `money` is also exposed on the `list_customers`/`get_customer` MCP tools
+and REST customer reads. Credits, subscriptions, and money stay distinct fields.
+Coverage: `lib/reporting.integration.test.ts` (opt-in).
 
 #### Blocked by
 

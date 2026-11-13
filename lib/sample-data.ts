@@ -32,6 +32,7 @@ export function sampleIds(creatorId: string) {
 		invite: `sample-invite-${creatorId}`,
 		inviteEmail: `leo.martin+${slug}@example.com`,
 		purchaseTransaction: `sample-tx-purchase-${creatorId}`,
+		payment: `sample-payment-${creatorId}`,
 		usageTransaction: `sample-tx-usage-${creatorId}`,
 		grant: `sample-grant-${creatorId}`,
 		usageAllocation: `sample-allocation-${creatorId}`,

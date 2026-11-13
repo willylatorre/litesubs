@@ -11,6 +11,7 @@ import { isSubscriptionOverdue } from "@/lib/subscription-state";
 import { usableBalances } from "./credit-balance";
 import { pageInput, resolvePlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
+import { moneyByCurrency } from "./reporting";
 
 export async function resolveCustomer(
 	principal: Principal,
@@ -136,25 +137,33 @@ export async function listCustomers(principal: Principal, input: unknown = {}) {
 				: null,
 		};
 	});
-	return customers.map((customer) => {
-		const owned = viewRows.filter((row) => row.userId === customer.id);
-		return {
-			id: customer.id,
-			userId: customer.id,
-			user: customer,
-			credits: owned.reduce((sum, row) => sum + row.credits, 0),
-			enrollments: owned.map((row) => ({
-				id: row.planId,
-				name: row.plan.name,
-				enrollmentId: row.id,
-				credits: row.credits,
-				billingSubscription: row.billingSubscription,
-			})),
-			updatedAt: new Date(
-				Math.max(...owned.map((row) => row.updatedAt.getTime())),
-			).toISOString(),
-		};
-	});
+	return Promise.all(
+		customers.map(async (customer) => {
+			const owned = viewRows.filter((row) => row.userId === customer.id);
+			return {
+				id: customer.id,
+				userId: customer.id,
+				user: customer,
+				credits: owned.reduce((sum, row) => sum + row.credits, 0),
+				/** Confirmed money this customer paid this creator, per currency. */
+				money: await moneyByCurrency({
+					kind: "customer",
+					id: customer.id,
+					creatorId: principal.creatorId,
+				}),
+				enrollments: owned.map((row) => ({
+					id: row.planId,
+					name: row.plan.name,
+					enrollmentId: row.id,
+					credits: row.credits,
+					billingSubscription: row.billingSubscription,
+				})),
+				updatedAt: new Date(
+					Math.max(...owned.map((row) => row.updatedAt.getTime())),
+				).toISOString(),
+			};
+		}),
+	);
 }
 
 export async function getCustomer(principal: Principal, identifier: string) {
@@ -209,6 +218,11 @@ export async function getCustomer(principal: Principal, identifier: string) {
 	}
 	return {
 		customer,
+		money: await moneyByCurrency({
+			kind: "customer",
+			id: customer.id,
+			creatorId: principal.creatorId,
+		}),
 		enrollments: rows.map((row) => {
 			const subscription = currentSubscriptions.get(row.planId);
 			return {

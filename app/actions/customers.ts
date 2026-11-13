@@ -1,9 +1,9 @@
 "use server";
 
-import { and, eq, sum } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/app/db";
-import { enrollments, transactions } from "@/app/db/schema";
+import { enrollments } from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
 import { adjustCredits } from "@/lib/services/credits";
 import {
@@ -12,6 +12,7 @@ import {
 	listTransactions,
 } from "@/lib/services/customers";
 import { ServiceError, sessionPrincipal } from "@/lib/services/principal";
+import { moneyByCurrency } from "@/lib/services/reporting";
 
 export async function getCreatorCustomers() {
 	return authenticatedAction(async (session) => ({
@@ -26,26 +27,20 @@ export async function getCustomerDetails(customerId: string) {
 	return authenticatedAction(async (session) => {
 		const principal = sessionPrincipal(session.user.id);
 		const details = await getCustomer(principal, customerId);
-		const [ledger, [spent]] = await Promise.all([
+		const [ledger, money] = await Promise.all([
 			listTransactions(principal, { customer: customerId, limit: 100 }),
-			db
-				.select({ value: sum(transactions.amountMoney) })
-				.from(transactions)
-				.where(
-					and(
-						eq(transactions.creatorId, session.user.id),
-						eq(transactions.userId, details.customer.id),
-						eq(transactions.type, "purchase"),
-						eq(transactions.status, "completed"),
-					),
-				),
+			moneyByCurrency({
+				kind: "customer",
+				id: details.customer.id,
+				creatorId: session.user.id,
+			}),
 		]);
 		return {
 			success: true,
 			data: {
 				...details,
 				transactions: ledger,
-				totalSpent: Number(spent?.value ?? 0),
+				money,
 			},
 		};
 	});

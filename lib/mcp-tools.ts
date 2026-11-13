@@ -143,14 +143,14 @@ export function createServer(principal: Principal) {
 	);
 	register(
 		"list_customers",
-		"List only customers enrolled with you, with per-plan usable credit balances and monthly subscription status/paid-through data where applicable. Paginate with limit/offset.",
+		"List only customers enrolled with you, with per-plan usable credit balances and monthly subscription status/paid-through data where applicable. `money` is confirmed receipts grouped by currency (gross, refunded, net); manual grants are never money. Paginate with limit/offset.",
 		pageInput,
 		true,
 		(input) => listCustomers(principal, input),
 	);
 	register(
 		"get_customer",
-		"Get your enrolled customer by ID, email, or exact name, with usable per-plan credits and monthly subscription overdue/paid-through state. Ambiguous names return candidates; never guess.",
+		"Get your enrolled customer by ID, email, or exact name, with usable per-plan credits and monthly subscription overdue/paid-through state. `money` is confirmed receipts from this customer grouped by currency (gross, refunded, net), never a blend of currencies. Ambiguous names return candidates; never guess.",
 		z.object({ customer: z.string().min(1) }),
 		true,
 		({ customer }) => getCustomer(principal, customer),

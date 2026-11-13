@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { getCustomerDetails } from "@/app/actions/customers";
+import { MoneySummary } from "@/components/section-cards";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +23,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import type { MoneyView } from "@/lib/dashboard-view";
 import { DecreaseCreditButton } from "./decrease-credit-button";
 import { EnrollmentMoreActions } from "./enrollment-more-actions";
 import { ManageEnrollmentCreditsDialog } from "./manage-enrollment-credits-dialog";
@@ -70,7 +72,7 @@ interface CustomerDetailsDialogProps {
 	}[];
 	children?: React.ReactNode;
 	demoData?: {
-		totalSpent: number;
+		money: MoneyView[];
 		enrollments: CustomerEnrollmentView[];
 		transactions: CustomerTransactionView[];
 	};
@@ -146,17 +148,15 @@ export function CustomerDetailsDialog({
 				<div className="flex flex-col gap-6 pt-4">
 					<div className="flex flex-col gap-0.5">
 						<span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-							Total Spent
+							Collected
 						</span>
 						{isLoading ? (
 							<Skeleton className="h-6 w-24" />
 						) : (
-							<span className="text-sm font-medium">
-								{new Intl.NumberFormat("en-US", {
-									style: "currency",
-									currency: "USD",
-								}).format((data?.totalSpent || 0) / 100)}
-							</span>
+							<MoneySummary
+								money={data?.money ?? []}
+								emptyLabel="No confirmed payments."
+							/>
 						)}
 					</div>
 

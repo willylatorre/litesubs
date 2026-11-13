@@ -102,6 +102,11 @@ Errors return code, error, and optional details or fieldErrors. Status codes:
 - Billing: billingMode is one_time or recurring; recurring requires interval
   "month" (yearly is deferred). Monthly plans renew and their credits
   do not roll over.
+- Sales and spending come from confirmed receipts (payments,
+  subscription_invoices), never from credit-ledger rows or current plan prices.
+  money on customers is grouped by currency with gross, refunded, and net;
+  USD and EUR are never added together. Pending Checkouts, manual grants, and
+  complimentary credits are not sales.
 - consume_credits requires an idempotency_key derived from the business event
   (booking ID, message ID), not a timestamp. Retrying with the same key returns
   the original receipt; a different payload under the same key is rejected.

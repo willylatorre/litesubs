@@ -5,6 +5,7 @@ import { getUserEnrollmentDetails } from "@/app/actions/dashboard";
 import { getUserTransactions } from "@/app/actions/transactions";
 import { BuyButton } from "@/components/buy-button";
 import { ManageBillingButton } from "@/components/manage-billing-button";
+import { formatMoney } from "@/components/section-cards";
 import { SubscriptionActions } from "@/components/subscription-actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -141,6 +142,33 @@ export default async function EnrollmentDetailPage({
 						<CardTitle className="stat-card-value @[250px]/card:text-3xl">
 							{enrollment.credits}
 						</CardTitle>
+					</CardHeader>
+				</Card>
+				<Card className="stat-card @container/card">
+					<CardHeader>
+						<CardDescription>Paid</CardDescription>
+						{enrollment.money.length === 0 ? (
+							<CardDescription className="text-sm font-normal">
+								No confirmed payments yet
+							</CardDescription>
+						) : (
+							enrollment.money.map((row) => (
+								<CardTitle
+									key={row.currency}
+									className="stat-card-value @[250px]/card:text-3xl"
+								>
+									{formatMoney(row.net, row.currency)}
+								</CardTitle>
+							))
+						)}
+						{enrollment.money.some((row) => row.refunded > 0) && (
+							<CardDescription className="text-xs">
+								{enrollment.money
+									.map((row) => formatMoney(row.refunded, row.currency))
+									.join(", ")}{" "}
+								refunded
+							</CardDescription>
+						)}
 					</CardHeader>
 				</Card>
 				<Card className="stat-card @container/card">

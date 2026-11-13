@@ -29,7 +29,14 @@ export function CustomersTableDemo({ plan }: CustomersTableDemoProps) {
 	};
 
 	const demoData = {
-		totalSpent: plan.price * 100,
+		money: [
+			{
+				currency: "usd",
+				gross: plan.price * 100,
+				refunded: 0,
+				net: plan.price * 100,
+			},
+		],
 		enrollments: [
 			{
 				id: "demo-enrollment-id",

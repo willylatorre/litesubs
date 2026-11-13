@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-01-01
 
 ### Added
+- **Receipt-based reporting (S13)**:
+  - Creator and customer money summaries now come from confirmed payments and
+    subscription invoices, grouped per currency with gross, refunded, net, and
+    platform fees. USD and EUR are never blended into one total.
+  - Pending Checkouts, comps, and manual grants no longer inflate sales.
+  - Plan and customer detail views show money and credits as separate concepts.
 - **Refund reconciliation (S12)**:
   - Reconcile `charge.refunded` against the owning account's receipt and revoke
     only the unspent units attributable to that purchase.

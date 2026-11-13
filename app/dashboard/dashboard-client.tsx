@@ -66,7 +66,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 				</div>
 
 				<ConsumerStatsCards
-					totalSpent={stats.totalSpent}
+					money={stats.money}
 					enrollmentCount={stats.enrollmentCount}
 				/>
 
