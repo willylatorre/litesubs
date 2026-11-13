@@ -11,13 +11,23 @@ import {
 	IconX,
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
 	disconnectStripeAccount,
 	refreshPaymentsStatus,
 	startStripeOnboarding,
 } from "@/app/actions/stripe-connect";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -74,6 +84,7 @@ export function PaymentsSetup({
 }) {
 	const router = useRouter();
 	const [pending, startTransition] = useTransition();
+	const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
 	const status = statusCopy[readiness.status];
 
 	function onboarding() {
@@ -101,13 +112,34 @@ export function PaymentsSetup({
 
 	function disconnect() {
 		startTransition(async () => {
-			const result = await disconnectStripeAccount();
+			// Never silently leave a live subscription billing. A refusal opens the
+			// choice instead of reporting a disconnect that did not happen.
+			const result = await disconnectStripeAccount(false);
 			if (result.success) {
 				toast.success("Stripe account disconnected");
 				router.refresh();
-			} else {
-				toast.error(result.error ?? "Could not disconnect");
+				return;
 			}
+			if (result.code === "SUBSCRIPTIONS_LIVE") {
+				setDisconnectDialogOpen(true);
+				return;
+			}
+			toast.error(result.error ?? "Could not disconnect");
+		});
+	}
+
+	function disconnectAndStopRenewals() {
+		startTransition(async () => {
+			const result = await disconnectStripeAccount(true);
+			if (result.success) {
+				setDisconnectDialogOpen(false);
+				toast.success(
+					"Stripe account disconnected. Renewals stop at the end of each paid period.",
+				);
+				router.refresh();
+				return;
+			}
+			toast.error(result.error ?? "Could not disconnect");
 		});
 	}
 
@@ -238,6 +270,36 @@ export function PaymentsSetup({
 						</div>
 					)}
 
+					{readiness.disconnectFailure && (
+						<div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+							<IconAlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+							<div className="space-y-1">
+								<p className="font-medium">
+									The last disconnect did not finish
+								</p>
+								<p className="text-xs text-muted-foreground">
+									{readiness.disconnectFailure}
+								</p>
+								<p className="text-xs text-muted-foreground">
+									Cancel those subscriptions in your Stripe Dashboard, or try
+									disconnecting again.
+								</p>
+							</div>
+						</div>
+					)}
+
+					{readiness.hasAccount && readiness.liveSubscriptions > 0 && (
+						<div className="flex items-start gap-2 rounded-md border bg-muted/40 p-3 text-sm">
+							<IconAlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+							<p className="text-muted-foreground">
+								{readiness.liveSubscriptions} subscription
+								{readiness.liveSubscriptions === 1 ? "" : "s"} can still renew.
+								Disconnecting asks you to stop them at the end of each paid
+								period, or to keep the connection until they end.
+							</p>
+						</div>
+					)}
+
 					<div className="flex flex-wrap gap-2">
 						{needsOnboarding && (
 							<Button onClick={onboarding} disabled={pending}>
@@ -300,6 +362,42 @@ export function PaymentsSetup({
 					)}
 				</CardContent>
 			</Card>
+
+			<AlertDialog
+				open={disconnectDialogOpen}
+				onOpenChange={setDisconnectDialogOpen}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							Stop {readiness.liveSubscriptions} subscription
+							{readiness.liveSubscriptions === 1 ? "" : "s"} before
+							disconnecting?
+						</AlertDialogTitle>
+						<AlertDialogDescription>
+							Stripe does not cancel subscriptions when Litesubs disconnects, so
+							they would keep charging customers for credits nobody can grant.
+							Continuing schedules each renewal to stop at the end of its paid
+							period. Customers keep the credits they already paid for until
+							that date, and nothing is refunded or shortened.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel disabled={pending}>
+							Keep the connection
+						</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={pending}
+							onClick={(event) => {
+								event.preventDefault();
+								disconnectAndStopRenewals();
+							}}
+						>
+							{pending ? "Stopping renewals…" : "Stop renewals and disconnect"}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 }

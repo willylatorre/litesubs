@@ -103,6 +103,7 @@ export async function listCustomers(principal: Principal, input: unknown = {}) {
 				paidThroughAt: true,
 				cancelAtPeriodEnd: true,
 				cancelAt: true,
+				cancellationCause: true,
 			},
 		}),
 	]);
@@ -201,6 +202,7 @@ export async function getCustomer(principal: Principal, identifier: string) {
 				paidThroughAt: true,
 				cancelAtPeriodEnd: true,
 				cancelAt: true,
+				cancellationCause: true,
 			},
 		}),
 	]);

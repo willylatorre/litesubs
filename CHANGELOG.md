@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-01-01
 
 ### Added
+- **Subscription-aware disconnect (S15)**:
+  - Disconnecting a Stripe account now enumerates the creator's live
+    subscriptions from Litesubs' own records and refuses to complete silently
+    while any remain unhandled.
+  - The Payments screen reports how many subscriptions can still renew and asks
+    for an explicit choice: stop renewals at each paid period, or keep the
+    connection until they end.
+  - Stopping renewals reuses the customer cancel path with `creator_disconnect`
+    recorded as the cause, so a platform-driven stop is never read as the
+    customer's own cancellation.
+  - Access and granted credits still run to the paid-period end; a renewal Stripe
+    still collects without a disconnect-safe cancellation moves money without
+    granting credits or extending the paid-through boundary.
+  - The deauthorization webhook applies the same handling, and a Stripe failure
+    leaves a visible, retryable state instead of a false success. Customers see
+    the honest ending state rather than a renewal date that will not be honoured.
 - **Receipt-based reporting (S13)**:
   - Creator and customer money summaries now come from confirmed payments and
     subscription invoices, grouped per currency with gross, refunded, net, and

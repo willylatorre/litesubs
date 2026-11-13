@@ -22,6 +22,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { customerSubscriptionSummary } from "@/lib/subscription-state";
 
 export default async function EnrollmentDetailPage({
 	params,
@@ -186,15 +187,7 @@ export default async function EnrollmentDetailPage({
 						</CardTitle>
 						{recurring && billingSubscription && (
 							<CardDescription>
-								{billingSubscription.status === "canceled"
-									? `Subscription ended${billingSubscription.paidThroughAt ? ` · paid through ${billingSubscription.paidThroughAt.toLocaleDateString()}` : ""}`
-									: billingSubscription.overdue
-										? `Payment overdue${billingSubscription.paidThroughAt ? ` · paid through ${billingSubscription.paidThroughAt.toLocaleDateString()}` : ""}`
-										: billingSubscription.cancelAtPeriodEnd
-											? `Scheduled to end${(billingSubscription.cancelAt ?? billingSubscription.paidThroughAt) ? ` on ${(billingSubscription.cancelAt ?? billingSubscription.paidThroughAt)?.toLocaleDateString()}` : ""}`
-											: billingSubscription.status === "active"
-												? `Subscription active${billingSubscription.paidThroughAt ? ` through ${billingSubscription.paidThroughAt.toLocaleDateString()}` : ""}`
-												: "First payment is processing"}
+								{customerSubscriptionSummary(billingSubscription)}
 							</CardDescription>
 						)}
 					</CardHeader>

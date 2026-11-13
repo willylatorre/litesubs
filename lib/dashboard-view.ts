@@ -2,6 +2,8 @@
  * Shared shape for the customer dashboard. Kept free of server imports so both
  * the server component and the client refresh path can map rows identically.
  */
+import type { SubscriptionCancellationCause } from "@/lib/subscription-state";
+
 export type PlanTermsView = {
 	billingMode: "one_time" | "recurring";
 	interval: "month" | null;
@@ -19,6 +21,7 @@ export type EnrollmentView = {
 		paidThroughAt: Date | null;
 		cancelAtPeriodEnd: boolean;
 		cancelAt: Date | null;
+		cancellationCause: SubscriptionCancellationCause | null;
 		canManageBilling: boolean;
 		overdue: boolean;
 		terms: PlanTermsView;
@@ -119,6 +122,7 @@ export function toDashboardView(raw: {
 		paidThroughAt: Date | null;
 		cancelAtPeriodEnd: boolean;
 		cancelAt: Date | null;
+		cancellationCause: SubscriptionCancellationCause | null;
 		canManageBilling: boolean;
 		overdue: boolean;
 		planVersion: PlanTermsView;
@@ -143,6 +147,7 @@ export function toDashboardView(raw: {
 							paidThroughAt: subscription.paidThroughAt,
 							cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
 							cancelAt: subscription.cancelAt,
+							cancellationCause: subscription.cancellationCause,
 							canManageBilling: subscription.canManageBilling,
 							overdue: subscription.overdue,
 							terms: subscription.planVersion,

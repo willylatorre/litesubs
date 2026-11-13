@@ -14,6 +14,9 @@ const stripeAdapter: SubscriptionManagementAdapter = {
 	update: updateConnectedSubscription,
 };
 
+/** Why renewals stopped. A customer choice and a disconnect are not the same event. */
+export type CancellationCause = "customer" | "creator_disconnect";
+
 function stripeCustomerId(subscription: Stripe.Subscription) {
 	return typeof subscription.customer === "string"
 		? subscription.customer
@@ -57,9 +60,16 @@ export async function updateCustomerSubscriptionCancellation(
 		userId: string;
 		subscriptionId: string;
 		cancelAtPeriodEnd: boolean;
+		/**
+		 * Defaults to the customer's own action. A creator disconnect uses the
+		 * same Stripe mutation but records `creator_disconnect`, so a scheduled
+		 * end is never mistaken for a customer choice.
+		 */
+		cause?: CancellationCause;
 	},
 	adapter: SubscriptionManagementAdapter = stripeAdapter,
 ) {
+	const cause = input.cause ?? "customer";
 	return db.transaction(async (tx) => {
 		await tx.execute(
 			sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify([input.userId, input.subscriptionId, "cancellation"])}, 0))`,
@@ -173,6 +183,9 @@ export async function updateCustomerSubscriptionCancellation(
 				status,
 				cancelAtPeriodEnd: updated.cancel_at_period_end,
 				cancelAt,
+				// Only a cancellation is attributed; resuming clears the attribution
+				// so a later stop is not misreported as the earlier one.
+				cancellationCause: input.cancelAtPeriodEnd ? cause : null,
 				cancellationRevision: subscription.cancellationRevision + 1,
 			})
 			.where(eq(subscriptions.id, subscription.id));

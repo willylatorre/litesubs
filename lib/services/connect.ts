@@ -27,7 +27,12 @@ import {
 	retrieveConnectedAccount,
 	StripeAccountError,
 } from "@/lib/stripe-connect";
+import {
+	listLiveSubscriptions,
+	stopLiveSubscriptions,
+} from "./account-disconnect";
 import { ServiceError } from "./principal";
+import type { SubscriptionManagementAdapter } from "./subscriptions";
 
 /**
  * The Stripe calls this service depends on. Production uses the real adapter;
@@ -43,6 +48,11 @@ const defaultAdapter: ConnectStripeAdapter = {
 	exchangeAuthorizationCode,
 	retrieveConnectedAccount,
 };
+
+/** Whether any subscription on this account can still bill the customer. */
+export async function getLiveSubscriptionCount(creatorId: string) {
+	return (await listLiveSubscriptions(creatorId)).length;
+}
 
 /** The UI-facing shape lives in an import-free module for client reuse. */
 export type { PaymentReadiness } from "@/lib/connect-copy";
@@ -152,6 +162,8 @@ function toReadiness(account: ConnectedAccount | undefined): PaymentReadiness {
 			existingAccountAvailable: isOauthConfigured(),
 			responsibilities: RESPONSIBILITY_COPY,
 			lastSyncedAt: null,
+			liveSubscriptions: 0,
+			disconnectFailure: null,
 		};
 	}
 	// Never trust `status` alone: derive from the synced capability snapshot so
@@ -198,6 +210,8 @@ function toReadiness(account: ConnectedAccount | undefined): PaymentReadiness {
 		existingAccountAvailable: isOauthConfigured(),
 		responsibilities: RESPONSIBILITY_COPY,
 		lastSyncedAt: account.lastSyncedAt,
+		liveSubscriptions: 0,
+		disconnectFailure: account.disconnectFailure,
 	};
 }
 
@@ -205,7 +219,15 @@ function toReadiness(account: ConnectedAccount | undefined): PaymentReadiness {
 export async function getPaymentReadiness(
 	creatorId: string,
 ): Promise<PaymentReadiness> {
-	return toReadiness(await findOwnAccount(creatorId));
+	const account = await findOwnAccount(creatorId);
+	const readiness = toReadiness(account);
+	// The disconnect decision needs the real count, but only for a live account.
+	return account
+		? {
+				...readiness,
+				liveSubscriptions: await getLiveSubscriptionCount(creatorId),
+			}
+		: readiness;
 }
 
 /** Boolean gate used by checkout: only a payment-ready account may sell. */
@@ -341,7 +363,12 @@ export async function syncConnectedAccount(
 			),
 		)
 		.returning();
-	return toReadiness(updated);
+	// Read the count from records rather than the snapshot: a refresh should not
+	// hide live subscriptions the creator still has to handle.
+	return {
+		...toReadiness(updated),
+		liveSubscriptions: await getLiveSubscriptionCount(creatorId),
+	};
 }
 
 /** Exposed for copy/tests: the responsibilities requested at creation. */
@@ -531,41 +558,126 @@ export async function completeExistingAccountConnection(
  * Disconnect. An OAuth-authorized account is deauthorized at Stripe so the
  * platform genuinely loses access; a self-created account is only detached
  * locally. Either way new sales stop and historical records keep their account.
+ *
+ * Stripe does not cancel a platform's subscriptions when it is disconnected, so
+ * this refuses to detach while subscriptions can still renew unless the creator
+ * explicitly chooses to stop them at their paid period. A paid period is never
+ * shortened and a Stripe failure leaves a retryable, visible state.
  */
-export async function disconnectAccount(creatorId: string) {
+export async function disconnectAccount(
+	creatorId: string,
+	input: { cancelLiveSubscriptions?: boolean } = {},
+	adapter?: SubscriptionManagementAdapter,
+) {
 	const existing = await findOwnAccount(creatorId);
 	if (!existing)
 		throw new ServiceError("NOT_CONNECTED", "No Stripe account connected", 404);
+
+	const live = await listLiveSubscriptions(creatorId);
+	// "Keep the connection until they end" means not disconnecting yet; silently
+	// detaching here would leave the customer billed by nobody who can fulfill.
+	if (live.length > 0 && !input.cancelLiveSubscriptions)
+		throw new ServiceError(
+			"SUBSCRIPTIONS_LIVE",
+			`${live.length} subscription${live.length === 1 ? "" : "s"} can still renew. Choose whether to stop renewals at the end of each paid period before disconnecting.`,
+			409,
+			{ liveSubscriptions: live.length },
+		);
+
+	if (live.length > 0) {
+		const stopped = await stopLiveSubscriptions(creatorId, adapter);
+		if (stopped.failed.length) {
+			const failure = describeDisconnectFailure(stopped.failed);
+			await recordDisconnectFailure(existing.id, creatorId, failure);
+			throw new ServiceError(
+				"DISCONNECT_INCOMPLETE",
+				`Stripe did not stop ${stopped.failed.length} subscription${stopped.failed.length === 1 ? "" : "s"}, so the account was not disconnected. Try again.`,
+				502,
+				{ failed: stopped.failed },
+			);
+		}
+	}
 
 	if (existing.authorizedViaOauth && isOauthConfigured()) {
 		try {
 			await deauthorizeAccount(existing.stripeAccountId);
 		} catch (error) {
 			// Report a real failure instead of pretending the local flag is enough.
-			if (error instanceof StripeAccountError)
+			if (error instanceof StripeAccountError) {
+				await recordDisconnectFailure(existing.id, creatorId, error.message);
 				throw new ServiceError("DEAUTHORIZE_FAILED", error.message, 502);
+			}
 			throw error;
 		}
 	}
 
 	await db
 		.update(connectedAccounts)
-		.set({ disconnectedAt: new Date(), status: "disabled" })
+		.set({
+			disconnectedAt: new Date(),
+			status: "disabled",
+			disconnectFailure: null,
+			disconnectAttemptedAt: new Date(),
+		})
 		.where(
 			and(
 				eq(connectedAccounts.id, existing.id),
 				eq(connectedAccounts.userId, creatorId),
 			),
 		);
-	return { success: true as const };
+	return { success: true as const, stoppedSubscriptions: live.length };
 }
 
-/** Called by the deauthorization webhook; never revives a disconnected row. */
-export async function markAccountDeauthorized(stripeAccountId: string) {
+function describeDisconnectFailure(
+	failed: { subscriptionId: string; message: string }[],
+) {
+	const ids = failed.map((item) => item.subscriptionId).join(", ");
+	return `Stripe did not stop ${failed.length} subscription${failed.length === 1 ? "" : "s"} (${ids}). Renewals may still be collected until they are cancelled in the Stripe Dashboard.`;
+}
+
+async function recordDisconnectFailure(
+	accountId: string,
+	creatorId: string,
+	message: string,
+) {
+	await db
+		.update(connectedAccounts)
+		.set({ disconnectFailure: message, disconnectAttemptedAt: new Date() })
+		.where(
+			and(
+				eq(connectedAccounts.id, accountId),
+				eq(connectedAccounts.userId, creatorId),
+			),
+		);
+}
+
+/**
+ * Called by the deauthorization webhook; never revives a disconnected row.
+ *
+ * Once Stripe reports the revocation, the platform can no longer update that
+ * account's subscriptions, so a cancellation attempted here may fail. The
+ * policy is still the same: enumerate our own live subscriptions, try to stop
+ * them, and record any that Stripe will not accept as a visible, retryable
+ * failure. Fulfillment independently refuses to grant credits on a disconnected
+ * account, so a renewal Stripe still collects can never become spendable units.
+ */
+export async function markAccountDeauthorized(
+	stripeAccountId: string,
+	adapter?: SubscriptionManagementAdapter,
+) {
 	const existing = await db.query.connectedAccounts.findFirst({
 		where: eq(connectedAccounts.stripeAccountId, stripeAccountId),
 	});
 	if (!existing) return { handled: false as const };
+
+	const live = await listLiveSubscriptions(existing.userId);
+	const stopped = live.length
+		? await stopLiveSubscriptions(existing.userId, adapter)
+		: { stopped: [], failed: [] };
+	const failure = stopped.failed.length
+		? describeDisconnectFailure(stopped.failed)
+		: null;
+
 	await db
 		.update(connectedAccounts)
 		.set({
@@ -573,7 +685,13 @@ export async function markAccountDeauthorized(stripeAccountId: string) {
 			disconnectedAt: existing.disconnectedAt ?? new Date(),
 			chargesEnabled: false,
 			lastSyncedAt: new Date(),
+			disconnectFailure: failure ?? existing.disconnectFailure,
+			disconnectAttemptedAt: new Date(),
 		})
 		.where(eq(connectedAccounts.id, existing.id));
-	return { handled: true as const };
+	return {
+		handled: true as const,
+		stoppedSubscriptions: stopped.stopped.length,
+		unhandledSubscriptions: stopped.failed.length,
+	};
 }

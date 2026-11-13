@@ -88,6 +88,16 @@ export const connectedAccounts = pgTable(
 		requirementsDisabledReason: text("requirements_disabled_reason"),
 		lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
 		disconnectedAt: timestamp("disconnected_at", { withTimezone: true }),
+		/**
+		 * Why the most recent disconnect attempt did not finish. A disconnect can
+		 * fail after Stripe refuses a subscription update or after access was
+		 * already revoked, so the state must stay visible and retryable instead
+		 * of being reported as a clean disconnection.
+		 */
+		disconnectFailure: text("disconnect_failure"),
+		disconnectAttemptedAt: timestamp("disconnect_attempted_at", {
+			withTimezone: true,
+		}),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),

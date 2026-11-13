@@ -570,6 +570,12 @@ async function handleApplicationDeauthorized(
 			eventId,
 			accountId: target,
 			handled: result.handled,
+			stoppedSubscriptions: result.handled
+				? result.stoppedSubscriptions
+				: undefined,
+			unhandledSubscriptions: result.handled
+				? result.unhandledSubscriptions
+				: undefined,
 		});
 		return new Response(null, { status: 200 });
 	} catch (error) {

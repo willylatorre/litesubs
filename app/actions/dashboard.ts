@@ -69,6 +69,7 @@ export async function getUserEnrollmentDetails(enrollmentId: string) {
 				paidThroughAt: true,
 				cancelAtPeriodEnd: true,
 				cancelAt: true,
+				cancellationCause: true,
 			},
 			with: {
 				planVersion: {
@@ -203,6 +204,7 @@ export async function getDashboardData() {
 						paidThroughAt: true,
 						cancelAtPeriodEnd: true,
 						cancelAt: true,
+						cancellationCause: true,
 					},
 					with: {
 						planVersion: {
@@ -360,6 +362,7 @@ export async function getUserEnrollments() {
 					paidThroughAt: true,
 					cancelAtPeriodEnd: true,
 					cancelAt: true,
+					cancellationCause: true,
 				},
 			}),
 		]);
@@ -413,6 +416,7 @@ export async function getUserBillingRelationships() {
 				paidThroughAt: true,
 				cancelAtPeriodEnd: true,
 				cancelAt: true,
+				cancellationCause: true,
 			},
 			with: {
 				creator: { columns: { name: true } },

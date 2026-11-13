@@ -694,10 +694,21 @@ export async function fulfillSubscriptionInvoice(input: {
 			};
 
 		const now = new Date();
+		// A disconnect ends the ability to serve credits. A renewal Stripe still
+		// collects because cancellation did not reach it must not become spendable
+		// units, and it must not pretend to extend a paid-through entitlement the
+		// customer was never given. The account's own connection state is therefore
+		// part of the grant rule, checked inside the same transaction.
+		const account = await tx.query.connectedAccounts.findFirst({
+			where: eq(connectedAccounts.stripeAccountId, input.stripeAccountId),
+			columns: { disconnectedAt: true },
+		});
+		const accountServesCredits = !account?.disconnectedAt;
 		const startsAfterPaidBoundary =
 			!subscription.paidThroughAt ||
 			input.periodStart >= subscription.paidThroughAt;
 		const advancesPaidBoundary =
+			accountServesCredits &&
 			startsAfterPaidBoundary &&
 			(!subscription.paidThroughAt ||
 				input.periodEnd > subscription.paidThroughAt);
@@ -755,7 +766,9 @@ export async function fulfillSubscriptionInvoice(input: {
 				status: "completed",
 				description: canGrant
 					? `Monthly allowance: ${version.credits} credits`
-					: "Paid monthly invoice; no credits granted (period expired or superseded)",
+					: accountServesCredits
+						? "Paid monthly invoice; no credits granted (period expired or superseded)"
+						: "Paid monthly invoice; no credits granted because the creator's Stripe account is disconnected",
 				stripeCheckoutId: null,
 				subscriptionInvoiceId: invoice.id,
 				usesStripeConnect: true,

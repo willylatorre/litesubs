@@ -25,6 +25,7 @@ const MIGRATIONS = [
 	"drizzle/0009_s09_cancellation.sql",
 	"drizzle/0010_s11_invites.sql",
 	"drizzle/0011_s12_refunds.sql",
+	"drizzle/0012_s15_disconnect.sql",
 ];
 
 /** Create a fresh database, run `body`, then always drop it. */
@@ -601,6 +602,59 @@ test("0011 adds refund receipts without storing a refund as new credits", {
 				UPDATE payments SET amount_refunded = 1200 WHERE id = 'pay1';
 			`),
 			/check constraint/,
+		);
+	});
+});
+
+/**
+ * S15 records why renewals stopped and whether a disconnect attempt failed.
+ * Existing subscriptions predate the distinction, so the cause must stay null
+ * instead of being backfilled into a customer cancellation.
+ */
+test("0012 records a cancellation cause without relabelling existing subscriptions", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, 12));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES
+				('u1','Creator','c@example.test',true),
+				('u2','Buyer','b@example.test',true);
+			INSERT INTO connected_accounts(id,user_id,stripe_account_id,onboarding_mode,status)
+			VALUES ('ca1','u1','acct_test','connected','active');
+			INSERT INTO plans(id,creator_id,name) VALUES ('p1','u1','Monthly');
+			INSERT INTO plan_versions(id,plan_id,creator_id,status,billing_mode,interval,currency,price,credits,version)
+			VALUES ('pv1','p1','u1','published','recurring','month','usd',2000,12,1);
+			INSERT INTO subscriptions(id,creator_id,user_id,plan_id,plan_version_id,stripe_account_id,stripe_customer_id,status,application_fee_percent,cancel_at_period_end)
+			VALUES ('s1','u1','u2','p1','pv1','acct_test','cus_test','active',2,false);
+		`);
+		await apply(client, MIGRATIONS[12]);
+
+		const {
+			rows: [subscription],
+		} = await client.query(
+			"select cancellation_cause from subscriptions where id = 's1'",
+		);
+		assert.deepEqual(subscription, { cancellation_cause: null });
+		const {
+			rows: [account],
+		} = await client.query(
+			"select disconnect_failure, disconnect_attempted_at from connected_accounts where id = 'ca1'",
+		);
+		assert.deepEqual(account, {
+			disconnect_failure: null,
+			disconnect_attempted_at: null,
+		});
+
+		// The enum rejects an invented cause rather than accepting free text.
+		await assert.rejects(
+			client.query(
+				"UPDATE subscriptions SET cancellation_cause = 'platform' WHERE id = 's1'",
+			),
+			/invalid input value/,
+		);
+		await client.query(
+			"UPDATE subscriptions SET cancellation_cause = 'creator_disconnect' WHERE id = 's1'",
 		);
 	});
 });

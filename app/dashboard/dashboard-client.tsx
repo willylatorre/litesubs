@@ -207,12 +207,20 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 																	)}
 																</>
 															) : subscription?.cancelAtPeriodEnd ? (
-																<p className="text-xs text-muted-foreground text-right">
-																	Scheduled to end
+																<p
+																	className={`text-xs text-right ${subscription.cancellationCause === "creator_disconnect" ? "text-destructive" : "text-muted-foreground"}`}
+																>
+																	{subscription.cancellationCause ===
+																	"creator_disconnect"
+																		? "Creator disconnected billing · ends"
+																		: "Scheduled to end"}
 																	{subscriptionEnd && (
 																		<>
 																			{" "}
-																			·{" "}
+																			{subscription.cancellationCause ===
+																			"creator_disconnect"
+																				? "on "
+																				: "· "}
 																			{new Date(
 																				subscriptionEnd,
 																			).toLocaleDateString()}

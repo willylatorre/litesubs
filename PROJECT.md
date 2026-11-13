@@ -78,6 +78,7 @@ This model establishes a direct relationship between the creator and the buyer, 
 
 ### Subscriptions
 - [x] **Subscriptions plan (S07–S13 billing slices):** Monthly plans use Stripe subscriptions and grant one expiring allowance per paid invoice. Recurring Checkout remains sandbox-only until the live-release gate is complete. Customers can cancel at period end, resume, manage creator-specific billing, claim invites whose credits carry an explicit expiry, and have refunds revoke only the refunded purchase's unspent units. Money reporting is derived from receipts, per currency.
+- [x] **Disconnection safety (S15):** Disconnecting a creator's Stripe account is subscription-aware: live subscriptions block a silent disconnect, the creator chooses to stop renewals at each paid period (recorded as `creator_disconnect`), paid periods and granted credits are never shortened, and a renewal still collected after a failed cancellation grants no credits.
 
 ### 💻 Developer Experience (API)
 - [x] **API Key Management:** UI for creators to generate/revoke API keys for their projects. (`/dashboard/developers/api-keys`)

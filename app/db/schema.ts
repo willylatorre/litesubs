@@ -73,6 +73,11 @@ export const subscriptionStatusEnum = pgEnum("subscription_status", [
 	"past_due",
 	"canceled",
 ]);
+/** Who stopped renewals; a disconnect must never read as a customer action. */
+export const subscriptionCancellationCauseEnum = pgEnum(
+	"subscription_cancellation_cause",
+	["customer", "creator_disconnect"],
+);
 
 // Tables
 
@@ -523,6 +528,12 @@ export const subscriptions = pgTable(
 		paidThroughAt: timestamp("paid_through_at", { withTimezone: true }),
 		cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false).notNull(),
 		cancelAt: timestamp("cancel_at", { withTimezone: true }),
+		/**
+		 * Who stopped renewals: the customer (S09) or the creator's Stripe
+		 * disconnection (S15). Kept explicit so support and history never present
+		 * a platform-driven stop as the customer's own choice.
+		 */
+		cancellationCause: subscriptionCancellationCauseEnum("cancellation_cause"),
 		cancellationRevision: integer("cancellation_revision").default(0).notNull(),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()

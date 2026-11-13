@@ -62,4 +62,11 @@ export type PaymentReadiness = {
 	responsibilities: ResponsibilityCopy;
 	/** Serialized as a Date over the RSC boundary. */
 	lastSyncedAt: Date | string | null;
+	/**
+	 * How many subscriptions on this account can still renew. A disconnect has to
+	 * handle them explicitly; 0 means detaching stops no one's access.
+	 */
+	liveSubscriptions: number;
+	/** Why the last disconnect did not finish; null when nothing failed. */
+	disconnectFailure: string | null;
 };

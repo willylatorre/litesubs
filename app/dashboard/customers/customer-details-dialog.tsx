@@ -38,6 +38,7 @@ type CustomerEnrollmentView = {
 		paidThroughAt: Date | null;
 		cancelAtPeriodEnd: boolean;
 		cancelAt: Date | null;
+		cancellationCause: "customer" | "creator_disconnect" | null;
 		overdue: boolean;
 	} | null;
 };
@@ -67,6 +68,7 @@ interface CustomerDetailsDialogProps {
 			paidThroughAt: Date | null;
 			cancelAtPeriodEnd: boolean;
 			cancelAt: Date | null;
+			cancellationCause: "customer" | "creator_disconnect" | null;
 			overdue: boolean;
 		} | null;
 	}[];
@@ -200,7 +202,10 @@ export function CustomerDetailsDialog({
 															: billingSubscription.status === "canceled"
 																? "Subscription ended"
 																: billingSubscription.cancelAtPeriodEnd
-																	? "Scheduled to end"
+																	? billingSubscription.cancellationCause ===
+																		"creator_disconnect"
+																		? "Ending — you disconnected billing"
+																		: "Scheduled to end"
 																	: billingSubscription.status}
 														{effectiveEnd && (
 															<>

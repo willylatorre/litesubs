@@ -63,13 +63,16 @@ export async function refreshPaymentsStatus() {
 	});
 }
 
-export async function disconnectStripeAccount() {
+export async function disconnectStripeAccount(cancelLiveSubscriptions = false) {
 	return authenticatedAction(async (session) => {
 		try {
-			await disconnectAccount(session.user.id);
+			const result = await disconnectAccount(session.user.id, {
+				cancelLiveSubscriptions,
+			});
 			revalidatePath("/dashboard/payments");
 			revalidatePath("/dashboard/plans");
-			return { success: true };
+			revalidatePath("/dashboard");
+			return { success: true, data: result };
 		} catch (error) {
 			return {
 				success: false,
@@ -77,6 +80,17 @@ export async function disconnectStripeAccount() {
 					error instanceof ServiceError
 						? error.message
 						: "Could not disconnect the Stripe account",
+				code: error instanceof ServiceError ? error.code : undefined,
+				liveSubscriptions:
+					error instanceof ServiceError &&
+					typeof error.details === "object" &&
+					error.details !== null &&
+					"liveSubscriptions" in error.details
+						? Number(
+								(error.details as { liveSubscriptions: unknown })
+									.liveSubscriptions,
+							)
+						: undefined,
 			};
 		}
 	});

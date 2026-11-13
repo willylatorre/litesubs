@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import type { auth } from "@/lib/auth";
 import { getCurrentSession } from "@/lib/auth-cached";
 
 export type ActionResponse<T = any> = {
@@ -6,6 +6,8 @@ export type ActionResponse<T = any> = {
 	error?: string;
 	data?: T;
 	fieldErrors?: Record<string, string[]>;
+	/** Machine-readable failure from a ServiceError, when one is available. */
+	code?: string;
 };
 
 /**

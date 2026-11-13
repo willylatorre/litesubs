@@ -4,6 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { getUserBillingRelationships } from "@/app/actions/dashboard";
 import { ManageBillingButton } from "@/components/manage-billing-button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+	subscriptionDisplayState,
+	subscriptionStateCopy,
+} from "@/lib/subscription-state";
 
 export function BillingRelationships() {
 	const { data = [], isLoading } = useQuery({
@@ -38,15 +42,14 @@ export function BillingRelationships() {
 							style: "currency",
 							currency: billing.planVersion.currency.toUpperCase(),
 						}).format(billing.planVersion.price / 100);
-						const status = billing.overdue
-							? "Payment overdue"
-							: billing.status === "canceled"
-								? "Subscription ended"
-								: billing.cancelAtPeriodEnd
-									? "Scheduled to end"
-									: billing.status === "active"
-										? "Active"
-										: "Payment processing";
+						const state = subscriptionDisplayState({
+							status: billing.status,
+							paidThroughAt: billing.paidThroughAt,
+							cancelAtPeriodEnd: billing.cancelAtPeriodEnd,
+							cancellationCause: billing.cancellationCause,
+							overdue: billing.overdue,
+						});
+						const status = subscriptionStateCopy[state];
 						return (
 							<div
 								key={billing.id}

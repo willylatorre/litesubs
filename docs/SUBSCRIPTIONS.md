@@ -66,6 +66,14 @@ Implemented slices:
 - S13 — creator and customer money reporting is receipt-derived, grouped per
   currency with gross/refunded/net, while counts, subscriptions, and usable
   credits stay separate concepts.
+- S15 — disconnecting a Stripe account is subscription-aware: live
+  subscriptions are enumerated from Litesubs' own records, a disconnect refuses
+  to proceed silently, the explicit choice schedules each renewal to stop at its
+  paid period with `creator_disconnect` recorded as the cause, and a Stripe
+  failure leaves a visible retryable state. Access and granted credits still run
+  to the paid-period end, and a renewal Stripe still collects on a disconnected
+  account moves money without granting credits. See
+  `drizzle/0012_s15_disconnect.sql`.
 
 ## Purpose
 
@@ -1072,26 +1080,26 @@ subscriptions on that account instead of silently keeping them billing.
 
 #### Acceptance criteria
 
-- [ ] Disconnect enumerates the creator's **live** subscriptions from Litesubs'
+- [x] Disconnect enumerates the creator's **live** subscriptions from Litesubs'
       own records (not by scanning Stripe) and refuses to complete silently while
       any remain unhandled.
-- [ ] The creator is told exactly how many subscriptions are live and given a
+- [x] The creator is told exactly how many subscriptions are live and given a
       supported choice: cancel them at period end, or keep the connection until
       they end.
-- [ ] Cancellation performed for this reason sets `cancel_at_period_end` on the
+- [x] Cancellation performed for this reason sets `cancel_at_period_end` on the
       owning account and is recorded with its cause, so it is never confused with a
       customer-initiated cancellation in S09.
-- [ ] Access and already-granted credits still run to the end of each paid period;
+- [x] Access and already-granted credits still run to the end of each paid period;
       disconnect never revokes a paid period early or refunds it implicitly.
-- [ ] No further allowance is granted after the final paid period, and a renewal
+- [x] No further allowance is granted after the final paid period, and a renewal
       that Stripe still collects (because cancellation failed) does not silently
       grant credits.
-- [ ] A deauthorization webhook from the creator's Dashboard triggers the same
+- [x] A deauthorization webhook from the creator's Dashboard triggers the same
       handling, and a failure to reach Stripe leaves a visible, retryable state
       rather than a false "disconnected" success.
-- [ ] Customers see an honest status on their subscription instead of a renewal
+- [x] Customers see an honest status on their subscription instead of a renewal
       date that will not be honoured.
-- [ ] One-time-pack purchases are unaffected: they need no cancellation, and their
+- [x] One-time-pack purchases are unaffected: they need no cancellation, and their
       remaining credits keep their existing expiry rules.
 
 #### Implementation notes and relevant files
@@ -1108,6 +1116,17 @@ Subscribe, then disconnect with one live subscription. Show the refusal or the
 explicit cancellation choice, the period-end cancellation, remaining credits usable
 until that date, no post-period allowance, and a clean state after the webhook.
 Repeat with the creator cancelling from their own Dashboard.
+
+**Implemented:** yes — `lib/services/account-disconnect.ts` owns the policy
+(`listLiveSubscriptions`, `stopLiveSubscriptions`), `disconnectAccount` refuses
+with `SUBSCRIPTIONS_LIVE` unless `cancelLiveSubscriptions` is chosen, and
+`markAccountDeauthorized` applies the same handling from the webhook. The
+renewal grant rule in `fulfillSubscriptionInvoice` refuses to extend the
+paid-through boundary or grant units on a disconnected account. The Payments
+screen shows the live count, the choice dialog, and a retryable failure banner;
+`subscriptionDisplayState`/`customerSubscriptionSummary` give customers and
+creators the honest state. Coverage: `lib/disconnect.integration.test.ts`
+(opt-in) plus the `0012` migration test.
 
 #### Blocked by
 
