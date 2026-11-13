@@ -358,7 +358,7 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 					customer: email,
 					mode: "comp",
 					reason: "Trial month",
-					expires_at: expiry,
+					expires_at: expiry.toISOString(),
 				});
 				assert.equal(invite.status, "invited");
 				assert.ok("inviteUrl" in invite && "creditsExpireAt" in invite);
@@ -509,6 +509,10 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 					);
 					const payload = await response.json();
 					assert.equal(response.status, 200, JSON.stringify(payload));
+					assert.ok(
+						payload.result,
+						`unexpected payload: ${JSON.stringify(payload)}`,
+					);
 					assert.deepEqual(
 						payload.result.tools.map((tool: { name: string }) => tool.name),
 						["consume_credits"],

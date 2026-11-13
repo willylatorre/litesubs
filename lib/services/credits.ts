@@ -42,8 +42,11 @@ export const creditInput = z.object({
 	amount: z.number().int().min(1).max(1000000),
 	reason: z.string().trim().min(1).max(1000),
 	idempotency_key: z.string().trim().min(1).max(200).optional(),
-	/** Optional for one-time plans and disallowed in the past. */
-	expires_at: z.coerce.date().optional(),
+	/**
+	 * ISO-8601 string, not a Date: this schema is also served as MCP tool input
+	 * JSON Schema, and a Date has no JSON Schema representation.
+	 */
+	expires_at: z.iso.datetime().optional(),
 	dry_run: z.boolean().default(false),
 });
 
@@ -318,9 +321,18 @@ export async function changeCredits(
 		type,
 		reason: data.reason,
 		key: data.idempotency_key,
-		expiresAt: type === "usage" ? null : (data.expires_at ?? null),
+		expiresAt: type === "usage" ? null : parseExpiry(data.expires_at),
 		dryRun: data.dry_run,
 	});
+}
+
+/** An ISO string from a transport is not trusted to be a valid Date. */
+function parseExpiry(value: string | undefined): Date | null {
+	if (!value) return null;
+	const parsed = new Date(value);
+	if (Number.isNaN(parsed.getTime()))
+		throw new ServiceError("INVALID_INPUT", "expires_at must be an ISO date");
+	return parsed;
 }
 
 // Row locking serializes concurrent debits. Advisory locking serializes a

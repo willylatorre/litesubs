@@ -18,8 +18,11 @@ export const enrollmentInput = z.object({
 	customer: z.string().trim().min(1),
 	mode: z.enum(["invoice", "comp"]).default("invoice"),
 	reason: z.string().trim().min(1).max(1000).optional(),
-	/** Required for a complimentary recurring plan with no current paid period. */
-	expires_at: z.coerce.date().optional(),
+	/**
+	 * ISO-8601 string: required for a complimentary recurring plan with no
+	 * current paid period. A Date is not expressible as MCP input JSON Schema.
+	 */
+	expires_at: z.iso.datetime().optional(),
 });
 
 export async function enrollCustomer(principal: Principal, input: unknown) {
@@ -77,7 +80,7 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 					"A complimentary monthly invite needs an explicit expiry date",
 					409,
 				);
-			if (data.expires_at.getTime() <= Date.now())
+			if (new Date(data.expires_at).getTime() <= Date.now())
 				throw new ServiceError(
 					"INVALID_INPUT",
 					"A credit expiry must be in the future",
@@ -98,7 +101,9 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 			});
 			const compCredits = data.mode === "comp" ? terms.credits : 0;
 			const compExpiresAt =
-				data.mode === "comp" ? (data.expires_at ?? null) : null;
+				data.mode === "comp" && data.expires_at
+					? new Date(data.expires_at)
+					: null;
 			if (
 				existing &&
 				(existing.compCredits !== compCredits ||
@@ -160,7 +165,7 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 				creatorId: principal.creatorId,
 				userId: customer.id,
 				planId: plan.id,
-				expiresAt: data.expires_at,
+				expiresAt: data.expires_at ? new Date(data.expires_at) : null,
 			});
 			const [entry] = await tx
 				.insert(transactions)

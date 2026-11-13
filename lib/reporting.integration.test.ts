@@ -80,6 +80,24 @@ test("money reporting uses receipts per currency and never blends them", {
 		...overrides,
 	});
 
+	const [otherPlan] = await db
+		.insert(plans)
+		.values({ creatorId: otherCreatorId, name: "Another creator's pack" })
+		.returning();
+	const [otherVersion] = await db
+		.insert(planVersions)
+		.values({
+			planId: otherPlan.id,
+			creatorId: otherCreatorId,
+			status: "published",
+			billingMode: "one_time",
+			currency: "usd",
+			price: 1000,
+			credits: 10,
+			version: 1,
+		})
+		.returning();
+
 	await db.insert(payments).values([
 		// USD paid.
 		receipt({ id: "pay_usd", currency: "usd" }),
@@ -113,8 +131,8 @@ test("money reporting uses receipts per currency and never blends them", {
 			currency: "usd",
 			creatorId: otherCreatorId,
 			userId: otherBuyerId,
-			planId: null as never,
-			planVersionId: null as never,
+			planId: otherPlan.id,
+			planVersionId: otherVersion.id,
 		}),
 	]);
 
