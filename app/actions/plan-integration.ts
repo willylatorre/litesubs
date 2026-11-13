@@ -20,12 +20,28 @@ export async function setPlanCalEventType(
 		name?: string | null;
 		url?: string | null;
 	} | null,
+	/**
+	 * Credits one booking spends. `null`/omitted keeps the event type free, so
+	 * attaching a booking link never starts charging by surprise.
+	 */
+	creditsPerBooking?: number | null,
 ) {
 	return authenticatedAction(async (session) => {
 		const plan = await db.query.plans.findFirst({
 			where: and(eq(plans.id, planId), eq(plans.creatorId, session.user.id)),
 		});
 		if (!plan) throw new ServiceError("NOT_FOUND", "Plan not found", 404);
+
+		if (
+			creditsPerBooking !== undefined &&
+			creditsPerBooking !== null &&
+			(!Number.isSafeInteger(creditsPerBooking) || creditsPerBooking <= 0)
+		)
+			throw new ServiceError(
+				"INVALID_INPUT",
+				"A booking price must be a whole number of credits above zero",
+			);
+		const price = creditsPerBooking ?? null;
 
 		await db.transaction(async (tx) => {
 			if (!eventType) {
@@ -53,6 +69,7 @@ export async function setPlanCalEventType(
 							eventTypeSlug: eventType.slug ?? null,
 							eventTypeName: eventType.name ?? null,
 							eventTypeUrl: eventType.url ?? null,
+							creditsPerBooking: price,
 							connectedAt: new Date(),
 						})
 						.where(eq(calcomIntegrations.id, integration.calcomIntegrationId));
@@ -67,6 +84,7 @@ export async function setPlanCalEventType(
 					eventTypeSlug: eventType.slug ?? null,
 					eventTypeName: eventType.name ?? null,
 					eventTypeUrl: eventType.url ?? null,
+					creditsPerBooking: price,
 					connectedAt: new Date(),
 				})
 				.returning();

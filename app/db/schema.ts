@@ -91,6 +91,12 @@ export const calcomIntegrations = pgTable(
 		eventTypeSlug: text("event_type_slug"),
 		eventTypeName: text("event_type_name"),
 		eventTypeUrl: text("event_type_url"),
+		/**
+		 * Credits one confirmed booking of this event type spends. Null means
+		 * booking is free: the link stays usable and no ledger row is written.
+		 * Set by the creator, because only they know what a session is worth.
+		 */
+		creditsPerBooking: integer("credits_per_booking"),
 		connectedAt: timestamp("connected_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -101,6 +107,66 @@ export const calcomIntegrations = pgTable(
 	(table) => [
 		index("calcom_event_type_id_idx").on(table.eventTypeId),
 		index("calcom_event_type_slug_idx").on(table.eventTypeSlug),
+		check(
+			"calcom_credits_per_booking_positive",
+			sql`${table.creditsPerBooking} is null or ${table.creditsPerBooking} > 0`,
+		),
+	],
+);
+
+/**
+ * One Cal.com booking that moved credits.
+ *
+ * The booking uid is Cal.com's stable identity for an appointment, so it is the
+ * idempotency boundary: Cal.com retries deliveries, and a replay must not spend
+ * a second time. `chargedCredits` is what the debit actually took, which is what
+ * a cancellation may restore — never a re-read of the plan's current price.
+ */
+export const calBookings = pgTable(
+	"cal_bookings",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		/** Cal.com's booking uid; unique across the instance. */
+		bookingUid: text("booking_uid").notNull().unique(),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		planId: text("plan_id")
+			.notNull()
+			.references(() => plans.id, { onDelete: "cascade" }),
+		enrollmentId: text("enrollment_id")
+			.notNull()
+			.references(() => enrollments.id, { onDelete: "cascade" }),
+		calcomIntegrationId: text("calcom_integration_id").references(
+			() => calcomIntegrations.id,
+			{ onDelete: "set null" },
+		),
+		/** The debit ledger row this booking created. */
+		chargeTransactionId: text("charge_transaction_id"),
+		/** Positive: units the debit took. Zero when the booking spent nothing. */
+		chargedCredits: integer("charged_credits").default(0).notNull(),
+		/** The restore ledger row, once a cancellation has given units back. */
+		refundTransactionId: text("refund_transaction_id"),
+		cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+		/** Scheduled start, as Cal.com reported it. */
+		startsAt: timestamp("starts_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [
+		index("cal_booking_creator_idx").on(table.creatorId),
+		index("cal_booking_user_idx").on(table.userId),
+		index("cal_booking_plan_idx").on(table.planId),
+		check(
+			"cal_booking_charged_non_negative",
+			sql`${table.chargedCredits} >= 0`,
+		),
 	],
 );
 

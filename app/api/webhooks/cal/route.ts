@@ -1,5 +1,15 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
+import {
+	CREDIT_RESTORING_TRIGGERS,
+	CREDIT_SPENDING_TRIGGERS,
+	readCalBooking,
+	readCalTrigger,
+} from "@/lib/cal-webhook";
+import {
+	chargeCalBooking,
+	restoreCalBooking,
+} from "@/lib/services/cal-bookings";
 
 const SIGNATURE_HEADER = "x-cal-signature-256";
 const UNSIGNED_MARKER = "no-secret-provided";
@@ -64,13 +74,55 @@ export async function POST(request: Request) {
 		return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
 	}
 
-	// TODO: Lookup subscription/product by event type and decrement credits.
-	// Log only the trigger type — the payload contains attendee PII.
-	const trigger =
-		typeof payload === "object" && payload !== null && "triggerEvent" in payload
-			? String((payload as { triggerEvent: unknown }).triggerEvent)
-			: "unknown";
-	console.log("Received verified Cal.com webhook", { trigger });
+	// Log only the trigger and outcome — the payload contains attendee PII.
+	const trigger = readCalTrigger(payload);
+	const booking = readCalBooking(payload);
+	if (!booking) {
+		// A verified delivery we cannot attribute is acknowledged, not retried
+		// forever: there is no safe action to take on an unreadable payload.
+		console.log("Cal.com webhook without a readable booking", { trigger });
+		return NextResponse.json({ received: true, handled: false });
+	}
 
-	return NextResponse.json({ received: true });
+	try {
+		if ((CREDIT_SPENDING_TRIGGERS as readonly string[]).includes(trigger)) {
+			// A reschedule is the same booking; the uid is stable, so the debit is
+			// replayed rather than charged again.
+			const result = await chargeCalBooking({
+				bookingUid: booking.uid,
+				eventTypeId: booking.eventTypeId,
+				email: booking.email,
+				startsAt: booking.startsAt,
+			});
+			console.log("Cal.com booking charge", {
+				trigger,
+				status: result.status,
+				credits: "credits" in result ? result.credits : 0,
+			});
+			// Insufficient credits is a business outcome the creator must see, not a
+			// transport failure; a 200 stops Cal.com retrying it forever.
+			return NextResponse.json({ received: true, status: result.status });
+		}
+
+		if ((CREDIT_RESTORING_TRIGGERS as readonly string[]).includes(trigger)) {
+			const result = await restoreCalBooking({ bookingUid: booking.uid });
+			console.log("Cal.com booking restore", {
+				trigger,
+				status: result.status,
+				credits: "credits" in result ? result.credits : 0,
+			});
+			return NextResponse.json({ received: true, status: result.status });
+		}
+
+		console.log("Received verified Cal.com webhook", { trigger });
+		return NextResponse.json({ received: true, handled: false });
+	} catch (error) {
+		// A real failure (database, allocation) must be retried by Cal.com rather
+		// than silently swallowed; the booking uid keeps the retry idempotent.
+		console.error("Failed to apply Cal.com booking", {
+			trigger,
+			type: error instanceof Error ? error.name : "UnknownError",
+		});
+		return NextResponse.json({ error: "Webhook Error" }, { status: 500 });
+	}
 }

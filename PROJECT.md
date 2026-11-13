@@ -73,7 +73,7 @@ This model establishes a direct relationship between the creator and the buyer, 
 
 ### Integrations
 - [x] **Stripe connect:** Explore allowing users to connect their own "stripe" account so the purchases of the packs will go directly to them. If connected, we skip/disable the whole Payouts section as it is handled automatically.
-- [ ] **Cal.com Integration:** Explore allowing users to connect their account and automatically "spend" credits when booking appointments via Cal.com through a webhook.
+- [x] **Cal.com Integration:** Connect a Cal.com account and spend credits automatically when someone books a linked event type. The creator sets a credits-per-booking price per plan; a confirmed booking debits it, and cancelling the booking returns only the units that booking spent.
 - [ ] **Calendly Integration:** Explore allowing users to connect their account and automatically "spend" credits when booking appointments via Cal.com through a webhook.
 
 ### Subscriptions

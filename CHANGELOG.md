@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-01-01
 
 ### Added
+- **Cal.com booking credits (S15 follow-on)**:
+  - A plan's Cal.com event type can carry a credits-per-booking price. A
+    confirmed booking (`BOOKING_CREATED`) spends exactly that many credits from
+    the booker's enrollment on the linked plan; a reschedule is the same booking
+    and is not charged twice.
+  - The booking uid is the idempotency boundary, so Cal.com's retried deliveries
+    never double-charge. A booker with too few credits is refused and spends
+    nothing; the failed attempt leaves no booking row.
+  - Cancelling or rejecting a booking (`BOOKING_CANCELLED`/`BOOKING_REJECTED`)
+    returns only the units that booking spent, back to the grants it took them
+    from. Expired or re-spent units are never resurrected, so a cancellation
+    cannot mint a balance.
+  - Bookings for an unknown event type, an unenrolled booker, or a plan that was
+    detached from the event type do nothing and are reported as such rather than
+    guessed. An event type with no price keeps working as a free booking link.
+  - The webhook payload parser is strict: a delivery without a booking uid or a
+    booker email is acknowledged but never turned into a debit.
 - **Subscription-aware disconnect (S15)**:
   - Disconnecting a Stripe account now enumerates the creator's live
     subscriptions from Litesubs' own records and refuses to complete silently

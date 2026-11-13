@@ -26,6 +26,7 @@ const MIGRATIONS = [
 	"drizzle/0010_s11_invites.sql",
 	"drizzle/0011_s12_refunds.sql",
 	"drizzle/0012_s15_disconnect.sql",
+	"drizzle/0013_cal_booking_credits.sql",
 ];
 
 /** Create a fresh database, run `body`, then always drop it. */
@@ -655,6 +656,65 @@ test("0012 records a cancellation cause without relabelling existing subscriptio
 		);
 		await client.query(
 			"UPDATE subscriptions SET cancellation_cause = 'creator_disconnect' WHERE id = 's1'",
+		);
+	});
+});
+
+/**
+ * S15 part two: booking credits. An existing event type must keep working as a
+ * free booking link (the price is nullable), and the booking uid must be unique
+ * so a replayed Cal.com delivery cannot become a second debit.
+ */
+test("0013 adds booking credit pricing without charging existing event types", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, 13));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES
+				('u1','Creator','c@example.test',true),
+				('u2','Buyer','b@example.test',true);
+			INSERT INTO calcom_integrations(id,event_type_id,event_type_name)
+			VALUES ('cal1',4242,'Coaching call');
+			INSERT INTO plans(id,creator_id,name) VALUES ('p1','u1','Coaching');
+			INSERT INTO plan_versions(id,plan_id,creator_id,status,billing_mode,currency,price,credits,version)
+			VALUES ('pv1','p1','u1','published','one_time','usd',10000,10,1);
+			INSERT INTO enrollments(id,user_id,plan_id,creator_id,credits) VALUES ('e1','u2','p1','u1',10);
+		`);
+		await apply(client, MIGRATIONS[13]);
+
+		// A pre-existing booking link does not start charging people by surprise.
+		const {
+			rows: [integration],
+		} = await client.query(
+			"select credits_per_booking from calcom_integrations where id = 'cal1'",
+		);
+		assert.deepEqual(integration, { credits_per_booking: null });
+
+		await client.query(`
+			INSERT INTO cal_bookings(id,booking_uid,creator_id,user_id,plan_id,enrollment_id,calcom_integration_id,charged_credits)
+			VALUES ('b1','bk_1','u1','u2','p1','e1','cal1',3);
+		`);
+		// The booking uid is the idempotency boundary for webhook retries.
+		await assert.rejects(
+			client.query(`
+				INSERT INTO cal_bookings(id,booking_uid,creator_id,user_id,plan_id,enrollment_id,charged_credits)
+				VALUES ('b2','bk_1','u1','u2','p1','e1',3);
+			`),
+			/duplicate key/,
+		);
+		// A booking cannot claim a negative charge, and a price must be positive.
+		await assert.rejects(
+			client.query(
+				"UPDATE cal_bookings SET charged_credits = -1 WHERE id = 'b1'",
+			),
+			/check constraint/,
+		);
+		await assert.rejects(
+			client.query(
+				"UPDATE calcom_integrations SET credits_per_booking = 0 WHERE id = 'cal1'",
+			),
+			/check constraint/,
 		);
 	});
 });

@@ -248,6 +248,18 @@ payment-ready account cannot sell.
 System paths (Stripe fulfillment and comp enrollment/claim) retain their own
 transactional ledger writes.
 
+Cal.com bookings are a third system path. `/api/webhooks/cal` verifies the
+`X-Cal-Signature-256` HMAC over the raw body with `CAL_WEBHOOK_SECRET` and rejects
+an unconfigured or unsigned delivery. The booking uid is the idempotency
+boundary: `BOOKING_CREATED` (and a reschedule, which reuses the uid) spends the
+plan's configured credits-per-booking once, and `BOOKING_CANCELLED` /
+`BOOKING_REJECTED` returns only the units that booking took, back to the same
+grants. Expired or already re-spent units are never restored, so a cancellation
+cannot mint a balance. Bookings for an unknown event type, an unenrolled booker,
+or a plan detached from the event type are recorded as no-ops; an event type with
+no price is a free booking link. See `lib/services/cal-bookings.ts` and
+`lib/cal-webhook.ts`.
+
 ## Connected accounts and readiness
 
 Each creator connects their own Stripe account. `connected_accounts` stores the

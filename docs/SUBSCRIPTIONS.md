@@ -297,10 +297,10 @@ slice must update the views needed for its own demo.
 - Regenerate a clean schema baseline, but do not reset any database without
   confirmation of the exact environment and scope. Do not rewrite an applied
   baseline underneath a running deployment.
-- The Cal.com webhook currently authenticates requests but does not deduct credits.
-  These slices preserve the booking link and make the shared credit service ready;
-  implementing automatic Cal.com booking consumption is a separate integration
-  task. Hiding a Book button is not server-side enforcement of an external booking.
+- The Cal.com webhook now deducts credits for a linked, priced event type (see the
+  Cal.com note in `docs/MCP.md`). A hidden Book button is still not server-side
+  enforcement of an external booking, so the debit is enforced on the webhook,
+  not on the UI.
 
 ### S01 — Create and edit an unpublished plan
 
