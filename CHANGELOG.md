@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-01-01
 
 ### Added
+- **Error and not-found boundaries**:
+  - Added `app/global-error.tsx`, `app/error.tsx`, `app/dashboard/error.tsx`, and
+    `app/not-found.tsx`. Previously no boundary existed, so Next generated a bare
+    document for `/_global-error` and every 404 fell back to a generic page.
+  - Boundaries show the error digest for log correlation, state explicitly that
+    nothing was charged or changed, and offer `retry()` plus a safe way out.
+  - The not-found page names the two realistic causes (expired invite/token, plan
+    no longer available) instead of a generic message.
 - **Cal.com booking credits (S15 follow-on)**:
   - A plan's Cal.com event type can carry a credits-per-booking price. A
     confirmed booking (`BOOKING_CREATED`) spends exactly that many credits from

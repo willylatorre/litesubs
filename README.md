@@ -17,9 +17,20 @@ To build this application for production:
 npm run build
 ```
 
+**Run the build with `NODE_ENV=production`.** `next build` expects a production
+`NODE_ENV`; if your shell exports `NODE_ENV=development` (common when a dev
+server or another project set it), the build can fail while prerendering
+`/_global-error` with a confusing `Cannot read properties of null (reading
+'useContext')`, even though the code is fine. CI sets it for you.
+
+```bash
+NODE_ENV=production npm run build
+```
+
 ## Testing
 
-This project uses [Vitest](https://vitest.dev/) for testing. You can run the tests with:
+Tests run on the built-in Node test runner via `tsx` (not Vitest). You can run
+them with:
 
 ```bash
 npm test
