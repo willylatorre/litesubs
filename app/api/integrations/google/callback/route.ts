@@ -101,14 +101,25 @@ export async function GET(request: Request) {
 		return finish("missing-key");
 	}
 
-	const calendarId = "primary";
+	const existing = await db.query.calendarConnections.findFirst({
+		where: and(
+			eq(calendarConnections.creatorId, session.user.id),
+			eq(calendarConnections.provider, GOOGLE_CALENDAR_PROVIDER),
+		),
+	});
+
+	// Defaults on first connect: the creator's own calendar both blocks slots and
+	// receives bookings. They can point either role elsewhere afterwards without
+	// re-authorising.
+	const busyCalendarId = existing?.busyCalendarId ?? "primary";
+	const writeCalendarId = existing?.writeCalendarId ?? "primary";
 
 	// Probe free/busy once so "connected" means "actually usable". A failure is
 	// recorded but still keeps the connection: sync is best-effort.
 	let syncFailure: string | null = null;
 	try {
 		await queryFreeBusy(tokens.accessToken, {
-			calendarId,
+			calendarId: busyCalendarId,
 			timeMin: new Date(),
 			timeMax: new Date(Date.now() + 60 * 60 * 1000),
 		});
@@ -116,13 +127,6 @@ export async function GET(request: Request) {
 		syncFailure =
 			"Connected, but a test calendar read failed. Try syncing again shortly.";
 	}
-
-	const existing = await db.query.calendarConnections.findFirst({
-		where: and(
-			eq(calendarConnections.creatorId, session.user.id),
-			eq(calendarConnections.provider, GOOGLE_CALENDAR_PROVIDER),
-		),
-	});
 
 	// A reconnect may omit the refresh token (Google only reissues it on a full
 	// consent). Keep the previous one rather than losing offline access.
@@ -145,7 +149,8 @@ export async function GET(request: Request) {
 			encryptedRefreshToken: refreshTokenToStore,
 			expiresAt: tokens.expiresAt,
 			scope: tokens.scope,
-			calendarId,
+			busyCalendarId,
+			writeCalendarId,
 			lastSyncedAt,
 			syncFailure,
 			disconnectedAt: null,
@@ -159,7 +164,8 @@ export async function GET(request: Request) {
 				encryptedRefreshToken: refreshTokenToStore,
 				expiresAt: tokens.expiresAt,
 				scope: tokens.scope,
-				calendarId,
+				busyCalendarId,
+				writeCalendarId,
 				lastSyncedAt,
 				syncFailure,
 				// Reconnecting resumes sync.

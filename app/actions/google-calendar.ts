@@ -5,9 +5,12 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/app/db";
 import { calendarConnections } from "@/app/db/schema";
 import {
+	createBookingCalendar,
 	findActiveConnection,
 	GOOGLE_CALENDAR_PROVIDER,
+	listCalendars,
 	retryCalendarSync,
+	withCreatorAccessToken,
 } from "@/lib/google-calendar";
 import { isTokenEncryptionConfigured } from "@/lib/google-calendar-crypto";
 import { authenticatedAction } from "@/lib/safe-action";
@@ -23,7 +26,12 @@ export type GoogleCalendarStatus = {
 	 */
 	configured: boolean;
 	email: string | null;
-	calendarId: string | null;
+	/** Whose busy time blocks slots. */
+	busyCalendarId: string | null;
+	/** Where booking events are written. */
+	writeCalendarId: string | null;
+	/** True when Litesubs created the write calendar. */
+	writeCalendarCreated: boolean;
 	scope: string | null;
 	expiresAt: Date | null;
 	lastSyncedAt: Date | null;
@@ -56,7 +64,9 @@ export async function getGoogleCalendarStatus() {
 					connected: false,
 					configured,
 					email: null,
-					calendarId: null,
+					busyCalendarId: null,
+					writeCalendarId: null,
+					writeCalendarCreated: false,
 					scope: null,
 					expiresAt: null,
 					lastSyncedAt: null,
@@ -71,7 +81,9 @@ export async function getGoogleCalendarStatus() {
 				connected: true,
 				configured,
 				email: connection.externalAccountEmail,
-				calendarId: connection.calendarId,
+				busyCalendarId: connection.busyCalendarId,
+				writeCalendarId: connection.writeCalendarId,
+				writeCalendarCreated: connection.writeCalendarCreated,
 				scope: connection.scope,
 				expiresAt: connection.expiresAt,
 				lastSyncedAt: connection.lastSyncedAt,
@@ -156,4 +168,126 @@ function syncFailureMessage(reason: string): string {
 		default:
 			return "Google Calendar sync failed. Try again.";
 	}
+}
+
+/* -------------------------------------------------------------------------- */
+/* Choosing which calendars block and receive bookings                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The calendars a creator can pick from, for the picker.
+ *
+ * Errors are returned as a message rather than thrown: a missing or expired
+ * grant must render as "reconnect", not as a broken page.
+ */
+export async function listGoogleCalendars() {
+	return authenticatedAction(async (session) => {
+		const result = await withCreatorAccessToken(session.user.id, (token) =>
+			listCalendars(token),
+		);
+		if (!result.ok)
+			return { success: false, error: CALENDAR_ERROR_COPY[result.reason] };
+		return { success: true, data: result.data };
+	});
+}
+
+const CALENDAR_ERROR_COPY: Record<string, string> = {
+	not_configured: "Google Calendar is not configured on this server.",
+	not_connected: "Connect Google Calendar first.",
+	unauthorized: "Google access expired. Reconnect Google Calendar.",
+	refresh_failed: "Google access expired. Reconnect Google Calendar.",
+	token_decrypt_failed: "The stored Google token is unreadable. Reconnect.",
+	rate_limited: "Google is rate limiting requests. Try again shortly.",
+	api_error: "Google did not respond. Try again shortly.",
+	timeout: "Google took too long to respond. Try again.",
+};
+
+/**
+ * Point each role at a calendar.
+ *
+ * Both ids are validated against the creator's own calendar list, so a value
+ * from another account cannot be written. Changing these never re-authorises and
+ * never moves existing bookings.
+ */
+export async function setGoogleCalendars(input: {
+	busyCalendarId?: string;
+	writeCalendarId?: string;
+}) {
+	return authenticatedAction(async (session) => {
+		const connection = await findActiveConnection(session.user.id);
+		if (!connection)
+			return { success: false, error: "Connect Google Calendar first." };
+
+		const listed = await withCreatorAccessToken(session.user.id, (token) =>
+			listCalendars(token),
+		);
+		if (!listed.ok)
+			return { success: false, error: CALENDAR_ERROR_COPY[listed.reason] };
+		const allowed = new Set(listed.data.map((calendar) => calendar.id));
+
+		const updates: {
+			busyCalendarId?: string;
+			writeCalendarId?: string;
+			writeCalendarCreated?: boolean;
+		} = {};
+		if (input.busyCalendarId !== undefined) {
+			if (!allowed.has(input.busyCalendarId))
+				return { success: false, error: "Pick one of your own calendars." };
+			updates.busyCalendarId = input.busyCalendarId;
+		}
+		if (input.writeCalendarId !== undefined) {
+			if (!allowed.has(input.writeCalendarId))
+				return { success: false, error: "Pick one of your own calendars." };
+			const writable = listed.data.find(
+				(calendar) => calendar.id === input.writeCalendarId,
+			);
+			if (!writable?.canWrite)
+				return {
+					success: false,
+					error: "That calendar is read-only. Pick one you can write to.",
+				};
+			updates.writeCalendarId = input.writeCalendarId;
+			// Pointing at an existing calendar means we no longer own it.
+			updates.writeCalendarCreated = false;
+		}
+
+		await db
+			.update(calendarConnections)
+			.set({ ...updates, updatedAt: new Date() })
+			.where(eq(calendarConnections.id, connection.id));
+		revalidatePath(INTEGRATIONS_PATH);
+		return { success: true };
+	});
+}
+
+/**
+ * Create a dedicated calendar and make it the write target.
+ *
+ * Offered because a creator usually does not want bookings flooding their
+ * personal calendar. The created id is recorded as ours so disconnect can tell
+ * the creator it exists.
+ */
+export async function createGoogleBookingCalendar(name?: string) {
+	return authenticatedAction(async (session) => {
+		const connection = await findActiveConnection(session.user.id);
+		if (!connection)
+			return { success: false, error: "Connect Google Calendar first." };
+
+		const created = await withCreatorAccessToken(session.user.id, (token) =>
+			createBookingCalendar(token, name?.trim() || undefined),
+		);
+		if (!created.ok)
+			return { success: false, error: CALENDAR_ERROR_COPY[created.reason] };
+
+		await db
+			.update(calendarConnections)
+			.set({
+				writeCalendarId: created.data.id,
+				writeCalendarCreated: true,
+				updatedAt: new Date(),
+			})
+			.where(eq(calendarConnections.id, connection.id));
+		revalidatePath(INTEGRATIONS_PATH);
+		return { success: true, data: created.data };
+	});
 }

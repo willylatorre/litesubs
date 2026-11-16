@@ -10,6 +10,7 @@ import {
 	retryGoogleCalendarSync,
 } from "@/app/actions/google-calendar";
 import { Badge } from "@/components/ui/badge";
+import { GoogleCalendarPicker } from "./google-calendar-picker";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -152,35 +153,27 @@ export function GoogleCalendarCard({
 				)}
 
 				{status.connected ? (
-					<div className="flex flex-col gap-1 text-sm text-muted-foreground">
-						<p>
-							{status.email ? (
-								<>
-									Syncing{" "}
-									<span className="text-foreground font-medium">
-										{status.email}
-									</span>
-									.
-								</>
-							) : (
-								<>
-									Syncing your{" "}
-									<span className="text-foreground font-medium">
-										{status.calendarId ?? "primary"}
-									</span>{" "}
-									calendar.
-								</>
-							)}
-						</p>
-						{status.syncFailure ? (
-							<p className="text-amber-600 dark:text-amber-500">
-								{status.syncFailure}
+					<div className="flex flex-col gap-4">
+						<div className="flex flex-col gap-1 text-sm text-muted-foreground">
+							<p>
+								Busy time blocks slots, and confirmed bookings are written to
+								the calendar you choose below.
 							</p>
-						) : lastSynced ? (
-							<p>Last successful sync {lastSynced}.</p>
-						) : (
-							<p>No sync has completed yet.</p>
-						)}
+							{status.syncFailure ? (
+								<p className="text-amber-600 dark:text-amber-500">
+									{status.syncFailure}
+								</p>
+							) : lastSynced ? (
+								<p>Last successful sync {lastSynced}.</p>
+							) : (
+								<p>No sync has completed yet.</p>
+							)}
+						</div>
+						<GoogleCalendarPicker
+							busyCalendarId={status.busyCalendarId ?? "primary"}
+							writeCalendarId={status.writeCalendarId ?? "primary"}
+							writeCalendarCreated={status.writeCalendarCreated}
+						/>
 					</div>
 				) : status.configured ? (
 					<p className="text-muted-foreground text-sm">

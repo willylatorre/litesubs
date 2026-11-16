@@ -1037,8 +1037,23 @@ export const calendarConnections = pgTable(
 		encryptedRefreshToken: text("encrypted_refresh_token"),
 		expiresAt: timestamp("expires_at", { withTimezone: true }),
 		scope: text("scope"),
-		/** Free/busy is read for this calendar; events are created on it. */
-		calendarId: text("calendar_id").default("primary").notNull(),
+		/**
+		 * Which calendar's existing events BLOCK slots.
+		 *
+		 * Separate from the write target: a creator usually wants their main
+		 * calendar to keep them honest about being busy, while bookings land in a
+		 * dedicated calendar so their personal calendar is not flooded.
+		 */
+		busyCalendarId: text("busy_calendar_id").default("primary").notNull(),
+		/** Which calendar a booking's event is written to. */
+		writeCalendarId: text("write_calendar_id").default("primary").notNull(),
+		/**
+		 * True when Litesubs created the write calendar itself, so disconnect can
+		 * offer to remove it instead of leaving an orphan in the creator's list.
+		 */
+		writeCalendarCreated: boolean("write_calendar_created")
+			.default(false)
+			.notNull(),
 		lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
 		/** Why the last sync failed, so the creator sees a retryable state. */
 		syncFailure: text("sync_failure"),

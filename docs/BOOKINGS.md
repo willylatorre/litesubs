@@ -58,7 +58,7 @@ the only option.
 | `booking_availability` | Weekly windows (weekday + minutes-of-day in the schedule's timezone). |
 | `booking_exceptions` | One-off blocked ranges (holidays, travel). |
 | `bookings` | A confirmed slot: schedule, creator, customer, UTC start/end, status, charge transaction, restore timestamp. |
-| `calendar_connections` | Optional external calendar link; tokens encrypted at rest. |
+| `calendar_connections` | Optional external calendar link: tokens encrypted at rest, plus **two** calendar roles (`busy_calendar_id`, `write_calendar_id`). |
 | `notifications` | In-app notification rows with a dedupe key. |
 
 `bookings.status` is one of `confirmed`, `cancelled`, `completed`, `no_show`.
@@ -194,14 +194,28 @@ busy intervals from available slots, and event creation/deletion on book/cancel.
 
 #### Acceptance criteria
 
-- [ ] Tokens are encrypted at rest and never returned to the client or written to
+- [x] Tokens are encrypted at rest and never returned to the client or written to
       logs.
-- [ ] Free/busy failure degrades to "calendar not synced" rather than blocking
+- [x] Free/busy failure degrades to "calendar not synced" rather than blocking
       existing bookings; the creator sees a visible, retryable state.
-- [ ] A busy interval removes matching slots; a booked slot blocks the same time.
-- [ ] Disconnecting stops sync without cancelling bookings or revoking credits.
-- [ ] Sync is best-effort: a Google failure never rolls back a booking or a debit.
-- [ ] The whole native product (B1–B4) works with B5 absent.
+- [x] A busy interval removes matching slots; a booked slot blocks the same time.
+- [x] The calendar that **blocks** slots and the calendar that **receives** bookings
+      are configured separately. A creator can keep their personal calendar as the
+      busy source while bookings land in a dedicated calendar, which can be one
+      they already own or one Litesubs creates for them.
+- [x] Disconnecting stops sync without cancelling bookings or revoking credits.
+- [x] Sync is best-effort: a Google failure never rolls back a booking or a debit.
+- [x] The created event id is persisted on the booking, so cancelling removes the
+      event instead of leaving an orphan on the creator's calendar.
+- [x] The whole native product (B1–B4) works with B5 absent.
+
+**Implementation:** the Google helpers are wired into the booking service:
+`listOpenSlots` subtracts busy intervals (best-effort, native slots survive a
+Google failure), `createBooking` re-checks the chosen slot against the calendar
+before committing, and the created event id is stored on the booking so
+`cancelBooking` can delete it. A local stub-fetch run confirmed free/busy is
+queried on the busy calendar only while event create/delete hit the write
+calendar only. Live verification against Google is still outstanding.
 
 ## Also deferred
 

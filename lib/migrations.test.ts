@@ -28,6 +28,7 @@ const MIGRATIONS = [
 	"drizzle/0012_s15_disconnect.sql",
 	"drizzle/0013_bookings.sql",
 	"drizzle/0014_outgoing_webhooks.sql",
+	"drizzle/0015_split_calendars.sql",
 ];
 
 /** Create a fresh database, run `body`, then always drop it. */
@@ -818,5 +819,57 @@ test("0013 prevents overlapping confirmed bookings without reserving ended slots
 			INSERT INTO bookings(id,schedule_id,creator_id,user_id,starts_at,ends_at)
 			VALUES ('b6','s2','u3','u2','2026-12-01 10:00Z','2026-12-01 10:30Z');
 		`);
+	});
+});
+
+/**
+ * 0015 splits one calendar setting into two roles. An existing connection must
+ * keep its behaviour: whatever id the creator had chosen is carried into both
+ * new columns, so nobody starts writing bookings to an unexpected calendar.
+ */
+test("0015 splits the calendar setting without moving existing connections", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, 15));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified)
+			VALUES ('u1','Creator','c@example.test',true);
+			INSERT INTO calendar_connections(id,creator_id,provider,encrypted_access_token,calendar_id)
+			VALUES ('cc1','u1','google','v1.envelope','team@group.calendar.google.com');
+		`);
+		await apply(client, MIGRATIONS[15]);
+
+		const { rows } = await client.query(
+			"select busy_calendar_id, write_calendar_id, write_calendar_created from calendar_connections where id = 'cc1'",
+		);
+		assert.deepEqual(rows, [
+			{
+				busy_calendar_id: "team@group.calendar.google.com",
+				write_calendar_id: "team@group.calendar.google.com",
+				write_calendar_created: false,
+			},
+		]);
+
+		// A fresh connection defaults to the creator's main calendar for both.
+		// One connection per (creator, provider), so this needs its own creator.
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified)
+			VALUES ('u2','Other','o@example.test',true);
+			INSERT INTO calendar_connections(id,creator_id,provider,encrypted_access_token)
+			VALUES ('cc2','u2','google','v1.envelope');
+		`);
+		const { rows: [fresh] } = await client.query(
+			"select busy_calendar_id, write_calendar_id from calendar_connections where id = 'cc2'",
+		);
+		assert.deepEqual(fresh, {
+			busy_calendar_id: "primary",
+			write_calendar_id: "primary",
+		});
+		// The old single column is gone, so nothing can read a stale value.
+		const { rows: old } = await client.query(
+			"select column_name from information_schema.columns where table_name='calendar_connections' and column_name='calendar_id'",
+		);
+		assert.deepEqual(old, []);
 	});
 });

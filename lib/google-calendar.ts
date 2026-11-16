@@ -49,13 +49,26 @@ export function parseStateCookie(
 }
 
 /**
- * Minimal scopes: read busy intervals, create/delete our own events. We do not
- * request full calendar read access, and we do not request offline access beyond
- * what a refresh token requires.
+ * Scopes, chosen narrowly but sufficient for the two-calendar model.
+ *
+ * - `freebusy.readonly` lets a chosen calendar block slots without exposing event
+ *   titles or attendees.
+ * - `calendar.events` writes booking events on a calendar the creator already
+ *   owns.
+ * - `calendar.app.created` lets us create a dedicated "Litesubs bookings"
+ *   calendar, which a plain `calendar.events` grant cannot do.
+ * - `calendar.calendarlist.readonly` is what makes "pick a calendar" possible:
+ *   without it we cannot list what the creator has.
+ *
+ * Deliberately NOT requested: full `calendar` (which would expose every event's
+ * contents) or `openid`/`email` (so Google returns no id_token and the
+ * connection is labelled by calendar rather than account email).
  */
 export const GOOGLE_CALENDAR_SCOPES = [
 	"https://www.googleapis.com/auth/calendar.freebusy",
 	"https://www.googleapis.com/auth/calendar.events",
+	"https://www.googleapis.com/auth/calendar.app.created",
+	"https://www.googleapis.com/auth/calendar.calendarlist.readonly",
 ] as const;
 
 /** Bounded timeout for every Google request. No request may hang a page. */
@@ -611,7 +624,15 @@ async function markSyncSuccess(connectionId: string): Promise<void> {
 }
 
 type AccessTokenResult =
-	| { ok: true; accessToken: string; calendarId: string; connectionId: string }
+	| {
+			ok: true;
+			accessToken: string;
+			/** Whose busy time blocks slots. */
+			busyCalendarId: string;
+			/** Where booking events are written. */
+			writeCalendarId: string;
+			connectionId: string;
+	  }
 	| { ok: false; reason: GoogleSyncFailureReason };
 
 /**
@@ -651,7 +672,8 @@ async function resolveAccessToken(
 		return {
 			ok: true,
 			accessToken,
-			calendarId: connection.calendarId,
+			busyCalendarId: connection.busyCalendarId,
+			writeCalendarId: connection.writeCalendarId,
 			connectionId: connection.id,
 		};
 	}
@@ -695,7 +717,8 @@ async function resolveAccessToken(
 	return {
 		ok: true,
 		accessToken,
-		calendarId: connection.calendarId,
+		busyCalendarId: connection.busyCalendarId,
+		writeCalendarId: connection.writeCalendarId,
 		connectionId: connection.id,
 	};
 }
@@ -708,9 +731,28 @@ async function resolveAccessToken(
  * is used on read-only paths (rendering availability) so a public page never
  * writes to the connection row.
  */
+/**
+ * Run a calendar call with a resolved token.
+ *
+ * Exported for the "choose your calendars" actions, which need to list and
+ * create calendars rather than read busy time. Same token resolution, same
+ * bounded requests, same failure typing as every sync path.
+ */
+export async function withCreatorAccessToken<T>(
+	creatorId: string,
+	fn: (accessToken: string) => Promise<T>,
+): Promise<GoogleSyncResult<T>> {
+	return withAccessToken(creatorId, (accessToken) => fn(accessToken), {
+		record: false,
+	});
+}
+
 async function withAccessToken<T>(
 	creatorId: string,
-	fn: (accessToken: string, calendarId: string) => Promise<T>,
+	fn: (
+		accessToken: string,
+		calendar: { busyCalendarId: string; writeCalendarId: string },
+	) => Promise<T>,
 	options: { record?: boolean } = {},
 ): Promise<GoogleSyncResult<T>> {
 	const record = options.record ?? true;
@@ -718,7 +760,10 @@ async function withAccessToken<T>(
 	if (!token.ok) return { ok: false, reason: token.reason };
 
 	try {
-		const data = await fn(token.accessToken, token.calendarId);
+		const data = await fn(token.accessToken, {
+			busyCalendarId: token.busyCalendarId,
+			writeCalendarId: token.writeCalendarId,
+		});
 		if (record) await markSyncSuccess(token.connectionId);
 		return { ok: true, data };
 	} catch (error) {
@@ -743,9 +788,10 @@ export async function getCreatorBusyIntervals(
 ): Promise<GoogleSyncResult<BusyInterval[]>> {
 	return withAccessToken(
 		creatorId,
-		(accessToken, calendarId) =>
+		(accessToken, calendar) =>
 			queryFreeBusy(accessToken, {
-				calendarId,
+				// The creator's own calendar is what makes them unavailable.
+				calendarId: calendar.busyCalendarId,
 				timeMin: range.from,
 				timeMax: range.to,
 			}),
@@ -793,9 +839,9 @@ export async function bestEffortCreateBookingEvent(
 	event: BookingCalendarEvent,
 ): Promise<GoogleSyncResult<{ eventId: string }>> {
 	try {
-		return await withAccessToken(creatorId, async (accessToken, calendarId) => {
+		return await withAccessToken(creatorId, async (accessToken, calendar) => {
 			const eventId = await createCalendarEvent(accessToken, {
-				calendarId,
+				calendarId: calendar.writeCalendarId,
 				summary: event.summary,
 				description: event.description,
 				start: event.start,
@@ -821,8 +867,8 @@ export async function bestEffortDeleteBookingEvent(
 	eventId: string,
 ): Promise<GoogleSyncResult<{ deleted: boolean }>> {
 	try {
-		return await withAccessToken(creatorId, async (accessToken, calendarId) => {
-			await deleteCalendarEvent(accessToken, calendarId, eventId);
+		return await withAccessToken(creatorId, async (accessToken, calendar) => {
+			await deleteCalendarEvent(accessToken, calendar.writeCalendarId, eventId);
 			return { deleted: true };
 		});
 	} catch {
@@ -839,12 +885,102 @@ export async function retryCalendarSync(
 	creatorId: string,
 ): Promise<GoogleSyncResult<{ busyCount: number }>> {
 	const now = new Date();
-	return withAccessToken(creatorId, async (accessToken, calendarId) => {
+	return withAccessToken(creatorId, async (accessToken, calendar) => {
 		const busy = await queryFreeBusy(accessToken, {
-			calendarId,
+			calendarId: calendar.busyCalendarId,
 			timeMin: now,
 			timeMax: new Date(now.getTime() + 24 * 60 * 60 * 1000),
 		});
 		return { busyCount: busy.length };
 	});
+}
+
+/* -------------------------------------------------------------------------- */
+/* Choosing calendars                                                          */
+/* -------------------------------------------------------------------------- */
+
+export type CalendarSummary = {
+	id: string;
+	summary: string;
+	primary: boolean;
+	/** Whether the creator can write events here, per Google's accessRole. */
+	canWrite: boolean;
+};
+
+/**
+ * The calendars a creator can choose from.
+ *
+ * Read-only and bounded: this is used to populate a picker, never on a booking
+ * path. Throws on failure so the caller can show a retryable message; it is not
+ * part of any money-moving flow.
+ */
+export async function listCalendars(
+	accessToken: string,
+): Promise<CalendarSummary[]> {
+	const response = await googleFetch(
+		`${GOOGLE_CALENDAR_API_BASE_URL}/users/me/calendarList?minAccessRole=reader&maxResults=250`,
+		{
+			method: "GET",
+			headers: { Authorization: `Bearer ${accessToken}` },
+		},
+	);
+	const payload = (await response.json()) as {
+		items?: {
+			id?: unknown;
+			summary?: unknown;
+			primary?: unknown;
+			accessRole?: unknown;
+		}[];
+	};
+	return (payload.items ?? [])
+		.filter((item): item is { id: string } => typeof item.id === "string")
+		.map((item) => {
+			const record = item as {
+				id: string;
+				summary?: unknown;
+				primary?: unknown;
+				accessRole?: unknown;
+			};
+			return {
+				id: record.id,
+				summary:
+					typeof record.summary === "string" ? record.summary : record.id,
+				primary: record.primary === true,
+				canWrite:
+					record.accessRole === "owner" || record.accessRole === "writer",
+			};
+		});
+}
+
+/**
+ * Create a dedicated calendar for bookings.
+ *
+ * Only used when the creator asks for a new calendar rather than picking an
+ * existing one. The id is returned so it can be stored as the write target.
+ */
+export async function createBookingCalendar(
+	accessToken: string,
+	name = "Litesubs bookings",
+): Promise<{ id: string; summary: string }> {
+	const response = await googleFetch(
+		`${GOOGLE_CALENDAR_API_BASE_URL}/calendars`,
+		{
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${accessToken}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ summary: name, timeZone: "UTC" }),
+		},
+	);
+	const payload = (await response.json()) as {
+		id?: unknown;
+		summary?: unknown;
+	};
+	if (typeof payload.id !== "string")
+		throw new GoogleApiError("api_error", response.status);
+	return {
+		id: payload.id,
+		summary: typeof payload.summary === "string" ? payload.summary : name,
+	};
 }

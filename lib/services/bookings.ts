@@ -19,6 +19,11 @@ import {
 	isSlotBookable,
 	type SlotInput,
 } from "@/lib/booking-slots";
+import {
+	bestEffortCreateBookingEvent,
+	bestEffortDeleteBookingEvent,
+	filterSlotsByCalendar,
+} from "@/lib/google-calendar";
 import { usableBalance } from "./credit-balance";
 import { adjustCredits } from "./credits";
 import {
@@ -251,11 +256,28 @@ export async function listOpenSlots(creatorHandle: string, slug: string) {
 		resolved.schedule.creatorId,
 	);
 	const { schedule: _schedule, ...slotInput } = input;
+	const generated = generateSlots(slotInput);
+
+	// The creator's external calendar can only REMOVE slots. This is best-effort:
+	// if Google is unreachable the native availability still stands, because a
+	// calendar problem must never take a bookable page offline.
+	const calendarFiltered =
+		generated.length > 0
+			? await filterSlotsByCalendar(
+					resolved.schedule.creatorId,
+					generated,
+					{
+						from: generated[0].start,
+						to: generated[generated.length - 1].end,
+					},
+				)
+			: generated;
+
 	return {
 		schedule: resolved.schedule,
 		// `slotInputForSchedule` also returns the schedule row; slot math only
 		// needs the timing fields.
-		slots: generateSlots(slotInput).map((slot) => ({
+		slots: calendarFiltered.map((slot) => ({
 			start: slot.start.toISOString(),
 			end: slot.end.toISOString(),
 		})),
@@ -366,6 +388,22 @@ export async function createBooking(
 			409,
 		);
 
+	// The page filtered by the external calendar when it rendered, but a stale
+	// page could still submit a slot the creator became busy for since. Re-check
+	// the one chosen slot. A calendar failure degrades to "allow", because a
+	// Google outage must not stop the business from taking bookings.
+	const stillFree = await filterSlotsByCalendar(
+		schedule.creatorId,
+		[slot],
+		{ from: slot.start, to: slot.end },
+	);
+	if (stillFree.length === 0)
+		throw new ServiceError(
+			"SLOT_UNAVAILABLE",
+			"That time is no longer available on the creator's calendar.",
+			409,
+		);
+
 	const bookingId = crypto.randomUUID();
 	const end = slot.end;
 
@@ -421,6 +459,27 @@ export async function createBooking(
 		// Notifications run strictly after the booking and its debit committed.
 		// They cannot throw (the service guarantees it), and a failure here must
 		// never make a real booking look failed to the customer.
+		// Mirror the booking onto the creator's calendar, best-effort and after
+		// commit. The event id is persisted so cancellation can remove it; without
+		// that the event would be orphaned on the calendar forever.
+		const createdEvent = await bestEffortCreateBookingEvent(schedule.creatorId, {
+			bookingId: created.bookingId,
+			summary: `Booking: ${schedule.name}`,
+			description: `Booked through Litesubs. Booking ${created.bookingId}.`,
+			start: new Date(created.startsAt),
+			end: new Date(created.endsAt),
+			timeZone: schedule.timezone,
+		});
+		if (createdEvent.ok) {
+			await db
+				.update(bookings)
+				.set({ externalEventId: createdEvent.data.eventId })
+				.where(eq(bookings.id, created.bookingId))
+				.catch(() => {
+					// A failed bookkeeping write must not fail a real booking.
+				});
+		}
+
 		await notifyBookingConfirmed({
 			bookingId: created.bookingId,
 			creatorId: schedule.creatorId,
@@ -481,6 +540,7 @@ export async function cancelBooking(
 			status: true,
 			chargedCredits: true,
 			chargeTransactionId: true,
+			externalEventId: true,
 			startsAt: true,
 		},
 	});
@@ -536,6 +596,16 @@ export async function cancelBooking(
 			balance,
 		};
 	});
+
+	// Remove the mirrored calendar event, best-effort and after commit. The
+	// cancellation and the credit restore already stand; a Google failure only
+	// leaves an event behind for the creator to delete by hand.
+	if (result.status === "cancelled" && booking.externalEventId) {
+		await bestEffortDeleteBookingEvent(
+			booking.creatorId,
+			booking.externalEventId,
+		);
+	}
 
 	// Announced only after the cancellation and the restore committed, so the
 	// credit outcome in the copy is the one that actually happened.
