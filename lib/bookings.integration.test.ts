@@ -25,13 +25,13 @@ import {
 	transactions,
 	user,
 } from "@/app/db/schema";
-import { usableBalance } from "@/lib/services/credits";
-import { sessionPrincipal } from "@/lib/services/principal";
 import {
-	createBooking,
 	cancelBooking,
+	createBooking,
 	listOpenSlots,
 } from "@/lib/services/bookings";
+import { usableBalance } from "@/lib/services/credits";
+import { sessionPrincipal } from "@/lib/services/principal";
 
 async function seedCredits(input: {
 	creatorId: string;
@@ -143,7 +143,20 @@ test("a booking spends its own plan's credits once and cancellation returns them
 	});
 	assert.equal(await usableBalance(db, enrollment.id), 10);
 
-	const buyer = { ...sessionPrincipal(buyerId), creatorId: buyerId };
+	// Exactly what a signed-in customer gets: no credits:consume, because that is
+	// API-key-only. If the booking path depended on it, this test must fail.
+	const customerPrincipal = (id: string) => ({
+		kind: "session" as const,
+		creatorId: id,
+		userId: id,
+		scopes: [
+			"plans:read",
+			"customers:read",
+			"customers:write",
+			"billing:read",
+		] as const,
+	});
+	const buyer = customerPrincipal(buyerId);
 	const firstSlot = new Date(dayStart.getTime() + 9 * 60 * 60 * 1000);
 
 	await t.test("the booking spends exactly the schedule's price", async () => {
@@ -250,7 +263,7 @@ test("a booking spends its own plan's credits once and cancellation returns them
 	});
 
 	await t.test("a customer without the plan cannot book", async () => {
-		const outsider = { ...sessionPrincipal(outsiderId), creatorId: outsiderId };
+		const outsider = customerPrincipal(outsiderId);
 		await assert.rejects(
 			createBooking(outsider, {
 				scheduleId: schedule.id,
@@ -271,10 +284,7 @@ test("a booking spends its own plan's credits once and cancellation returns them
 					eq(bookings.status, "confirmed"),
 				),
 			});
-			const outsider = {
-				...sessionPrincipal(outsiderId),
-				creatorId: outsiderId,
-			};
+			const outsider = customerPrincipal(outsiderId);
 			await assert.rejects(
 				cancelBooking(outsider, { bookingId: booking?.id as string }),
 				{ code: "NOT_FOUND" },

@@ -20,7 +20,12 @@ import {
 } from "@/lib/booking-slots";
 import { usableBalance } from "./credit-balance";
 import { adjustCredits } from "./credits";
-import { type Principal, requireScope, ServiceError } from "./principal";
+import {
+	type Principal,
+	requireScope,
+	ServiceError,
+	systemPrincipal,
+} from "./principal";
 
 /**
  * Native bookings.
@@ -338,19 +343,20 @@ export async function createBooking(
 				chargedCredits: schedule.creditsPerBooking as number,
 			});
 
-			const charge = await adjustCredits(
-				{ ...principal, creatorId: schedule.creatorId },
-				{
-					customerId: userId,
-					planId: schedule.planId as string,
-					delta: -(schedule.creditsPerBooking as number),
-					type: "usage",
-					reason: `Booking ${bookingId}`,
-					// Derived from the booking, so a retried request replays the debit
-					// instead of charging twice.
-					key: `booking:${bookingId}`,
-				},
-			);
+			// The caller is a customer session, which by policy cannot consume
+			// credits; the booking is an internal, already-validated debit on the
+			// creator's plan, so it acts with explicit system authority scoped to
+			// that creator rather than widening the public gate.
+			const charge = await adjustCredits(systemPrincipal(schedule.creatorId), {
+				customerId: userId,
+				planId: schedule.planId as string,
+				delta: -(schedule.creditsPerBooking as number),
+				type: "usage",
+				reason: `Booking ${bookingId}`,
+				// Derived from the booking, so a retried request replays the debit
+				// instead of charging twice.
+				key: `booking:${bookingId}`,
+			});
 
 			const balance = await usableBalance(tx, enrollment.id);
 			await tx

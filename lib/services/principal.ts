@@ -60,3 +60,21 @@ export function sessionPrincipal(creatorId: string): Principal {
 		scopes: [...CREATOR_SCOPES, "credits:consume"],
 	};
 }
+
+/**
+ * The principal an internal, already-validated system action acts as.
+ *
+ * `credits:consume` is deliberately API-key-only for *callers*, so a customer
+ * session cannot spend credits through the public API. A booking still has to
+ * debit, but only after the booking service has proven the customer's enrollment
+ * and the slot. This builds that internal authority explicitly, scoped to the
+ * creator whose plan is being spent, instead of loosening the `requireScope`
+ * gate for everyone. Never derive this from user input.
+ */
+export function systemPrincipal(creatorId: string): Principal {
+	return {
+		kind: "session",
+		creatorId,
+		scopes: [...CREATOR_SCOPES, "credits:consume"],
+	};
+}

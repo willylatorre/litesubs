@@ -2,6 +2,7 @@
 
 import {
 	IconBook,
+	IconCalendarEvent,
 	IconChecklist,
 	IconCode,
 	IconDashboard,
@@ -38,6 +39,11 @@ const data = {
 			title: "Active Plans",
 			url: "/dashboard",
 			icon: IconChecklist,
+		},
+		{
+			title: "Bookings",
+			url: "/dashboard/bookings",
+			icon: IconCalendarEvent,
 		},
 	],
 	navCreator: [
