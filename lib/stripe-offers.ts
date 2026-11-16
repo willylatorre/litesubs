@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
 import { getStripe } from "@/lib/stripe";
+import {
+	classifyStripeError,
+	logStripeFailure,
+} from "@/lib/stripe-error-classify";
 
 /**
  * Server-only adapter for the catalog objects a published plan sells.
@@ -45,23 +49,40 @@ export type PlanOfferAdapter = {
 
 export class StripeOfferError extends Error {
 	constructor(
-		public code: "STRIPE_UNAVAILABLE" | "STRIPE_REJECTED",
+		public code:
+			| "STRIPE_UNAVAILABLE"
+			| "STRIPE_MISCONFIGURED"
+			| "STRIPE_REJECTED",
 		message: string,
 	) {
 		super(message);
 	}
 }
 
+/**
+ * A platform setup problem (bad key, missing restricted-key permission, Connect
+ * not enabled) is permanent until an operator fixes it, so it must not be
+ * reported as an outage the creator should retry.
+ */
+export const OFFERS_MISCONFIGURED_MESSAGE =
+	"Stripe is not set up correctly for this app. Contact support.";
+
 function translate(error: unknown): StripeOfferError {
 	if (error instanceof StripeOfferError) return error;
-	if (typeof error === "object" && error !== null) {
-		const record = error as { type?: string };
-		if (record.type === "StripeInvalidRequestError")
-			return new StripeOfferError(
-				"STRIPE_REJECTED",
-				"Stripe rejected this plan's terms",
-			);
+	const kind = classifyStripeError(error);
+	if (kind === "misconfigured") {
+		logStripeFailure(error);
+		return new StripeOfferError(
+			"STRIPE_MISCONFIGURED",
+			OFFERS_MISCONFIGURED_MESSAGE,
+		);
 	}
+	if (kind === "invalid_request")
+		return new StripeOfferError(
+			"STRIPE_REJECTED",
+			"Stripe rejected this plan's terms",
+		);
+	logStripeFailure(error);
 	return new StripeOfferError(
 		"STRIPE_UNAVAILABLE",
 		"Stripe is temporarily unavailable",

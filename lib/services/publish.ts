@@ -177,7 +177,11 @@ async function provisionOffer(input: {
 		};
 	} catch (error) {
 		if (error instanceof StripeOfferError)
-			throw new ServiceError(error.code, error.message, 502);
+			throw new ServiceError(
+				error.code,
+				error.message,
+				error.code === "STRIPE_MISCONFIGURED" ? 503 : 502,
+			);
 		throw error;
 	}
 }

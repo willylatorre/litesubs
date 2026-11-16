@@ -1,4 +1,8 @@
 import { getStripe } from "@/lib/stripe";
+import {
+	classifyStripeError,
+	logStripeFailure,
+} from "@/lib/stripe-error-classify";
 
 /**
  * Server-only adapter for Connect account calls: it reads the platform secret
@@ -28,6 +32,7 @@ export class StripeAccountError extends Error {
 	constructor(
 		public code:
 			| "STRIPE_UNAVAILABLE"
+			| "STRIPE_MISCONFIGURED"
 			| "STRIPE_REJECTED"
 			| "ACCOUNT_UNAVAILABLE"
 			| "OAUTH_UNCONFIGURED"
@@ -40,18 +45,39 @@ export class StripeAccountError extends Error {
 	}
 }
 
-function translate(error: unknown): StripeAccountError {
-	// Stripe errors can echo request details, so log/return categories only.
+/**
+ * A platform-level setup problem: the secret key is wrong, the restricted key
+ * lacks a required permission, or Connect was never enabled. No retry can ever
+ * fix it, so it must not be reported as an outage.
+ */
+export const MISCONFIGURED_MESSAGE =
+	"Stripe is not set up correctly for this app. Contact support.";
+
+/**
+ * Map a Stripe SDK error onto a code callers can act on.
+ *
+ * Exported for the mapping's own tests: a permission failure reported as
+ * "temporarily unavailable" makes creators retry a permanently broken setup.
+ */
+export function translate(error: unknown): StripeAccountError {
 	if (error instanceof StripeAccountError) return error;
-	if (typeof error === "object" && error !== null) {
-		const record = error as { type?: string; statusCode?: number };
-		if (record.type === "StripeInvalidRequestError")
-			return new StripeAccountError(
-				"STRIPE_REJECTED",
-				"Stripe rejected this account configuration",
-				record.statusCode,
-			);
+	const kind = classifyStripeError(error);
+	if (kind === "misconfigured") {
+		logStripeFailure(error);
+		return new StripeAccountError(
+			"STRIPE_MISCONFIGURED",
+			MISCONFIGURED_MESSAGE,
+			(error as { statusCode?: number }).statusCode,
+		);
 	}
+	if (kind === "invalid_request") {
+		return new StripeAccountError(
+			"STRIPE_REJECTED",
+			"Stripe rejected this account configuration",
+			(error as { statusCode?: number }).statusCode,
+		);
+	}
+	logStripeFailure(error);
 	return new StripeAccountError(
 		"STRIPE_UNAVAILABLE",
 		"Stripe is temporarily unavailable",
@@ -218,6 +244,16 @@ export async function deauthorizeAccount(stripeAccountId: string) {
 
 function translateOauth(error: unknown): StripeAccountError {
 	if (error instanceof StripeAccountError) return error;
+	// OAuth needs its own platform credentials, so a permission or auth failure
+	// means the app is misconfigured, not that Stripe is down.
+	if (classifyStripeError(error) === "misconfigured") {
+		logStripeFailure(error);
+		return new StripeAccountError(
+			"STRIPE_MISCONFIGURED",
+			MISCONFIGURED_MESSAGE,
+			(error as { statusCode?: number }).statusCode,
+		);
+	}
 	if (typeof error === "object" && error !== null) {
 		const { code, type } = error as { code?: string; type?: string };
 		// `invalid_grant` means a used/expired code or wrong API-key mode.
@@ -232,6 +268,7 @@ function translateOauth(error: unknown): StripeAccountError {
 				"Stripe authorization was cancelled",
 			);
 	}
+	logStripeFailure(error);
 	return new StripeAccountError(
 		"STRIPE_UNAVAILABLE",
 		"Stripe is temporarily unavailable",

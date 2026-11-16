@@ -266,6 +266,11 @@ async function persistAccountSnapshot(
 		.onConflictDoNothing({ target: connectedAccounts.userId });
 }
 
+/** A platform misconfiguration is a server problem, not a bad request. */
+function statusForStripeError(error: StripeAccountError) {
+	return error.code === "STRIPE_MISCONFIGURED" ? 503 : 502;
+}
+
 /**
  * Start (or restart) new-account onboarding and return the Stripe-hosted URL.
  *
@@ -285,7 +290,11 @@ export async function startNewAccountOnboarding(input: {
 			created = await createConnectedAccount(input);
 		} catch (error) {
 			if (error instanceof StripeAccountError)
-				throw new ServiceError(error.code, error.message, 502);
+				throw new ServiceError(
+					error.code,
+					error.message,
+					statusForStripeError(error),
+				);
 			throw error;
 		}
 		await persistAccountSnapshot(created, "created");
@@ -307,7 +316,11 @@ export async function startNewAccountOnboarding(input: {
 	} catch (error) {
 		if (error instanceof ServiceError) throw error;
 		if (error instanceof StripeAccountError)
-			throw new ServiceError(error.code, error.message, 502);
+			throw new ServiceError(
+				error.code,
+				error.message,
+				statusForStripeError(error),
+			);
 		throw error;
 	}
 }
@@ -330,7 +343,11 @@ export async function syncConnectedAccount(
 		account = await adapter.retrieveConnectedAccount(existing.stripeAccountId);
 	} catch (error) {
 		if (error instanceof StripeAccountError)
-			throw new ServiceError(error.code, error.message, 502);
+			throw new ServiceError(
+				error.code,
+				error.message,
+				statusForStripeError(error),
+			);
 		throw error;
 	}
 
