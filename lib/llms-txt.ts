@@ -135,5 +135,7 @@ Errors return code, error, and optional details or fieldErrors. Status codes:
 - [Landing page](${base}): product overview and demo.
 - [API tokens](${base}/dashboard/developers/api-keys): generate or revoke machine
   keys (requires sign-in).
+- [Terms](${base}/terms): the agreement between users and Litesubs.
+- [Privacy](${base}/privacy): what data Litesubs collects and why.
 `;
 }
