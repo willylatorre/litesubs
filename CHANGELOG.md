@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-01-01
 
 ### Added
+- **Native bookings**:
+  - Creators define weekly availability, buffers, a horizon, a timezone, and
+    one-off blocks; a schedule links to a one-time plan and a booked slot spends
+    that plan's credits. See `docs/BOOKINGS.md`.
+  - Public booking pages are `/book/<creator>/<slug>`: slugs are unique per
+    creator, so addressing by slug alone would serve the wrong schedule.
+  - Slot math is pure and timezone-tested: availability is wall-clock in the
+    schedule's zone, bookings are UTC instants, and DST gaps are detected rather
+    than silently shifted.
+  - Double-booking is prevented by a `btree_gist` exclusion constraint, not a
+    read-then-insert check. Cancelling restores only the units the booking took,
+    back to the grants they came from, so book/cancel cannot mint credits.
+  - Customers can see and cancel their bookings from the dashboard. That view was
+    missing at first, which left the restore path unreachable for the person it
+    protects.
+- **In-app notifications**: booking confirmations and cancellations notify both
+  parties, deduped in the database, with "starting soon" derived on read so no
+  scheduler is needed. No email is sent.
+- **Google Calendar (optional)**: OAuth connection with AES-256-GCM encrypted
+  tokens, free/busy slot filtering, and best-effort event sync that cannot roll
+  back a booking or a debit. Unverified against a live Google client.
 - **Outgoing webhooks**:
   - Creators register HTTPS endpoints for `purchase.completed` and
     `credits.changed`. Deliveries are signed with HMAC-SHA256 over the exact

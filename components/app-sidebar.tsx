@@ -40,11 +40,6 @@ const data = {
 			url: "/dashboard",
 			icon: IconChecklist,
 		},
-		{
-			title: "Bookings",
-			url: "/dashboard/bookings",
-			icon: IconCalendarEvent,
-		},
 	],
 	navCreator: [
 		{
@@ -56,6 +51,11 @@ const data = {
 			title: "Plans",
 			url: "/dashboard/plans",
 			icon: IconPackage,
+		},
+		{
+			title: "Bookings",
+			url: "/dashboard/bookings",
+			icon: IconCalendarEvent,
 		},
 		{
 			title: "Payments",
@@ -81,11 +81,6 @@ const data = {
 			title: "API Tokens",
 			url: "/dashboard/developers/api-keys",
 			icon: IconCode,
-		},
-		{
-			title: "Webhooks",
-			url: "/dashboard/developers/webhooks",
-			icon: IconPlug,
 		},
 	],
 	navSecondary: [

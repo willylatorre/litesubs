@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { getCalAccountStatus } from "@/app/actions/cal-com";
+import { getGoogleCalendarStatus } from "@/app/actions/google-calendar";
 import { getPaymentsStatus } from "@/app/actions/stripe-connect";
 import { CalIntegrationCard } from "@/components/integrations/cal-integration-card";
+import { GoogleCalendarCard } from "@/components/integrations/google-calendar-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,15 +16,22 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function IntegrationsPage() {
-	const [calAccountRes, paymentsRes] = await Promise.all([
+export default async function IntegrationsPage({
+	searchParams,
+}: {
+	searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+	const sp = await searchParams;
+	const [calAccountRes, paymentsRes, googleRes] = await Promise.all([
 		getCalAccountStatus(),
 		getPaymentsStatus(),
+		getGoogleCalendarStatus(),
 	]);
 
 	const calAccount = calAccountRes?.data;
 	const readiness = paymentsRes?.data;
 	const canSell = Boolean(readiness?.canSell);
+	const googleStatus = googleRes?.data;
 
 	return (
 		<div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
@@ -40,6 +49,13 @@ export default async function IntegrationsPage() {
 						username: calAccount?.calUsername,
 					}}
 				/>
+
+				{googleStatus && (
+					<GoogleCalendarCard
+						status={googleStatus}
+						result={typeof sp.google === "string" ? sp.google : undefined}
+					/>
+				)}
 
 				<Card>
 					<CardHeader className="flex flex-row items-start justify-between gap-4">

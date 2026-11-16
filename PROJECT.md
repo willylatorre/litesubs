@@ -73,8 +73,8 @@ This model establishes a direct relationship between the creator and the buyer, 
 
 ### Integrations
 - [x] **Stripe connect:** Explore allowing users to connect their own "stripe" account so the purchases of the packs will go directly to them. If connected, we skip/disable the whole Payouts section as it is handled automatically.
-- [ ] **Cal.com Integration:** Explore allowing users to connect their account and automatically "spend" credits when booking appointments via Cal.com through a webhook.
-- [ ] **Calendly Integration:** Explore allowing users to connect their account and automatically "spend" credits when booking appointments via Cal.com through a webhook.
+- [x] **Native bookings:** Creators define weekly availability and one-off blocks, link a schedule to a one-time plan, and a booked slot spends that plan's credits. Public pages live at `/book/<creator>/<slug>`; double-booking is prevented by a database exclusion constraint. No vendor sits in the path.
+- [x] **Google Calendar (optional):** A creator can connect Google Calendar so busy times block slots and bookings appear as events. Tokens are encrypted at rest and sync failures never roll back a booking or a debit. Not yet verified against a live Google client.
 
 ### Subscriptions
 - [x] **Subscriptions plan (S07–S13 billing slices):** Monthly plans use Stripe subscriptions and grant one expiring allowance per paid invoice. Recurring Checkout remains sandbox-only until the live-release gate is complete. Customers can cancel at period end, resume, manage creator-specific billing, claim invites whose credits carry an explicit expiry, and have refunds revoke only the refunded purchase's unspent units. Money reporting is derived from receipts, per currency.
