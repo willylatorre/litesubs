@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - 2026-01-01
 
+### Changed
+- **Sidebar grouping**: reordered by the creator's loop rather than page type —
+  "My Account", then "Creator" (Dashboard, Plans, Customers, Bookings, Payments,
+  Integrations), then "Developer" (API Tokens, Webhooks). Customers now sits
+  directly under Plans, and Integrations moved below the money-related pages.
+- **Active nav state**: nav items never passed `isActive`, so the sidebar could
+  not show which page you were on. Every item now reflects the current route with
+  exactly one active, including `aria-current="page"`. A container route like
+  `/dashboard` matches exactly, so it no longer lights on every child page.
+- **Webhooks** was reachable only by typing the URL; it is now in the sidebar.
+- `/dashboard/developers` redirected to the public `/docs`, which rendered the
+  identical component in two places and could drift. `/docs` is the single copy.
+- Fixed the light-mode `--sidebar-accent` token: it was oklch(0.98) against a
+  0.99 sidebar, so hover and the selected row were effectively invisible.
+
 ### Removed
 - **Cal.com integration**: the vendor card, OAuth routes, inbound webhook, event-type
   pickers, and the `integrations` / `calcom_integrations` / `cal_com_accounts`

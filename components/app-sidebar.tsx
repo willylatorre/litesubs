@@ -4,13 +4,14 @@ import {
 	IconBook,
 	IconCalendarEvent,
 	IconChecklist,
-	IconCode,
 	IconDashboard,
 	IconHelpCircle,
+	IconKey,
 	IconPackage,
 	IconPlug,
 	IconUsers,
 	IconWallet,
+	IconWebhook,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import type * as React from "react";
@@ -23,9 +24,6 @@ import {
 	Sidebar,
 	SidebarContent,
 	SidebarFooter,
-	SidebarGroup,
-	SidebarGroupContent,
-	SidebarGroupLabel,
 	SidebarHeader,
 	SidebarMenu,
 	SidebarMenuButton,
@@ -33,11 +31,27 @@ import {
 } from "@/components/ui/sidebar";
 import { authClient } from "@/lib/auth-client";
 
+/**
+ * Three groups, ordered by the creator's actual loop rather than by page type:
+ *
+ * 1. **My Account** — what the signed-in person has bought. One item, and it is
+ *    the only thing here for someone who is purely a customer.
+ * 2. **Creator** — the business, in the order it happens: overview, the offers,
+ *    who buys them, then the plumbing that makes selling possible.
+ * 3. **Developer** — machine-facing surfaces, kept separate so they do not read
+ *    as day-to-day work.
+ *
+ * "Customers" sits directly under "Plans" because a plan without customers earns
+ * nothing; integrations and settings are enablers, so they come after.
+ */
 const data = {
-	navSubscriptions: [
+	navAccount: [
 		{
 			title: "Active Plans",
 			url: "/dashboard",
+			// `/dashboard` is also the parent of every tool page, so it must match
+			// exactly or it would light on every route.
+			match: ["/dashboard"],
 			icon: IconChecklist,
 		},
 	],
@@ -51,6 +65,11 @@ const data = {
 			title: "Plans",
 			url: "/dashboard/plans",
 			icon: IconPackage,
+		},
+		{
+			title: "Customers",
+			url: "/dashboard/customers",
+			icon: IconUsers,
 		},
 		{
 			title: "Bookings",
@@ -67,20 +86,18 @@ const data = {
 			url: "/dashboard/integrations",
 			icon: IconPlug,
 		},
-		{
-			title: "Customers",
-			url: "/dashboard/customers",
-			icon: IconUsers,
-		},
-		{
-			title: "Developers",
-			url: "/dashboard/developers",
-			icon: IconCode,
-		},
+	],
+	navDeveloper: [
 		{
 			title: "API Tokens",
 			url: "/dashboard/developers/api-keys",
-			icon: IconCode,
+			icon: IconKey,
+		},
+		{
+			// Existed but was never reachable from the sidebar.
+			title: "Webhooks",
+			url: "/dashboard/developers/webhooks",
+			icon: IconWebhook,
 		},
 	],
 	navSecondary: [
@@ -127,28 +144,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 				</SidebarMenu>
 			</SidebarHeader>
 			<SidebarContent>
-				{/* Active Subscriptions Group */}
-				<SidebarGroup>
-					<SidebarGroupLabel>My Account</SidebarGroupLabel>
-					<SidebarGroupContent>
-						<SidebarMenu>
-							{data.navSubscriptions.map((item) => (
-								<SidebarMenuItem key={item.title}>
-									<SidebarMenuButton asChild tooltip={item.title}>
-										<Link href={item.url}>
-											<item.icon />
-											<span>{item.title}</span>
-										</Link>
-									</SidebarMenuButton>
-								</SidebarMenuItem>
-							))}
-						</SidebarMenu>
-					</SidebarGroupContent>
-				</SidebarGroup>
-
-				{/* Creator Group */}
+				<NavMain items={data.navAccount} label="My Account" />
 				<NavMain items={data.navCreator} label="Creator" />
+				<NavMain items={data.navDeveloper} label="Developer" />
 
+				{/* Reference material stays pinned to the bottom, away from the loop. */}
 				<NavSecondary items={data.navSecondary} className="mt-auto" />
 			</SidebarContent>
 			<SidebarFooter>

@@ -1,22 +1,13 @@
-import { IntegrationDocs } from "@/components/integration-docs";
+import { redirect } from "next/navigation";
 
-export const metadata = {
-	title: "API & MCP | Litesubs",
-	description:
-		"Connect an AI assistant or consume credits from your own backend.",
-};
-
+/**
+ * The in-app developer docs used to render the same `IntegrationDocs` component
+ * as the public `/docs` page, so the content existed twice and could drift.
+ *
+ * `/docs` is the single source: it is public, linked from the sitemap, and
+ * referenced by `/llms.txt`. This route keeps the old dashboard URL working for
+ * anyone with it open or bookmarked.
+ */
 export default function DevelopersPage() {
-	return (
-		<div className="mx-auto w-full max-w-6xl space-y-8 px-4 py-6 lg:px-6">
-			<header className="space-y-2">
-				<h1 className="text-2xl font-bold tracking-tight">API &amp; MCP</h1>
-				<p className="text-sm text-muted-foreground">
-					Manage plans with an AI assistant, or consume credits from your own
-					app. Same services, same permission checks.
-				</p>
-			</header>
-			<IntegrationDocs embedded />
-		</div>
-	);
+	redirect("/docs");
 }
