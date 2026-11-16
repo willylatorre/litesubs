@@ -9,6 +9,14 @@ export type Scope = (typeof CREATOR_SCOPES)[number] | "credits:consume";
 export type Principal = {
 	kind: "session" | "oauth" | "apiKey";
 	creatorId: string;
+	/**
+	 * The signed-in user behind this principal, when there is one.
+	 *
+	 * `creatorId` is who the principal acts *for*; this is who they *are*. They
+	 * differ for a customer session, which is how a booking knows whose credits to
+	 * spend without pretending the customer is a creator.
+	 */
+	userId?: string;
 	scopes: readonly string[];
 };
 
@@ -48,6 +56,7 @@ export function sessionPrincipal(creatorId: string): Principal {
 	return {
 		kind: "session",
 		creatorId,
+		userId: creatorId,
 		scopes: [...CREATOR_SCOPES, "credits:consume"],
 	};
 }
