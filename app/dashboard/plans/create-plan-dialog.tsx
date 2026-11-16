@@ -23,7 +23,6 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useCalEventTypes, useUpdatePlanCalEventType } from "@/hooks/use-cal";
 import { useCreatePlan } from "@/hooks/use-plans";
 import { CURRENCIES } from "@/lib/constants";
 
@@ -34,14 +33,6 @@ export function CreatePlanDialog() {
 		"one_time",
 	);
 	const { mutateAsync, isPending } = useCreatePlan();
-	const { mutateAsync: updateEventType } = useUpdatePlanCalEventType();
-	const { data: calEventTypesData, isLoading: calLoading } = useCalEventTypes();
-	const [selectedEventTypeId, setSelectedEventTypeId] = useState("none");
-
-	const selectedEventType =
-		calEventTypesData?.eventTypes.find(
-			(eventType) => String(eventType.id) === selectedEventTypeId,
-		) ?? null;
 
 	function onSubmit(e: React.FormEvent<HTMLFormElement>) {
 		e.preventDefault();
@@ -60,15 +51,7 @@ export function CreatePlanDialog() {
 		};
 
 		mutateAsync(data)
-			.then(async (createdPlan) => {
-				if (selectedEventType && createdPlan?.id) {
-					await updateEventType({
-						planId: createdPlan.id,
-						eventType: selectedEventType,
-					});
-				}
-				setOpen(false);
-			})
+			.then(() => setOpen(false))
 			.catch(() => undefined);
 	}
 
@@ -128,44 +111,6 @@ export function CreatePlanDialog() {
 									? "Monthly credits renew each paid month and do not roll over."
 									: "A one-time pack: the customer buys these credits once."}
 							</p>
-						</div>
-						<div className="grid gap-2">
-							<Label htmlFor="cal-event-type">Cal.com event type</Label>
-							<Select
-								value={selectedEventTypeId}
-								onValueChange={setSelectedEventTypeId}
-								disabled={!calEventTypesData?.connected || calLoading}
-							>
-								<SelectTrigger id="cal-event-type">
-									<SelectValue
-										placeholder={
-											calLoading
-												? "Loading event types..."
-												: "Select an event type (optional)"
-										}
-									/>
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="none">No event type</SelectItem>
-									{calEventTypesData?.eventTypes.map((eventType) => (
-										<SelectItem key={eventType.id} value={String(eventType.id)}>
-											{eventType.name || eventType.slug}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							{!calEventTypesData?.connected && !calLoading && (
-								<p className="text-xs text-muted-foreground">
-									Connect Cal.com in{" "}
-									<Link
-										href="/dashboard/integrations"
-										className="underline underline-offset-4"
-									>
-										Integrations
-									</Link>{" "}
-									to attach an event type.
-								</p>
-							)}
 						</div>
 						<div className="grid grid-cols-2 gap-4">
 							<div className="grid gap-2">

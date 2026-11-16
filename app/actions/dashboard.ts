@@ -31,11 +31,6 @@ export async function getUserEnrollmentDetails(enrollmentId: string) {
 						versions: {
 							orderBy: (version, { desc }) => [desc(version.version)],
 						},
-						integration: {
-							with: {
-								calcomIntegration: true,
-							},
-						},
 					},
 				},
 			},
@@ -146,11 +141,6 @@ export async function getDashboardData() {
 								versions: {
 									orderBy: (version, { desc }) => [desc(version.version)],
 								},
-								integration: {
-									with: {
-										calcomIntegration: true,
-									},
-								},
 							},
 						},
 					},
@@ -168,11 +158,6 @@ export async function getDashboardData() {
 							with: {
 								versions: {
 									orderBy: (version, { desc }) => [desc(version.version)],
-								},
-								integration: {
-									with: {
-										calcomIntegration: true,
-									},
 								},
 							},
 						},
@@ -327,11 +312,6 @@ export async function getUserEnrollments() {
 						with: {
 							versions: {
 								orderBy: (version, { desc }) => [desc(version.version)],
-							},
-							integration: {
-								with: {
-									calcomIntegration: true,
-								},
 							},
 						},
 					},

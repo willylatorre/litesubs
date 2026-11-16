@@ -16,7 +16,6 @@ export interface PlanCardProduct {
 	currency?: string;
 	billingMode?: "one_time" | "recurring";
 	interval?: "month" | null;
-	eventTypeName?: string | null;
 }
 
 interface PlanCardProps {
@@ -53,7 +52,6 @@ export function PlanCard({
 	isLoading = false,
 }: PlanCardProps) {
 	const { name, credits, description, badge, currency = "usd" } = product;
-	const eventTypeName = product.eventTypeName;
 	const finalPrice = price !== undefined ? price : product.price;
 	const recurring = product.billingMode === "recurring";
 
@@ -142,11 +140,6 @@ export function PlanCard({
 						{formattedPrice}
 						{recurring ? " / month" : " one-time"}
 					</p>
-					{eventTypeName && (
-						<p className="text-xs text-muted-foreground mt-1">
-							Cal.com · {eventTypeName}
-						</p>
-					)}
 					{recurring && (
 						<p className="text-xs text-muted-foreground mt-1">
 							Renews monthly. Credits do not roll over.

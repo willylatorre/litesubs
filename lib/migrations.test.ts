@@ -29,6 +29,7 @@ const MIGRATIONS = [
 	"drizzle/0013_bookings.sql",
 	"drizzle/0014_outgoing_webhooks.sql",
 	"drizzle/0015_split_calendars.sql",
+	"drizzle/0016_remove_calcom.sql",
 ];
 
 /** Create a fresh database, run `body`, then always drop it. */
@@ -871,5 +872,75 @@ test("0015 splits the calendar setting without moving existing connections", {
 			"select column_name from information_schema.columns where table_name='calendar_connections' and column_name='calendar_id'",
 		);
 		assert.deepEqual(old, []);
+	});
+});
+
+/**
+ * 0016 retires the Cal.com vendor integration. The danger is collateral damage:
+ * dropping a table must not take plans, prices, enrollments, credits, bookings,
+ * or payments with it, and native schedule links must survive.
+ */
+test("0016 removes Cal.com without touching plans, credits, or bookings", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, 16));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES
+				('u1','Creator','c@example.test',true),
+				('u2','Buyer','b@example.test',true);
+			INSERT INTO plans(id,creator_id,name) VALUES ('p1','u1','Coaching');
+			INSERT INTO plan_versions(id,plan_id,creator_id,status,billing_mode,currency,price,credits,version)
+			VALUES ('pv1','p1','u1','published','one_time','usd',10000,10,1);
+			INSERT INTO enrollments(id,user_id,plan_id,creator_id,credits)
+			VALUES ('e1','u2','p1','u1',10);
+			INSERT INTO credit_grants(id,enrollment_id,creator_id,user_id,plan_id,kind,amount,remaining)
+			VALUES ('g1','e1','u1','u2','p1','purchase',10,7);
+			INSERT INTO booking_schedules(id,creator_id,name,slug,plan_id,credits_per_booking)
+			VALUES ('s1','u1','Sessions','sessions','p1',3);
+			INSERT INTO bookings(id,schedule_id,creator_id,user_id,plan_id,starts_at,ends_at,charged_credits)
+			VALUES ('b1','s1','u1','u2','p1','2026-12-01 10:00Z','2026-12-01 10:30Z',3);
+			INSERT INTO payments(id,creator_id,user_id,plan_id,plan_version_id,stripe_account_id,status,credits,amount_total,currency,application_fee)
+			VALUES ('pay1','u1','u2','p1','pv1','acct_x','paid',10,10000,'usd',200);
+		`);
+		await apply(client, MIGRATIONS[16]);
+
+		// Vendor artifacts are gone.
+		const { rows: tables } = await client.query(`
+			select table_name from information_schema.tables
+			where table_schema='public'
+			  and table_name in ('integrations','calcom_integrations','cal_com_accounts')
+		`);
+		assert.deepEqual(tables, []);
+		const { rows: col } = await client.query(`
+			select column_name from information_schema.columns
+			where table_name='plans' and column_name='integration_id'
+		`);
+		assert.deepEqual(col, []);
+
+		// Everything that carries money or entitlement survived untouched.
+		const { rows } = await client.query(`
+			select
+				(select count(*)::int from plans) as plans,
+				(select count(*)::int from plan_versions) as versions,
+				(select count(*)::int from enrollments) as enrollments,
+				(select credits from enrollments where id='e1') as enrollment_credits,
+				(select remaining from credit_grants where id='g1') as grant_remaining,
+				(select count(*)::int from bookings) as bookings,
+				(select charged_credits from bookings where id='b1') as charged,
+				(select count(*)::int from payments) as payments,
+				(select plan_id from booking_schedules where id='s1') as schedule_plan
+		`);
+		assert.deepEqual(rows[0], {
+			plans: 1,
+			versions: 1,
+			enrollments: 1,
+			enrollment_credits: 10,
+			grant_remaining: 7,
+			bookings: 1,
+			charged: 3,
+			payments: 1,
+			schedule_plan: "p1",
+		});
 	});
 });

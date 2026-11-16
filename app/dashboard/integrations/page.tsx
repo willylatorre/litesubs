@@ -1,8 +1,6 @@
 import Link from "next/link";
-import { getCalAccountStatus } from "@/app/actions/cal-com";
 import { getGoogleCalendarStatus } from "@/app/actions/google-calendar";
 import { getPaymentsStatus } from "@/app/actions/stripe-connect";
-import { CalIntegrationCard } from "@/components/integrations/cal-integration-card";
 import { GoogleCalendarCard } from "@/components/integrations/google-calendar-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,13 +20,10 @@ export default async function IntegrationsPage({
 	searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
 	const sp = await searchParams;
-	const [calAccountRes, paymentsRes, googleRes] = await Promise.all([
-		getCalAccountStatus(),
+	const [paymentsRes, googleRes] = await Promise.all([
 		getPaymentsStatus(),
 		getGoogleCalendarStatus(),
 	]);
-
-	const calAccount = calAccountRes?.data;
 	const readiness = paymentsRes?.data;
 	const canSell = Boolean(readiness?.canSell);
 	const googleStatus = googleRes?.data;
@@ -38,18 +33,12 @@ export default async function IntegrationsPage({
 			<div>
 				<h1 className="text-2xl font-bold tracking-tight">Integrations</h1>
 				<p className="text-sm text-muted-foreground">
-					Manage external connections for bookings and payments.
+					Manage external connections for payments and calendar sync. Native
+					bookings live in the Bookings section.
 				</p>
 			</div>
 
 			<div className="grid gap-4 lg:grid-cols-2">
-				<CalIntegrationCard
-					status={{
-						connected: Boolean(calAccount),
-						username: calAccount?.calUsername,
-					}}
-				/>
-
 				{googleStatus && (
 					<GoogleCalendarCard
 						status={googleStatus}

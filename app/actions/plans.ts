@@ -52,7 +52,6 @@ export async function getPlanDetails(planId: string) {
 			where: and(eq(plans.id, planId), eq(plans.creatorId, session.user.id)),
 			with: {
 				versions: { orderBy: [desc(planVersions.version)] },
-				integration: { with: { calcomIntegration: true } },
 			},
 		});
 		if (!plan) return { success: false, error: "Plan not found" };

@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - 2026-01-01
 
+### Removed
+- **Cal.com integration**: the vendor card, OAuth routes, inbound webhook, event-type
+  pickers, and the `integrations` / `calcom_integrations` / `cal_com_accounts`
+  tables. Native booking schedules are the only booking path now, so the vendor
+  tables were a parallel unusable route. Migration `0016` drops them; it does not
+  touch plans, prices, enrollments, credits, bookings, or payments, which never
+  held a foreign key into them.
+
 ### Added
 - **Native bookings**:
   - Creators define weekly availability, buffers, a horizon, a timezone, and

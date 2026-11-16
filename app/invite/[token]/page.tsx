@@ -30,11 +30,6 @@ const getInvite = cache(async (token: string) => {
 			plan: {
 				with: {
 					versions: { orderBy: (version, { desc }) => [desc(version.version)] },
-					integration: {
-						with: {
-							calcomIntegration: true,
-						},
-					},
 				},
 			},
 		},
@@ -250,8 +245,6 @@ export default async function InvitePage({
 							currency: published.currency,
 							billingMode: complimentary ? undefined : published.billingMode,
 							interval: complimentary ? null : published.interval,
-							eventTypeName:
-								invite.plan.integration?.calcomIntegration?.eventTypeName,
 						}}
 						productId={invite.plan.id}
 						creditsSuffix={complimentary ? " credits on claim" : " credits"}

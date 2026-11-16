@@ -142,7 +142,6 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 												currency: terms?.currency ?? "usd",
 												billingMode: terms?.billingMode ?? "one_time",
 												interval: terms?.interval ?? null,
-												eventTypeName: enrollment.plan.calEventTypeName,
 											}}
 											creditsSuffix=" credits left"
 											creatorName={enrollment.creator?.name}

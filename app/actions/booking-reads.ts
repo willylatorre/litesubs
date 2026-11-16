@@ -150,3 +150,28 @@ export async function listBookablePlanOptions() {
 		};
 	});
 }
+
+/**
+ * The public booking link for a plan, if it has a linked schedule.
+ *
+ * Used wherever a "Book" action appears, so the button points at native booking
+ * rather than a vendor's event page. Returns null when there is no schedule, in
+ * which case callers render no Book action at all.
+ */
+export async function getBookLinkForPlan(planId: string) {
+	return authenticatedAction(async (session) => {
+		const schedule = await db.query.bookingSchedules.findFirst({
+			where: and(
+				eq(bookingSchedules.planId, planId),
+				eq(bookingSchedules.creatorId, session.user.id),
+				eq(bookingSchedules.active, true),
+			),
+			columns: { slug: true },
+		});
+		if (!schedule) return { success: true, data: null };
+		return {
+			success: true,
+			data: `/book/${creatorHandle(session.user.id)}/${schedule.slug}`,
+		};
+	}).then((result) => (result.success ? (result.data ?? null) : null));
+}

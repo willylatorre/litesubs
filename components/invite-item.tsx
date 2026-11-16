@@ -45,7 +45,6 @@ export function InviteItem({ invite }: { invite: InviteView }) {
 				currency: invite.plan.terms?.currency ?? "usd",
 				billingMode: invite.plan.terms?.billingMode,
 				interval: invite.plan.terms?.interval ?? null,
-				eventTypeName: invite.plan.calEventTypeName,
 			}
 		: {
 				name: "Connection Invite",

@@ -47,7 +47,6 @@ export const transactionStatusEnum = pgEnum(
 );
 export const inviteStatusEnum = pgEnum("invite_status", INVITE_STATUSES);
 export const currencyEnum = pgEnum("currency", CURRENCIES);
-export const integrationTypeEnum = pgEnum("integration_type", ["calcom"]);
 export const bookingStatusEnum = pgEnum("booking_status", [
 	"confirmed",
 	"cancelled",
@@ -87,55 +86,6 @@ export const subscriptionCancellationCauseEnum = pgEnum(
 
 // Tables
 
-export const calcomIntegrations = pgTable(
-	"calcom_integrations",
-	{
-		id: text("id")
-			.primaryKey()
-			.$defaultFn(() => crypto.randomUUID()),
-		eventTypeId: integer("event_type_id"),
-		eventTypeSlug: text("event_type_slug"),
-		eventTypeName: text("event_type_name"),
-		eventTypeUrl: text("event_type_url"),
-		connectedAt: timestamp("connected_at"),
-		createdAt: timestamp("created_at").defaultNow().notNull(),
-		updatedAt: timestamp("updated_at")
-			.defaultNow()
-			.$onUpdate(() => new Date())
-			.notNull(),
-	},
-	(table) => [
-		index("calcom_event_type_id_idx").on(table.eventTypeId),
-		index("calcom_event_type_slug_idx").on(table.eventTypeSlug),
-	],
-);
-
-export const integrations = pgTable(
-	"integrations",
-	{
-		id: text("id")
-			.primaryKey()
-			.$defaultFn(() => crypto.randomUUID()),
-		userId: text("user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
-		type: integrationTypeEnum("type").notNull(),
-		calcomIntegrationId: text("calcom_integration_id").references(
-			() => calcomIntegrations.id,
-			{ onDelete: "cascade" },
-		),
-		createdAt: timestamp("created_at").defaultNow().notNull(),
-		updatedAt: timestamp("updated_at")
-			.defaultNow()
-			.$onUpdate(() => new Date())
-			.notNull(),
-	},
-	(table) => [
-		index("integrations_user_idx").on(table.userId),
-		index("integrations_type_idx").on(table.type),
-	],
-);
-
 /**
  * Editable service identity for an offer. Commercial terms live in
  * `planVersions` so a published price can never be mutated underneath an
@@ -153,9 +103,6 @@ export const plans = pgTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		name: text("name").notNull(),
 		description: text("description"),
-		integrationId: text("integration_id").references(() => integrations.id, {
-			onDelete: "set null",
-		}),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -796,30 +743,6 @@ export const invites = pgTable(
 	],
 );
 
-export const calComAccounts = pgTable(
-	"cal_com_accounts",
-	{
-		id: text("id")
-			.primaryKey()
-			.$defaultFn(() => crypto.randomUUID()),
-		userId: text("user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
-		accessToken: text("access_token").notNull(),
-		refreshToken: text("refresh_token"),
-		expiresAt: timestamp("expires_at"),
-		scope: text("scope"),
-		calUserId: text("cal_user_id"),
-		calUsername: text("cal_username"),
-		createdAt: timestamp("created_at").defaultNow().notNull(),
-		updatedAt: timestamp("updated_at")
-			.defaultNow()
-			.$onUpdate(() => new Date())
-			.notNull(),
-	},
-	(table) => [unique("cal_com_accounts_user_id_unique").on(table.userId)],
-);
-
 /**
  * A creator's bookable offer.
  *
@@ -1258,10 +1181,6 @@ export const plansRelations = relations(plans, ({ one, many }) => ({
 		fields: [plans.creatorId],
 		references: [user.id],
 	}),
-	integration: one(integrations, {
-		fields: [plans.integrationId],
-		references: [integrations.id],
-	}),
 	versions: many(planVersions),
 	enrollments: many(enrollments),
 	transactions: many(transactions),
@@ -1358,38 +1277,6 @@ export const invitesRelations = relations(invites, ({ one }) => ({
 		references: [plans.id],
 	}),
 }));
-
-export const calComAccountsRelations = relations(calComAccounts, ({ one }) => ({
-	user: one(user, {
-		fields: [calComAccounts.userId],
-		references: [user.id],
-	}),
-}));
-
-export const calcomIntegrationsRelations = relations(
-	calcomIntegrations,
-	({ one }) => ({
-		integration: one(integrations, {
-			fields: [calcomIntegrations.id],
-			references: [integrations.calcomIntegrationId],
-		}),
-	}),
-);
-
-export const integrationsRelations = relations(
-	integrations,
-	({ one, many }) => ({
-		user: one(user, {
-			fields: [integrations.userId],
-			references: [user.id],
-		}),
-		calcomIntegration: one(calcomIntegrations, {
-			fields: [integrations.calcomIntegrationId],
-			references: [calcomIntegrations.id],
-		}),
-		plans: many(plans),
-	}),
-);
 
 export const paymentsRelations = relations(payments, ({ one, many }) => ({
 	creator: one(user, {

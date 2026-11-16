@@ -20,18 +20,6 @@ export type Plan = {
 	description: string | null;
 	createdAt: string | Date;
 	updatedAt: string | Date;
-	integrationId?: string | null;
-	integration?: {
-		id: string;
-		type: "calcom";
-		calcomIntegration?: {
-			id: string;
-			eventTypeId?: number | null;
-			eventTypeSlug?: string | null;
-			eventTypeName?: string | null;
-			eventTypeUrl?: string | null;
-		} | null;
-	} | null;
 	terms: PlanTermsClient | null;
 	isDraft: boolean;
 	/** The live offer, when one exists. `terms` may already be newer draft terms. */

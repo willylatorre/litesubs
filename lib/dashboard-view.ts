@@ -31,7 +31,6 @@ export type EnrollmentView = {
 		name: string;
 		description: string | null;
 		terms: PlanTermsView | null;
-		calEventTypeName?: string | null;
 	};
 	creator: { name: string } | null;
 };
@@ -42,7 +41,6 @@ export type InviteView = {
 		name: string;
 		description: string | null;
 		terms: PlanTermsView | null;
-		calEventTypeName?: string | null;
 	} | null;
 	creator: { name: string };
 	/** A complimentary invite grants credits on claim; it is not a purchase. */
@@ -94,9 +92,6 @@ type RawPlan = {
 	name: string;
 	description: string | null;
 	versions?: PlanVersionRow[];
-	integration?: {
-		calcomIntegration?: { eventTypeName?: string | null } | null;
-	} | null;
 };
 
 export function toDashboardView(raw: {
@@ -159,8 +154,6 @@ export function toDashboardView(raw: {
 				name: enrollment.plan.name,
 				description: enrollment.plan.description,
 				terms: publishedTerms(enrollment.plan.versions),
-				calEventTypeName:
-					enrollment.plan.integration?.calcomIntegration?.eventTypeName,
 			},
 			creator: enrollment.creator ? { name: enrollment.creator.name } : null,
 		})),
@@ -171,8 +164,6 @@ export function toDashboardView(raw: {
 						name: invite.plan.name,
 						description: invite.plan.description,
 						terms: publishedTerms(invite.plan.versions),
-						calEventTypeName:
-							invite.plan.integration?.calcomIntegration?.eventTypeName,
 					}
 				: null,
 			creator: { name: invite.creator.name },

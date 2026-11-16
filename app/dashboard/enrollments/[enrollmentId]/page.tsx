@@ -1,6 +1,7 @@
 import { ArrowLeft, CreditCard } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getBookLinkForPlan } from "@/app/actions/booking-reads";
 import { getUserEnrollmentDetails } from "@/app/actions/dashboard";
 import { getUserTransactions } from "@/app/actions/transactions";
 import { BuyButton } from "@/components/buy-button";
@@ -51,8 +52,10 @@ export default async function EnrollmentDetailPage({
 	const transactions = transactionsRes.success
 		? (transactionsRes.data ?? [])
 		: [];
-	const calEventTypeUrl = plan.integration?.calcomIntegration?.eventTypeUrl;
-	const canBook = Boolean(calEventTypeUrl);
+	// Native booking: the plan's schedule is where a session is booked now. A plan
+	// without a linked schedule simply has no Book action.
+	const scheduleLink = await getBookLinkForPlan(plan.id);
+	const canBook = Boolean(scheduleLink);
 	const hasCredits = enrollment.credits > 0;
 
 	return (
@@ -92,9 +95,7 @@ export default async function EnrollmentDetailPage({
 					{canBook &&
 						(hasCredits ? (
 							<Button size="lg" asChild>
-								<Link href={calEventTypeUrl as string} target="_blank">
-									Book
-								</Link>
+								<Link href={scheduleLink as string}>Book</Link>
 							</Button>
 						) : (
 							<Button size="lg" disabled>

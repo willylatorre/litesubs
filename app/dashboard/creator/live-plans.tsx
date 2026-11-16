@@ -74,8 +74,6 @@ export function LivePlans() {
 									currency: plan.terms?.currency ?? "usd",
 									billingMode: plan.terms?.billingMode ?? "one_time",
 									interval: plan.terms?.interval ?? null,
-									eventTypeName:
-										plan.integration?.calcomIntegration?.eventTypeName,
 								}}
 								action={
 									<Button asChild variant="outline" size="sm">

@@ -74,6 +74,7 @@ This model establishes a direct relationship between the creator and the buyer, 
 ### Integrations
 - [x] **Stripe connect:** Explore allowing users to connect their own "stripe" account so the purchases of the packs will go directly to them. If connected, we skip/disable the whole Payouts section as it is handled automatically.
 - [x] **Native bookings:** Creators define weekly availability and one-off blocks, link a schedule to a one-time plan, and a booked slot spends that plan's credits. Public pages live at `/book/<creator>/<slug>`; double-booking is prevented by a database exclusion constraint. No vendor sits in the path.
+- [x] **Remove the Cal.com integration:** native booking schedules replaced it, so the vendor card, OAuth routes, webhook, and tables were removed. `0016` drops them without touching plans, credits, bookings, or payments.
 - [x] **Google Calendar (optional):** A creator connects Google Calendar and chooses two calendars: one whose busy time blocks slots, and one where bookings are written (an existing calendar or a new one Litesubs creates). Tokens are encrypted at rest, the event id is stored so cancellation removes the event, and sync failures never roll back a booking or a debit. Not yet verified against a live Google client.
 
 ### Subscriptions

@@ -112,9 +112,6 @@ export default function PlansPage() {
 													{isSamplePlanId(plan.id) && (
 														<Badge variant="outline">Sample</Badge>
 													)}
-													{plan.integration?.calcomIntegration?.eventTypeId && (
-														<Badge variant="outline">cal.com</Badge>
-													)}
 												</div>
 												{plan.description && (
 													<span className="text-xs text-muted-foreground">

@@ -165,7 +165,6 @@ export async function listPlans(principal: Principal, input: unknown = {}) {
 		where: eq(plans.creatorId, principal.creatorId),
 		orderBy: [desc(plans.createdAt), desc(plans.id)],
 		...page,
-		with: { integration: { with: { calcomIntegration: true } } },
 	});
 	return Promise.all(rows.map((plan) => withTerms(plan)));
 }

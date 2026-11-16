@@ -34,7 +34,6 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { useCalEventTypes, useUpdatePlanCalEventType } from "@/hooks/use-cal";
 import { InviteUserDialog } from "../creator/invite-user-dialog";
 import { PlanBookingLink } from "./plan-booking-link";
 
@@ -47,10 +46,6 @@ export function PlanDetailsDialog({
 }) {
 	const [open, setOpen] = useState(false);
 	const [inviteOpen, setInviteOpen] = useState(false);
-	const [selectedEventTypeId, setSelectedEventTypeId] = useState("none");
-	const { data: calEventTypesData, isLoading: calLoading } = useCalEventTypes();
-	const { mutate: updateEventType, isPending: isUpdating } =
-		useUpdatePlanCalEventType();
 
 	const { data: details, isLoading: loading } = useQuery({
 		queryKey: ["plan-details", planId],
@@ -81,15 +76,6 @@ export function PlanDetailsDialog({
 	const enrollments = details?.enrollments ?? [];
 	const displayedEnrollments = enrollments.slice(0, 5);
 	const hasMore = enrollments.length > 5;
-	const selectedEventType =
-		calEventTypesData?.eventTypes.find(
-			(eventType) => String(eventType.id) === selectedEventTypeId,
-		) ?? null;
-
-	useEffect(() => {
-		const eventTypeId = plan?.integration?.calcomIntegration?.eventTypeId;
-		setSelectedEventTypeId(eventTypeId ? String(eventTypeId) : "none");
-	}, [plan?.integration?.calcomIntegration?.eventTypeId]);
 
 	return (
 		<>
@@ -192,72 +178,6 @@ export function PlanDetailsDialog({
 								planId={plan.id}
 								isRecurring={terms?.billingMode === "recurring"}
 							/>
-
-							<div className="flex flex-col gap-3 border-t pt-4">
-								<h3 className="font-semibold">Cal.com booking</h3>
-								<div className="grid gap-2">
-									<Label htmlFor="plan-cal-event-type">Event type</Label>
-									<Select
-										value={selectedEventTypeId}
-										onValueChange={setSelectedEventTypeId}
-										disabled={!calEventTypesData?.connected || calLoading}
-									>
-										<SelectTrigger id="plan-cal-event-type">
-											<SelectValue
-												placeholder={
-													calLoading
-														? "Loading event types..."
-														: "Select an event type"
-												}
-											/>
-										</SelectTrigger>
-										<SelectContent>
-											<SelectItem value="none">No event type</SelectItem>
-											{calEventTypesData?.eventTypes.map((eventType) => (
-												<SelectItem
-													key={eventType.id}
-													value={String(eventType.id)}
-												>
-													{eventType.name || eventType.slug}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-									{!calEventTypesData?.connected && !calLoading && (
-										<p className="text-xs text-muted-foreground">
-											Connect Cal.com in{" "}
-											<Link
-												href="/dashboard/integrations"
-												className="underline underline-offset-4"
-											>
-												Integrations
-											</Link>{" "}
-											to attach an event type.
-										</p>
-									)}
-									<Button
-										variant="outline"
-										size="sm"
-										className="w-fit"
-										disabled={
-											isUpdating ||
-											(!selectedEventType &&
-												!plan.integration?.calcomIntegration?.eventTypeId) ||
-											(!!selectedEventType &&
-												selectedEventType.id ===
-													plan.integration?.calcomIntegration?.eventTypeId)
-										}
-										onClick={() =>
-											updateEventType({
-												planId: plan.id,
-												eventType: selectedEventType,
-											})
-										}
-									>
-										{isUpdating ? "Saving..." : "Save event type"}
-									</Button>
-								</div>
-							</div>
 
 							<div className="flex flex-col gap-4 border-t pt-4">
 								<h3 className="font-semibold flex items-center gap-2">
