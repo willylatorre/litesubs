@@ -1,7 +1,6 @@
 "use client";
 
 import { Loader2, Plus } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +24,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useCreatePlan } from "@/hooks/use-plans";
 import { CURRENCIES } from "@/lib/constants";
+import { formatCurrency } from "@/lib/utils";
+
+type Currency = (typeof CURRENCIES)[number];
 
 /** Create a local draft plan. Nothing here contacts Stripe. */
 export function CreatePlanDialog() {
@@ -32,7 +34,30 @@ export function CreatePlanDialog() {
 	const [billingMode, setBillingMode] = useState<"one_time" | "recurring">(
 		"one_time",
 	);
+	const [currency, setCurrency] = useState<Currency>("usd");
+	const [price, setPrice] = useState("");
+	const [credits, setCredits] = useState("");
 	const { mutateAsync, isPending } = useCreatePlan();
+
+	const priceValue = Number(price);
+	const creditsValue = Number(credits);
+	const hasOffer =
+		Number.isFinite(priceValue) &&
+		priceValue > 0 &&
+		Number.isInteger(creditsValue) &&
+		creditsValue >= 1;
+
+	function resetForm() {
+		setBillingMode("one_time");
+		setCurrency("usd");
+		setPrice("");
+		setCredits("");
+	}
+
+	function onOpenChange(next: boolean) {
+		if (!next) resetForm();
+		setOpen(next);
+	}
 
 	function onSubmit(e: React.FormEvent<HTMLFormElement>) {
 		e.preventDefault();
@@ -43,28 +68,31 @@ export function CreatePlanDialog() {
 			description: (formData.get("description") as string) || undefined,
 			terms: {
 				billingMode,
-				currency: (formData.get("currency") as "usd" | "eur") || "usd",
-				price: Number(formData.get("price")),
-				credits: Number(formData.get("credits")),
+				currency,
+				price: Number(price),
+				credits: Number(credits),
 				interval: billingMode === "recurring" ? ("month" as const) : null,
 			},
 		};
 
 		mutateAsync(data)
-			.then(() => setOpen(false))
+			.then(() => {
+				resetForm();
+				setOpen(false);
+			})
 			.catch(() => undefined);
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={setOpen}>
+		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogTrigger asChild>
 				<Button>
 					<Plus className="mr-2 h-4 w-4" />
 					Create Plan
 				</Button>
 			</DialogTrigger>
-			<DialogContent className="sm:max-w-[460px]">
-				<form onSubmit={onSubmit}>
+			<DialogContent className="sm:max-w-[460px] max-h-[85vh] overflow-y-auto">
+				<form onSubmit={onSubmit} className="flex flex-col gap-5">
 					<DialogHeader>
 						<DialogTitle>Create Draft Plan</DialogTitle>
 						<DialogDescription>
@@ -72,7 +100,7 @@ export function CreatePlanDialog() {
 							so nothing is purchasable until then.
 						</DialogDescription>
 					</DialogHeader>
-					<div className="grid gap-4 py-4">
+					<div className="grid gap-4">
 						<div className="grid gap-2">
 							<Label htmlFor="name">Name</Label>
 							<Input
@@ -98,7 +126,7 @@ export function CreatePlanDialog() {
 									setBillingMode(value as "one_time" | "recurring")
 								}
 							>
-								<SelectTrigger id="billing-mode">
+								<SelectTrigger id="billing-mode" className="w-full">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
@@ -115,14 +143,17 @@ export function CreatePlanDialog() {
 						<div className="grid grid-cols-2 gap-4">
 							<div className="grid gap-2">
 								<Label htmlFor="currency">Currency</Label>
-								<Select name="currency" defaultValue="usd">
-									<SelectTrigger>
+								<Select
+									value={currency}
+									onValueChange={(value) => setCurrency(value as Currency)}
+								>
+									<SelectTrigger id="currency" className="w-full">
 										<SelectValue placeholder="Select currency" />
 									</SelectTrigger>
 									<SelectContent>
-										{CURRENCIES.map((currency) => (
-											<SelectItem key={currency} value={currency}>
-												{currency.toUpperCase()}
+										{CURRENCIES.map((option) => (
+											<SelectItem key={option} value={option}>
+												{option.toUpperCase()}
 											</SelectItem>
 										))}
 									</SelectContent>
@@ -136,27 +167,82 @@ export function CreatePlanDialog() {
 									id="price"
 									name="price"
 									type="number"
+									inputMode="decimal"
 									min="0.01"
 									step="0.01"
 									placeholder="10.00"
+									value={price}
+									onChange={(e) => setPrice(e.target.value)}
 									required
 								/>
 							</div>
 						</div>
 						<div className="grid gap-2">
-							<Label htmlFor="credits">Credits</Label>
+							<div className="flex items-baseline justify-between gap-3">
+								<Label htmlFor="credits">Credits</Label>
+								<span className="text-muted-foreground text-xs">
+									Lessons, products, items, etc.
+								</span>
+							</div>
 							<Input
 								id="credits"
 								name="credits"
 								type="number"
+								inputMode="numeric"
 								min="1"
 								step="1"
 								placeholder="100"
+								value={credits}
+								onChange={(e) => setCredits(e.target.value)}
 								required
 							/>
+							<p className="text-muted-foreground min-h-4 text-xs">
+								{hasOffer
+									? `That works out to ${formatCurrency(
+											priceValue / creditsValue,
+											currency,
+										)} per credit.`
+									: "One credit per lesson, product, or item."}
+							</p>
 						</div>
 					</div>
-					<DialogFooter>
+
+					<div
+						className="rounded-md border bg-muted/40 px-3.5 py-3"
+						aria-live="polite"
+					>
+						{hasOffer ? (
+							<p className="text-sm">
+								Your customer will pay{" "}
+								<span className="font-medium">
+									{formatCurrency(priceValue, currency)}
+								</span>{" "}
+								{billingMode === "recurring" ? (
+									<span className="text-muted-foreground">per month</span>
+								) : null}{" "}
+								for{" "}
+								<span className="font-medium">
+									{creditsValue.toLocaleString("en-US")}{" "}
+									{creditsValue === 1 ? "credit" : "credits"}
+								</span>
+								.
+							</p>
+						) : (
+							<p className="text-muted-foreground text-sm">
+								Set a price and a credit count to preview the offer.
+							</p>
+						)}
+					</div>
+
+					<DialogFooter className="border-t pt-4">
+						<Button
+							type="button"
+							variant="outline"
+							onClick={() => onOpenChange(false)}
+							disabled={isPending}
+						>
+							Cancel
+						</Button>
 						<Button type="submit" disabled={isPending}>
 							{isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
 							Create Draft

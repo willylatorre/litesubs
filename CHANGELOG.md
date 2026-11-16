@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-01-01
 
 ### Changed
+- **Create-plan dialog**: the terms section had three unrelated vertical rhythms —
+  a `py-4` wrapper, ad-hoc gaps, and a footer flush against the last field — so
+  price, credits, and the submit button shared no baseline. Field spacing is now
+  uniform and the footer is separated by a rule, with Cancel beside Create Draft
+  instead of a lone right-aligned button. Credits gained the subtitle the page
+  could not otherwise convey ("Lessons, products, items, etc."), the derived rate
+  sits under the field that produces it ("That works out to $10.00 per credit"),
+  and a live summary states the offer in the customer's terms. Price, currency, and
+  credits are now controlled state, so both readouts follow the currency, the
+  billing mode, and the singular/plural of the count; the form resets on close so
+  a created draft no longer leaves stale values behind. The dialog also scrolls on
+  short viewports, where the footer previously fell off-screen.
 - **Sidebar grouping**: reordered by the creator's loop rather than page type —
   "My Account", then "Creator" (Dashboard, Plans, Customers, Bookings, Payments,
   Integrations), then "Developer" (API Tokens, Webhooks). Customers now sits
