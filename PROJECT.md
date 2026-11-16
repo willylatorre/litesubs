@@ -83,4 +83,4 @@ This model establishes a direct relationship between the creator and the buyer, 
 ### 💻 Developer Experience (API)
 - [x] **API Key Management:** UI for creators to generate/revoke API keys for their projects. (`/dashboard/developers/api-keys`)
 - [x] **Credit Consumption API:** Build a secure endpoint for external applications to deduct credits from a user's balance. (`POST /api/v1/credits/consume`, plus the `consume_credits` MCP tool)
-- [ ] **Webhooks:** Set up outgoing webhooks to notify external services of successful purchases or balance changes.
+- [x] **Webhooks:** Outgoing webhooks notify external services of successful one-time purchases and credit-balance changes. Endpoints are creator-configured, signed with HMAC-SHA256, retry-safe by stored event id, and never grantable to a machine API key.

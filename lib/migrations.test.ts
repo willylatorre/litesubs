@@ -27,6 +27,7 @@ const MIGRATIONS = [
 	"drizzle/0011_s12_refunds.sql",
 	"drizzle/0012_s15_disconnect.sql",
 	"drizzle/0013_bookings.sql",
+	"drizzle/0014_outgoing_webhooks.sql",
 ];
 
 /** Create a fresh database, run `body`, then always drop it. */
@@ -661,9 +662,97 @@ test("0012 records a cancellation cause without relabelling existing subscriptio
 });
 
 /**
+ * 0014 adds outgoing webhooks. Purely additive: existing rows are untouched, an
+ * endpoint's event list cannot be empty, and a retry boundary is enforced by the
+ * database itself — (endpoint, event id) is unique so a re-emission cannot create
+ * a duplicate delivery, and attempt numbers are unique per delivery.
+ */
+test("0014 adds webhook tables without touching existing data", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, 14));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES
+				('u1','Creator','c@example.test',true),
+				('u2','Buyer','b@example.test',true);
+			INSERT INTO plans(id,creator_id,name) VALUES ('p1','u1','Pack');
+			INSERT INTO enrollments(id,user_id,plan_id,creator_id,credits)
+			VALUES ('e1','u2','p1','u1',7);
+		`);
+		await apply(client, MIGRATIONS[14]);
+
+		// Existing credit state survives untouched.
+		const {
+			rows: [enrollment],
+		} = await client.query("select credits from enrollments where id = 'e1'");
+		assert.equal(enrollment.credits, 7);
+
+		await client.query(`
+			INSERT INTO webhook_endpoints(id,creator_id,name,url,signing_secret,events)
+			VALUES ('wh1','u1','Backend','https://example.test/hook','whsec_x',ARRAY['purchase.completed']::text[]);
+		`);
+		// An endpoint with no events would never deliver anything; refuse it.
+		await assert.rejects(
+			client.query(`
+				INSERT INTO webhook_endpoints(id,creator_id,name,url,signing_secret,events)
+				VALUES ('wh2','u1','Empty','https://example.test/empty','whsec_y',ARRAY[]::text[]);
+			`),
+			/check constraint/,
+		);
+
+		await client.query(`
+			INSERT INTO webhook_deliveries(id,endpoint_id,creator_id,event_id,event_type,payload)
+			VALUES ('d1','wh1','u1','evt_1','purchase.completed','{"id":"evt_1"}');
+		`);
+		// The same event cannot be recorded twice for one endpoint.
+		await assert.rejects(
+			client.query(`
+				INSERT INTO webhook_deliveries(id,endpoint_id,creator_id,event_id,event_type,payload)
+				VALUES ('d2','wh1','u1','evt_1','purchase.completed','{"id":"evt_1"}');
+			`),
+			/duplicate key/,
+		);
+
+		await client.query(`
+			INSERT INTO webhook_delivery_attempts(id,delivery_id,creator_id,attempt_number,outcome)
+			VALUES ('a1','d1','u1',1,'failed');
+		`);
+		// Attempt numbers are unique per delivery, so history cannot be rewritten.
+		await assert.rejects(
+			client.query(`
+				INSERT INTO webhook_delivery_attempts(id,delivery_id,creator_id,attempt_number,outcome)
+				VALUES ('a2','d1','u1',1,'succeeded');
+			`),
+			/duplicate key/,
+		);
+		// The outcome is a closed set, not free text.
+		await assert.rejects(
+			client.query(`
+				INSERT INTO webhook_delivery_attempts(id,delivery_id,creator_id,attempt_number,outcome)
+				VALUES ('a3','d1','u1',2,'maybe');
+			`),
+			/check constraint/,
+		);
+
+		// Deleting an endpoint removes its deliveries, which keeps no stale PII.
+		await client.query("DELETE FROM webhook_endpoints WHERE id = 'wh1'");
+		const {
+			rows: [remaining],
+		} = await client.query("select count(*)::int as n from webhook_deliveries");
+		assert.equal(remaining.n, 0);
+	});
+});
+/**
+ * S15 part two: booking credits. An existing event type must keep working as a
+ * free booking link (the price is nullable), and the booking uid must be unique
+ * so a replayed Cal.com delivery cannot become a second debit.
+ */
+
+/**
  * B1: double-booking is prevented in the database, not by a read-then-insert
  * check. These cases pin the exclusion constraint's actual behaviour, because a
- * constraint that silently allows an overlap would produce two confirmed
+ * constraint that silently allowed an overlap would produce two confirmed
  * bookings for one slot and charge two customers for it.
  */
 test("0013 prevents overlapping confirmed bookings without reserving ended slots", {
@@ -720,8 +809,8 @@ test("0013 prevents overlapping confirmed bookings without reserving ended slots
 			{ id: "b5", status: "confirmed" },
 		]);
 
-		// Two creators can book the same wall-clock time; the constraint is
-		// per creator, never global.
+		// Two creators can book the same wall-clock time; the constraint is per
+		// creator, never global.
 		await client.query(`
 			INSERT INTO "user"(id,name,email,email_verified) VALUES ('u3','Other','o@example.test',true);
 			INSERT INTO booking_schedules(id,creator_id,name,slug)

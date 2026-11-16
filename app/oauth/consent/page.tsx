@@ -15,6 +15,8 @@ const scopeDescriptions: Record<string, string> = {
 	"customers:read": "Read your customers and balances",
 	"customers:write": "Enroll customers and grant credits",
 	"billing:read": "Read your transaction history",
+	"webhooks:manage":
+		"Configure outgoing webhooks and read their delivery history",
 };
 
 export default async function ConsentPage({

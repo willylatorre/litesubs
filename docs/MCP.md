@@ -129,6 +129,9 @@ OAuth scopes:
 - `plans:read`, `plans:write`
 - `customers:read`, `customers:write`
 - `billing:read`
+- `webhooks:manage` — configure outgoing webhooks and read their delivery
+  history. Separate from `plans:write` because an endpoint decides where customer
+  ids and balances are sent. See `docs/WEBHOOKS.md`.
 
 Machine keys use **`x-api-key`**, with Better Auth's `{ credits: ["consume"] }`
 permissions. They may only consume credits, never grant credits, read billing,
@@ -248,6 +251,18 @@ payment-ready account cannot sell.
 System paths (Stripe fulfillment and comp enrollment/claim) retain their own
 transactional ledger writes.
 
+Cal.com bookings are a third system path. `/api/webhooks/cal` verifies the
+`X-Cal-Signature-256` HMAC over the raw body with `CAL_WEBHOOK_SECRET` and rejects
+an unconfigured or unsigned delivery. The booking uid is the idempotency
+boundary: `BOOKING_CREATED` (and a reschedule, which reuses the uid) spends the
+plan's configured credits-per-booking once, and `BOOKING_CANCELLED` /
+`BOOKING_REJECTED` returns only the units that booking took, back to the same
+grants. Expired or already re-spent units are never restored, so a cancellation
+cannot mint a balance. Bookings for an unknown event type, an unenrolled booker,
+or a plan detached from the event type are recorded as no-ops; an event type with
+no price is a free booking link. See `lib/services/cal-bookings.ts` and
+`lib/cal-webhook.ts`.
+
 ## Connected accounts and readiness
 
 Each creator connects their own Stripe account. `connected_accounts` stores the
@@ -273,6 +288,16 @@ method preferences. Stripe pays out on the creator's own account.
 | POST | `/api/v1/credits/consume` |
 | GET | `/api/v1/transactions` |
 | GET / POST | `/api/v1/invites` |
+| GET / POST | `/api/v1/webhooks` |
+| PATCH / DELETE | `/api/v1/webhooks/:id` |
+| POST | `/api/v1/webhooks/:id/test` |
+| GET | `/api/v1/deliveries` |
+| POST | `/api/v1/deliveries/:id/retry` |
+
+Outgoing webhooks (`purchase.completed`, `credits.changed`) are signed with
+HMAC-SHA256 and delivered best-effort at the ledger change; see
+`docs/WEBHOOKS.md` for the payload, headers, verification snippet, and the
+retry contract.
 
 `/llms.txt` serves a curated plain-text index for agents (site summary, docs
 anchors, MCP scopes and tool list, REST routes, and the calling rules that are

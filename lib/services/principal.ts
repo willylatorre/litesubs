@@ -4,6 +4,16 @@ export const CREATOR_SCOPES = [
 	"customers:read",
 	"customers:write",
 	"billing:read",
+	/**
+	 * Configure outgoing webhooks and read/manage their delivery history.
+	 *
+	 * Deliberately separate from `plans:write`: registering an endpoint causes
+	 * customer ids, plan ids, and balances to be sent to a URL the caller names,
+	 * so it is a data-egress permission an OAuth client must be granted
+	 * explicitly. Machine API keys can never hold it (`requireScope` only ever
+	 * allows them `credits:consume`).
+	 */
+	"webhooks:manage",
 ] as const;
 export type Scope = (typeof CREATOR_SCOPES)[number] | "credits:consume";
 export type Principal = {

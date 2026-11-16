@@ -181,9 +181,10 @@ export function IntegrationDocs({ embedded = false }: { embedded?: boolean }) {
 						<strong>Creator operations:</strong> use OAuth through your MCP
 						client. The scopes are <code>plans:read</code>,{" "}
 						<code>plans:write</code>, <code>customers:read</code>,{" "}
-						<code>customers:write</code>, and <code>billing:read</code>. An
-						OAuth access token can also call REST endpoints with{" "}
-						<code>Authorization: Bearer &lt;token&gt;</code>.
+						<code>customers:write</code>, <code>billing:read</code>, and{" "}
+						<code>webhooks:manage</code>. An OAuth access token can also call
+						REST endpoints with <code>Authorization: Bearer &lt;token&gt;</code>
+						.
 					</p>
 					<p>
 						<strong>Machine consumption:</strong> generate an API token and send

@@ -11,6 +11,7 @@ import {
 } from "@/app/db/schema";
 import { usableBalance } from "./credits";
 import { ServiceError } from "./principal";
+import { emitWebhookEvent } from "./webhooks";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -79,7 +80,7 @@ export async function applyPaymentRefund(input: {
 	if (!Number.isSafeInteger(input.amount) || input.amount <= 0)
 		throw new ServiceError("INVALID_REFUND", "Refund amount is invalid", 400);
 
-	return db.transaction(async (tx) => {
+	const result = await db.transaction(async (tx) => {
 		const existing = await tx.query.refunds.findFirst({
 			where: and(
 				eq(refunds.stripeAccountId, input.stripeAccountId),
@@ -92,6 +93,7 @@ export async function applyPaymentRefund(input: {
 				status: "already_recorded" as const,
 				revokedCredits: existing.revokedCredits,
 				requiresAdjustment: false,
+				event: undefined,
 			};
 
 		const target = await resolveTarget(tx, input);
@@ -102,6 +104,7 @@ export async function applyPaymentRefund(input: {
 				status: "ignored" as const,
 				revokedCredits: 0,
 				requiresAdjustment: false,
+				event: undefined,
 			};
 		if (target.currency !== input.currency)
 			throw new ServiceError(
@@ -139,6 +142,7 @@ export async function applyPaymentRefund(input: {
 				status: "recorded" as const,
 				revokedCredits: 0,
 				requiresAdjustment: false,
+				event: undefined,
 			};
 		}
 
@@ -151,7 +155,7 @@ export async function applyPaymentRefund(input: {
 			);
 		const fullRefund = nextRefunded >= target.amountPaid;
 
-		const revoked = fullRefund
+		const revocation = fullRefund
 			? await revokeRemainingCredits(tx, {
 					target,
 					sourceTransactionId,
@@ -159,7 +163,8 @@ export async function applyPaymentRefund(input: {
 					fullRefund,
 					stripeRefundId: input.stripeRefundId,
 				})
-			: 0;
+			: { revoked: 0, transactionId: null, balance: 0, planId: null };
+		const revoked = revocation.revoked;
 
 		await tx.insert(refunds).values({
 			paymentId: target.kind === "payment" ? target.id : null,
@@ -196,8 +201,48 @@ export async function applyPaymentRefund(input: {
 			status: "recorded" as const,
 			revokedCredits: revoked,
 			requiresAdjustment: !fullRefund,
+			event:
+				revocation.transactionId && revoked > 0
+					? {
+							creatorId: target.creatorId,
+							customerId: target.userId,
+							planId: revocation.planId as string,
+							transactionId: revocation.transactionId,
+							amount: -revoked,
+							balance: revocation.balance,
+						}
+					: undefined,
 		};
 	});
+
+	// A refund revokes units, so it is a balance change a creator's systems can
+	// act on. Emitted after commit: a failed notification never unwinds money.
+	if (result.event)
+		await emitWebhookEvent({
+			creatorId: result.event.creatorId,
+			type: "credits.changed",
+			eventId: `evt_credits_${result.event.transactionId}`,
+			data: {
+				creatorId: result.event.creatorId,
+				customerId: result.event.customerId,
+				planId: result.event.planId,
+				transactionId: result.event.transactionId,
+				amount: result.event.amount,
+				balance: result.event.balance,
+				amountMoney: null,
+				currency: null,
+			},
+		}).catch((error) => {
+			console.error("Failed to emit refund webhook", {
+				type: error instanceof Error ? error.name : "UnknownError",
+			});
+		});
+
+	return {
+		status: result.status,
+		revokedCredits: result.revokedCredits,
+		requiresAdjustment: result.requiresAdjustment,
+	};
 }
 
 async function resolveTarget(
@@ -314,8 +359,14 @@ async function revokeRemainingCredits(
 		fullRefund: boolean;
 		stripeRefundId: string;
 	},
-) {
-	if (!input.sourceTransactionId) return 0;
+): Promise<{
+	revoked: number;
+	transactionId: string | null;
+	balance: number;
+	planId: string | null;
+}> {
+	if (!input.sourceTransactionId)
+		return { revoked: 0, transactionId: null, balance: 0, planId: null };
 	const grants = await tx
 		.select()
 		.from(creditGrants)
@@ -325,7 +376,8 @@ async function revokeRemainingCredits(
 		(sum, grant) => sum + Math.max(grant.remaining, 0),
 		0,
 	);
-	if (revocable === 0) return 0;
+	if (revocable === 0)
+		return { revoked: 0, transactionId: null, balance: 0, planId: null };
 
 	const enrollment = await tx.query.enrollments.findFirst({
 		where: and(
@@ -334,7 +386,8 @@ async function revokeRemainingCredits(
 		),
 		columns: { id: true, credits: true },
 	});
-	if (!enrollment) return 0;
+	if (!enrollment)
+		return { revoked: 0, transactionId: null, balance: 0, planId: null };
 	const balanceBefore = await usableBalance(tx, enrollment.id);
 
 	const [entry] = await tx
@@ -375,9 +428,15 @@ async function revokeRemainingCredits(
 	);
 	// The projection is derived from usable grants, so recompute rather than
 	// Recompute from usable grants so an expired unit is never subtracted twice.
+	const balance = await usableBalance(tx, enrollment.id);
 	await tx
 		.update(enrollments)
-		.set({ credits: await usableBalance(tx, enrollment.id) })
+		.set({ credits: balance })
 		.where(eq(enrollments.id, enrollment.id));
-	return revocable;
+	return {
+		revoked: revocable,
+		transactionId: entry.id,
+		balance,
+		planId: grants[0].planId,
+	};
 }

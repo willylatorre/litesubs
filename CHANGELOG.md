@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-01-01
 
 ### Added
+- **Outgoing webhooks**:
+  - Creators register HTTPS endpoints for `purchase.completed` and
+    `credits.changed`. Deliveries are signed with HMAC-SHA256 over the exact
+    body, carry a stable event id the receiver dedupes on, and are stored before
+    sending so a retry re-sends the same bytes rather than re-deriving history.
+  - Emitted after the ledger transaction commits, so a receiver failure can never
+    roll back a paid grant or a debit, and a replayed ledger event does not emit
+    twice.
+  - Configuration requires a dedicated `webhooks:manage` scope: it is a
+    data-egress permission, so it is not folded into `plans:write` and can never
+    be held by a machine API key. Signing secrets are returned once and never by
+    any read path.
+  - Failures are visible and retryable from the dashboard or
+    `POST /api/v1/deliveries/:id/retry`. No scheduler is involved.
 - **Error and not-found boundaries**:
   - Added `app/global-error.tsx`, `app/error.tsx`, `app/dashboard/error.tsx`, and
     `app/not-found.tsx`. Previously no boundary existed, so Next generated a bare

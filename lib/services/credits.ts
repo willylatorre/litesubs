@@ -13,6 +13,7 @@ import { usableBalance, usableGrantFilter } from "./credit-balance";
 import { resolveCustomer } from "./customers";
 import { resolvePublishedPlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
+import { emitWebhookEvent } from "./webhooks";
 
 export { usableBalance, usableBalances } from "./credit-balance";
 
@@ -423,7 +424,7 @@ export async function adjustCredits(
 		};
 	};
 
-	return db.transaction(async (tx) => {
+	const result = await db.transaction(async (tx) => {
 		const original = await replay(tx);
 		if (original) return original;
 
@@ -571,6 +572,34 @@ export async function adjustCredits(
 			allocations,
 		};
 	});
+
+	// Notify only a movement this call actually wrote. A replay, a dry run, and a
+	// rejected attempt all return their receipts without re-emitting, so a
+	// receiver never sees the same balance change twice.
+	if (result.transactionId && !result.dryRun && !result.replayed)
+		await emitWebhookEvent({
+			creatorId: principal.creatorId,
+			type: "credits.changed",
+			eventId: `evt_credits_${result.transactionId}`,
+			data: {
+				creatorId: principal.creatorId,
+				customerId: data.customerId,
+				planId: data.planId,
+				transactionId: result.transactionId,
+				amount: data.delta,
+				balance: result.after ?? 0,
+				amountMoney: null,
+				currency: null,
+			},
+		}).catch((error) => {
+			// The ledger change is committed. A notification failure is recorded on
+			// the delivery row and must not make a successful debit look failed.
+			console.error("Failed to emit credits webhook", {
+				type: error instanceof Error ? error.name : "UnknownError",
+			});
+		});
+
+	return result;
 }
 
 /**

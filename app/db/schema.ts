@@ -1093,6 +1093,149 @@ export const notifications = pgTable(
 	],
 );
 
+/** What a creator's endpoint knows about one delivery attempt so far. */
+export const webhookDeliveryStatusEnum = pgEnum("webhook_delivery_status", [
+	"pending",
+	"succeeded",
+	"failed",
+]);
+
+/**
+ * A creator's outgoing webhook endpoint.
+ *
+ * The signing secret cannot be hashed: an HMAC has to be computed with the key
+ * itself at delivery time, so it is stored as a secret that reads never select.
+ * Service responses expose the secret exactly once, at creation.
+ */
+export const webhookEndpoints = pgTable(
+	"webhook_endpoints",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		url: text("url").notNull(),
+		/** `whsec_…`; never returned by a read, only once when created. */
+		signingSecret: text("signing_secret").notNull(),
+		/** Event types this endpoint subscribed to. */
+		events: text("events").array().notNull(),
+		active: boolean("active").default(true).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("webhook_endpoint_creator_idx").on(table.creatorId),
+		// Two endpoints for one URL would deliver every event twice to the same
+		// receiver, which reads as a duplicate event rather than a config choice.
+		uniqueIndex("webhook_endpoint_creator_url_unique").on(
+			table.creatorId,
+			table.url,
+		),
+		check(
+			"webhook_endpoint_events_not_empty",
+			sql`cardinality(${table.events}) > 0`,
+		),
+	],
+);
+
+/**
+ * One event queued for one endpoint.
+ *
+ * `event_id` is the receiver's dedupe key and is stable across every retry, so
+ * re-sending can never look like a second business event. The payload is stored
+ * verbatim because a retry must send the same bytes: re-deriving a body from
+ * mutable tables would change history. `(endpoint, event_id)` being unique is
+ * what stops a duplicate emission from creating a second delivery.
+ */
+export const webhookDeliveries = pgTable(
+	"webhook_deliveries",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		endpointId: text("endpoint_id")
+			.notNull()
+			.references(() => webhookEndpoints.id, { onDelete: "cascade" }),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		/** `evt_…`; the stable id a receiver dedupes on. */
+		eventId: text("event_id").notNull(),
+		eventType: text("event_type").notNull(),
+		/** The exact JSON body, including the event id. */
+		payload: text("payload").notNull(),
+		status: webhookDeliveryStatusEnum("status").default("pending").notNull(),
+		attempts: integer("attempts").default(0).notNull(),
+		/** HTTP status of the most recent attempt, when one returned a response. */
+		responseStatus: integer("response_status"),
+		/** Redacted reason the most recent attempt failed. */
+		lastError: text("last_error"),
+		lastAttemptedAt: timestamp("last_attempted_at", { withTimezone: true }),
+		deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [
+		uniqueIndex("webhook_delivery_endpoint_event_unique").on(
+			table.endpointId,
+			table.eventId,
+		),
+		index("webhook_delivery_creator_idx").on(table.creatorId),
+		index("webhook_delivery_endpoint_idx").on(table.endpointId),
+		index("webhook_delivery_status_idx").on(table.status),
+		check(
+			"webhook_delivery_attempts_non_negative",
+			sql`${table.attempts} >= 0`,
+		),
+	],
+);
+
+/** Every HTTP attempt, including retries, so a delivery history is auditable. */
+export const webhookDeliveryAttempts = pgTable(
+	"webhook_delivery_attempts",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		deliveryId: text("delivery_id")
+			.notNull()
+			.references(() => webhookDeliveries.id, { onDelete: "cascade" }),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		/** 1-based, unique per delivery, so attempts cannot be rewritten. */
+		attemptNumber: integer("attempt_number").notNull(),
+		outcome: text("outcome").notNull(),
+		responseStatus: integer("response_status"),
+		error: text("error"),
+		durationMs: integer("duration_ms"),
+		attemptedAt: timestamp("attempted_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [
+		uniqueIndex("webhook_attempt_delivery_number_unique").on(
+			table.deliveryId,
+			table.attemptNumber,
+		),
+		index("webhook_attempt_creator_idx").on(table.creatorId),
+		check(
+			"webhook_attempt_outcome_valid",
+			sql`${table.outcome} in ('succeeded', 'failed')`,
+		),
+		check("webhook_attempt_number_positive", sql`${table.attemptNumber} > 0`),
+	],
+);
+
 // Relations
 
 export const plansRelations = relations(plans, ({ one, many }) => ({
@@ -1387,3 +1530,37 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
 		references: [user.id],
 	}),
 }));
+
+export const webhookEndpointsRelations = relations(
+	webhookEndpoints,
+	({ one, many }) => ({
+		creator: one(user, {
+			fields: [webhookEndpoints.creatorId],
+			references: [user.id],
+		}),
+		deliveries: many(webhookDeliveries),
+	}),
+);
+
+export const webhookDeliveriesRelations = relations(
+	webhookDeliveries,
+	({ one, many }) => ({
+		endpoint: one(webhookEndpoints, {
+			fields: [webhookDeliveries.endpointId],
+			references: [webhookEndpoints.id],
+		}),
+		// Named `attemptHistory`, not `attempts`: the delivery already has an
+		// `attempts` counter column, and a relation of the same name shadows it.
+		attemptHistory: many(webhookDeliveryAttempts),
+	}),
+);
+
+export const webhookDeliveryAttemptsRelations = relations(
+	webhookDeliveryAttempts,
+	({ one }) => ({
+		delivery: one(webhookDeliveries, {
+			fields: [webhookDeliveryAttempts.deliveryId],
+			references: [webhookDeliveries.id],
+		}),
+	}),
+);

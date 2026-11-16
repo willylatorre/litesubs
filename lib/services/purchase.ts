@@ -25,6 +25,7 @@ import { getPaymentReadiness } from "./connect";
 import { grantCredits, usableBalance } from "./credits";
 import { resolvePublishedPlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
+import { emitWebhookEvent } from "./webhooks";
 
 /**
  * The one purchase path. Self-service buying and creator-requested purchase
@@ -886,8 +887,21 @@ export async function fulfillPayment(input: {
 	checkoutSessionId: string;
 	amountPaid: number;
 	paymentIntentId?: string | null;
-}): Promise<{ status: "fulfilled" | "already_fulfilled"; credits: number }> {
-	return db.transaction(async (tx) => {
+}): Promise<{
+	status: "fulfilled" | "already_fulfilled";
+	credits: number;
+	/** Present only when this call actually granted; used to emit the webhook. */
+	event?: {
+		creatorId: string;
+		customerId: string;
+		planId: string;
+		transactionId: string;
+		balance: number;
+		amountMoney: number;
+		currency: string;
+	};
+}> {
+	const result = await db.transaction(async (tx) => {
 		const [claimed] = await tx
 			.update(payments)
 			.set({
@@ -964,8 +978,50 @@ export async function fulfillPayment(input: {
 			amount: claimed.credits,
 		});
 
-		return { status: "fulfilled" as const, credits: claimed.credits };
+		return {
+			status: "fulfilled" as const,
+			credits: claimed.credits,
+			event: {
+				creatorId: claimed.creatorId,
+				customerId: claimed.userId,
+				planId: claimed.planId,
+				transactionId: entry.id,
+				// The spendable balance after this grant, not the stale projection.
+				balance: await usableBalance(tx, enrollment.id),
+				amountMoney: input.amountPaid,
+				currency: claimed.currency,
+			},
+		};
 	});
+
+	// Emitted after commit: a failed notification must never undo a paid grant,
+	// and the transaction result is the only evidence the grant happened.
+	if (result.status === "fulfilled" && result.event) {
+		const { event, ...rest } = result;
+		await emitWebhookEvent({
+			creatorId: event.creatorId,
+			type: "purchase.completed",
+			eventId: `evt_purchase_${event.transactionId}`,
+			data: {
+				creatorId: event.creatorId,
+				customerId: event.customerId,
+				planId: event.planId,
+				transactionId: event.transactionId,
+				amount: rest.credits,
+				balance: event.balance,
+				amountMoney: event.amountMoney,
+				currency: event.currency,
+			},
+		}).catch((error) => {
+			// The grant is committed; notification failures are recorded on each
+			// delivery row and never propagate as a webhook-processing error.
+			console.error("Failed to emit purchase webhook", {
+				type: error instanceof Error ? error.name : "UnknownError",
+			});
+		});
+		return rest;
+	}
+	return result;
 }
 
 /** A Checkout that expired or failed grants nothing; it only records the fact. */

@@ -40,7 +40,8 @@ export function buildLlmsTxt(): string {
   session-oriented and DCR-only clients are not supported.
 - Client identification: CIMD with SSRF protections.
 - Auth: OAuth authorization code + PKCE. No cookie sessions on MCP.
-- Scopes: plans:read, plans:write, customers:read, customers:write, billing:read.
+- Scopes: plans:read, plans:write, customers:read, customers:write, billing:read,
+  webhooks:manage.
 - Creator tools: list_plans, get_plan, create_plan, update_plan, publish_plan,
   unpublish_plan, list_customers, get_customer, enroll_customer, grant_credits,
   list_transactions.

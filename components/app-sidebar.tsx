@@ -82,6 +82,11 @@ const data = {
 			url: "/dashboard/developers/api-keys",
 			icon: IconCode,
 		},
+		{
+			title: "Webhooks",
+			url: "/dashboard/developers/webhooks",
+			icon: IconPlug,
+		},
 	],
 	navSecondary: [
 		{
