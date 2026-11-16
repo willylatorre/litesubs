@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/table";
 import { useCalEventTypes, useUpdatePlanCalEventType } from "@/hooks/use-cal";
 import { InviteUserDialog } from "../creator/invite-user-dialog";
+import { PlanBookingLink } from "./plan-booking-link";
 
 export function PlanDetailsDialog({
 	planId,
@@ -186,6 +187,11 @@ export function PlanDetailsDialog({
 									; customers still buy it until you publish.
 								</p>
 							)}
+
+							<PlanBookingLink
+								planId={plan.id}
+								isRecurring={terms?.billingMode === "recurring"}
+							/>
 
 							<div className="flex flex-col gap-3 border-t pt-4">
 								<h3 className="font-semibold">Cal.com booking</h3>
