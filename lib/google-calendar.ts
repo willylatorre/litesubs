@@ -23,6 +23,8 @@ import { decryptToken, encryptToken } from "@/lib/google-calendar-crypto";
 export const GOOGLE_OAUTH_AUTH_URL =
 	"https://accounts.google.com/o/oauth2/v2/auth";
 export const GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
+/** Revoking here removes Litesubs from the creator's Google account entirely. */
+export const GOOGLE_OAUTH_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 export const GOOGLE_CALENDAR_API_BASE_URL =
 	"https://www.googleapis.com/calendar/v3";
 export const GOOGLE_CALENDAR_PROVIDER = "google";
@@ -898,6 +900,33 @@ export async function retryCalendarSync(
 /* -------------------------------------------------------------------------- */
 /* Choosing calendars                                                          */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Ask Google to revoke this grant.
+ *
+ * Without this, "Disconnect" only forgets the tokens locally: the app keeps its
+ * access and stays in the creator's Google account permissions, which is not what
+ * disconnecting means to a person.
+ *
+ * Best-effort by design. A network failure must not stop the local disconnect,
+ * because the creator asked for the connection to be gone and the tokens are
+ * erased regardless. Returns whether Google confirmed the revoke so the UI can be
+ * honest about it.
+ */
+export async function revokeGoogleToken(token: string): Promise<boolean> {
+	try {
+		const response = await googleFetch(GOOGLE_OAUTH_REVOKE_URL, {
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({ token }).toString(),
+		});
+		// Google answers 200 on success and 400 for an already-invalid token;
+		// the latter is not a failure of intent.
+		return response.ok || response.status === 400;
+	} catch {
+		return false;
+	}
+}
 
 export type CalendarSummary = {
 	id: string;

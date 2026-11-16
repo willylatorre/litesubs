@@ -10,9 +10,13 @@ import {
 	GOOGLE_CALENDAR_PROVIDER,
 	listCalendars,
 	retryCalendarSync,
+	revokeGoogleToken,
 	withCreatorAccessToken,
 } from "@/lib/google-calendar";
-import { isTokenEncryptionConfigured } from "@/lib/google-calendar-crypto";
+import {
+	decryptToken,
+	isTokenEncryptionConfigured,
+} from "@/lib/google-calendar-crypto";
 import { authenticatedAction } from "@/lib/safe-action";
 
 const INTEGRATIONS_PATH = "/dashboard/integrations";
@@ -106,11 +110,31 @@ export async function getGoogleCalendarStatus() {
  */
 export async function disconnectGoogleCalendar() {
 	return authenticatedAction(async (session) => {
+		const connection = await findActiveConnection(session.user.id);
+
+		// Revoke at Google BEFORE erasing, because the token is the only thing that
+		// can revoke it. Otherwise the app keeps access and remains in the
+		// creator's Google permissions, which is not what "Disconnect" promises.
+		let revoked = false;
+		if (connection) {
+			try {
+				revoked = await revokeGoogleToken(
+					decryptToken(connection.encryptedAccessToken),
+				);
+			} catch {
+				// An unreadable token cannot be revoked; the local disconnect still
+				// proceeds so the creator is never stuck connected.
+				revoked = false;
+			}
+		}
+
 		await db
 			.update(calendarConnections)
 			.set({
 				disconnectedAt: new Date(),
-				syncFailure: null,
+				syncFailure: revoked
+					? null
+					: "Disconnected here, but Google did not confirm the revoke. Remove Litesubs from your Google account permissions to be certain.",
 				encryptedAccessToken: "",
 				encryptedRefreshToken: null,
 				expiresAt: null,
@@ -124,7 +148,7 @@ export async function disconnectGoogleCalendar() {
 			);
 
 		revalidatePath(INTEGRATIONS_PATH);
-		return { success: true };
+		return { success: true, revoked };
 	});
 }
 
