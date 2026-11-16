@@ -92,10 +92,12 @@ function translate(error: unknown): StripeOfferError {
 function stripeClient() {
 	try {
 		return getStripe();
-	} catch {
+	} catch (error) {
+		// A missing key is a deployment mistake, not an outage.
+		logStripeFailure(error);
 		throw new StripeOfferError(
-			"STRIPE_UNAVAILABLE",
-			"Stripe is not configured",
+			"STRIPE_MISCONFIGURED",
+			OFFERS_MISCONFIGURED_MESSAGE,
 		);
 	}
 }

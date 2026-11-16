@@ -187,6 +187,51 @@ Separate Stripe's reported billing period from the period actually paid and gran
 - Recheck current merchant payment capability before sales. Disconnection or
   restricted capability stops new sales and produces a visible operational warning.
 
+## Operator setup: Stripe credentials
+
+The app can be deployed with Stripe misconfigured, and every payment action will
+fail. Both failure modes are permanent until an operator fixes them, so they are
+reported as "Stripe is not set up correctly for this app" rather than as an
+outage — retrying cannot help. Anything still saying "temporarily unavailable" is
+a real transport/5xx problem.
+
+Two independent things must be true.
+
+### 1. Connect is enabled on the platform account
+
+Connect is a platform-level signup, not a per-key setting. With it disabled,
+Stripe rejects account creation with `You can only create new accounts if you've
+signed up for Connect`. Enable it once at
+`https://dashboard.stripe.com/connect` for the account the secret key belongs to.
+A sandbox account can be in this state while still answering ordinary reads,
+which is why the key alone looks healthy.
+
+### 2. The key grants every scope the app uses
+
+A full secret key (`sk_…`) already has all of these. A **restricted key
+(`rk_…`) must be granted each one explicitly**, and Stripe reports a missing one
+as `403 more_permissions_required`:
+
+| Scope | Needed for |
+| --- | --- |
+| Accounts — write (`connected_account_write`) | Creating creator accounts (`accounts.create`) |
+| Account Links — write (`account_link_write`) | The hosted onboarding link (`account_links.create`) |
+| Accounts — read (`connected_account_read`) | Refresh/sync of readiness |
+
+Checkout, catalog, refunds, subscriptions, and billing portal scopes are also
+required, but are usually already present. The endpoint list the app calls lives
+in `lib/stripe-connect.ts`, `lib/stripe-offers.ts`, `lib/stripe-direct-charges.ts`,
+`lib/stripe-subscriptions.ts`, `lib/stripe-billing-portal.ts`, and
+`lib/stripe-refunds.ts`.
+
+Verify by opening **Payments → Set up payments**. Success means a Stripe-hosted
+onboarding page loads. A "not set up correctly" toast means one of the two items
+above is still missing; the server log records the Stripe error category and
+request id (`Stripe request failed { type, requestId }`) without echoing the key.
+
+Do not paper over a missing scope by widening the key silently, and never log or
+paste the key itself — Stripe's permission message includes a key fragment.
+
 ## Greenfield cleanup
 
 There are no customers to migrate. Build a clean schema baseline rather than

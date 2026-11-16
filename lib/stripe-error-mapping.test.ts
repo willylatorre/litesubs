@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import { translate } from "@/lib/stripe-connect";
+import { createConnectedAccount, translate } from "@/lib/stripe-connect";
 import { classifyStripeError } from "@/lib/stripe-error-classify";
 import { StripeOfferError } from "@/lib/stripe-offers";
 
@@ -105,6 +105,24 @@ describe("translate (Connect accounts)", () => {
 			}),
 		);
 		assert.doesNotMatch(error.message, /rk_live_/);
+	});
+
+	it("treats a missing API key as a setup problem, not an outage", async () => {
+		// getStripe() throws a plain Error when the env var is absent. That is a
+		// deployment mistake; calling it "unavailable" implies a retry will help.
+		const original = process.env.STRIPE_SECRET_KEY;
+		delete process.env.STRIPE_SECRET_KEY;
+		try {
+			await assert.rejects(
+				() => createConnectedAccount({ creatorId: "u1", email: "a@b.test" }),
+				(error: { code?: string }) => {
+					assert.equal(error.code, "STRIPE_MISCONFIGURED");
+					return true;
+				},
+			);
+		} finally {
+			if (original !== undefined) process.env.STRIPE_SECRET_KEY = original;
+		}
 	});
 });
 

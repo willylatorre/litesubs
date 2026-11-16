@@ -87,11 +87,11 @@ export function translate(error: unknown): StripeAccountError {
 function stripe() {
 	try {
 		return getStripe();
-	} catch {
-		throw new StripeAccountError(
-			"STRIPE_UNAVAILABLE",
-			"Stripe is not configured",
-		);
+	} catch (error) {
+		// A missing key is a deployment mistake, not an outage: retrying cannot
+		// fix it, and reporting it as unreachable hides the real cause.
+		logStripeFailure(error);
+		throw new StripeAccountError("STRIPE_MISCONFIGURED", MISCONFIGURED_MESSAGE);
 	}
 }
 
