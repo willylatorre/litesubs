@@ -36,13 +36,10 @@ export function useUpdatePlanCalEventType() {
 		mutationFn: ({
 			planId,
 			eventType,
-			creditsPerBooking,
 		}: {
 			planId: string;
 			eventType: CalEventType | null;
-			/** Omit or null to keep bookings free. */
-			creditsPerBooking?: number | null;
-		}) => setPlanCalEventType(planId, eventType, creditsPerBooking),
+		}) => setPlanCalEventType(planId, eventType),
 		onSuccess: () => {
 			toast.success("Cal.com event type updated");
 			queryClient.invalidateQueries({ queryKey: ["plans"] });

@@ -17,7 +17,6 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
 	Select,
@@ -48,7 +47,6 @@ export function PlanDetailsDialog({
 	const [open, setOpen] = useState(false);
 	const [inviteOpen, setInviteOpen] = useState(false);
 	const [selectedEventTypeId, setSelectedEventTypeId] = useState("none");
-	const [creditsPerBooking, setCreditsPerBooking] = useState("");
 	const { data: calEventTypesData, isLoading: calLoading } = useCalEventTypes();
 	const { mutate: updateEventType, isPending: isUpdating } =
 		useUpdatePlanCalEventType();
@@ -90,12 +88,7 @@ export function PlanDetailsDialog({
 	useEffect(() => {
 		const eventTypeId = plan?.integration?.calcomIntegration?.eventTypeId;
 		setSelectedEventTypeId(eventTypeId ? String(eventTypeId) : "none");
-		const price = plan?.integration?.calcomIntegration?.creditsPerBooking;
-		setCreditsPerBooking(price ? String(price) : "");
-	}, [
-		plan?.integration?.calcomIntegration?.eventTypeId,
-		plan?.integration?.calcomIntegration?.creditsPerBooking,
-	]);
+	}, [plan?.integration?.calcomIntegration?.eventTypeId]);
 
 	return (
 		<>
@@ -236,28 +229,6 @@ export function PlanDetailsDialog({
 											to attach an event type.
 										</p>
 									)}
-									<div className="grid gap-2">
-										<Label htmlFor="plan-cal-credits">
-											Credits per booking
-										</Label>
-										<Input
-											id="plan-cal-credits"
-											type="number"
-											min={1}
-											step={1}
-											inputMode="numeric"
-											placeholder="Leave empty to keep bookings free"
-											value={creditsPerBooking}
-											onChange={(event) =>
-												setCreditsPerBooking(event.target.value)
-											}
-										/>
-										<p className="text-xs text-muted-foreground">
-											Each confirmed booking spends this many credits from the
-											booker&apos;s balance, and a cancellation returns the
-											unspent ones. Empty means bookings spend nothing.
-										</p>
-									</div>
 									<Button
 										variant="outline"
 										size="sm"
@@ -268,24 +239,16 @@ export function PlanDetailsDialog({
 												!plan.integration?.calcomIntegration?.eventTypeId) ||
 											(!!selectedEventType &&
 												selectedEventType.id ===
-													plan.integration?.calcomIntegration?.eventTypeId &&
-												(creditsPerBooking
-													? Number(creditsPerBooking)
-													: null) ===
-													(plan.integration?.calcomIntegration
-														?.creditsPerBooking ?? null))
+													plan.integration?.calcomIntegration?.eventTypeId)
 										}
 										onClick={() =>
 											updateEventType({
 												planId: plan.id,
 												eventType: selectedEventType,
-												creditsPerBooking: creditsPerBooking
-													? Number(creditsPerBooking)
-													: null,
 											})
 										}
 									>
-										{isUpdating ? "Saving..." : "Save booking settings"}
+										{isUpdating ? "Saving..." : "Save event type"}
 									</Button>
 								</div>
 							</div>
