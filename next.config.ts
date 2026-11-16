@@ -3,6 +3,22 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
 	poweredByHeader: false,
 	compress: true,
+	headers() {
+		return [
+			{
+				source: "/:path*",
+				headers: [
+					{
+						// Browsers ignore this over plain HTTP, so it is safe in dev.
+						// Deliberately no includeSubDomains: PR preview hostnames have no
+						// certificate of their own, and HSTS would make them unreachable.
+						key: "Strict-Transport-Security",
+						value: "max-age=31536000",
+					},
+				],
+			},
+		];
+	},
 	experimental: {
 		serverActions: {
 			// A wildcard here (previously "*.app.github.dev") would let any
