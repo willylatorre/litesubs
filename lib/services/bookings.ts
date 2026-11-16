@@ -12,6 +12,7 @@ import {
 	plans,
 	planVersions,
 	transactions,
+	user,
 } from "@/app/db/schema";
 import {
 	generateSlots,
@@ -94,8 +95,33 @@ export async function getScheduleForCreator(
  * Creator identity is deliberately not exposed beyond the name: a public booking
  * page must not leak account ids or emails.
  */
-export async function resolvePublicSchedule(slug: string): Promise<{
-	schedule: PublicSchedule & { creatorId: string; creatorName: string };
+/**
+ * The public path segment for a creator.
+ *
+ * Derived from the account id so it needs no extra profile field and cannot be
+ * taken over by another creator. Twelve hex characters is short enough to share
+ * and long enough that guessing another creator's handle is impractical.
+ */
+export function creatorHandle(creatorId: string): string {
+	return creatorId.replace(/-/g, "").slice(0, 12);
+}
+
+/**
+ * Public schedules are addressed by `(creatorHandle, slug)`, not by slug alone.
+ *
+ * The unique constraint is per creator, so two creators may both own
+ * `office-hours`. Resolving by slug only would silently serve whichever row the
+ * database returned first, which is a data-leak and a wrong-debit risk at once.
+ */
+export async function resolvePublicSchedule(
+	creatorHandle: string,
+	slug: string,
+): Promise<{
+	schedule: PublicSchedule & {
+		creatorId: string;
+		creatorName: string;
+		creatorHandle: string;
+	};
 } | null> {
 	const [row] = await db
 		.select({
@@ -108,13 +134,25 @@ export async function resolvePublicSchedule(slug: string): Promise<{
 			creditsPerBooking: bookingSchedules.creditsPerBooking,
 			active: bookingSchedules.active,
 			creatorId: bookingSchedules.creatorId,
+			creatorName: user.name,
 			planId: plans.id,
 			planName: plans.name,
 			planDescription: plans.description,
 		})
 		.from(bookingSchedules)
+		.innerJoin(user, eq(user.id, bookingSchedules.creatorId))
 		.leftJoin(plans, eq(plans.id, bookingSchedules.planId))
-		.where(eq(bookingSchedules.slug, slug))
+		.where(
+			and(
+				eq(bookingSchedules.slug, slug),
+				// Matched on the handle, so a collision between two creators cannot
+				// resolve to the wrong schedule.
+				eq(
+					sql`substring(replace(${user.id}, '-', '') from 1 for 12)`,
+					creatorHandle,
+				),
+			),
+		)
 		.limit(1);
 	if (!row?.active) return null;
 
@@ -146,7 +184,8 @@ export async function resolvePublicSchedule(slug: string): Promise<{
 			creditsPerBooking: row.creditsPerBooking,
 			plan,
 			creatorId: row.creatorId,
-			creatorName: "",
+			creatorName: row.creatorName ?? "",
+			creatorHandle,
 		},
 	};
 }
@@ -204,8 +243,8 @@ async function slotInputForSchedule(
 }
 
 /** Open slots for a public schedule, computed on read. No cron, no caching. */
-export async function listOpenSlots(slug: string) {
-	const resolved = await resolvePublicSchedule(slug);
+export async function listOpenSlots(creatorHandle: string, slug: string) {
+	const resolved = await resolvePublicSchedule(creatorHandle, slug);
 	if (!resolved) return { schedule: null, slots: [] };
 	const input = await slotInputForSchedule(
 		resolved.schedule.id,

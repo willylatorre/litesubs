@@ -115,7 +115,7 @@ export function PlanBookingLink({
 						</span>
 					)}
 					<a
-						href={`/book/${linked.slug}`}
+						href={`/book/${linked.creatorHandle}/${linked.slug}`}
 						target="_blank"
 						rel="noreferrer"
 						className="underline underline-offset-4"

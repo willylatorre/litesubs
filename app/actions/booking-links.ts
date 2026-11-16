@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/app/db";
 import { bookingSchedules, bookings, plans } from "@/app/db/schema";
 import { authenticatedAction } from "@/lib/safe-action";
+import { creatorHandle } from "@/lib/services/bookings";
 import { ServiceError } from "@/lib/services/principal";
 
 /**
@@ -138,6 +139,7 @@ export async function listSchedulesForPlan(planId: string) {
 			success: true,
 			data: schedules.map((schedule) => ({
 				...schedule,
+				creatorHandle: creatorHandle(session.user.id),
 				linkedHere: schedule.planId === planId,
 			})),
 		};

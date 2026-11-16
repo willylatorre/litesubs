@@ -26,10 +26,10 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({
 	params,
 }: {
-	params: Promise<{ slug: string }>;
+	params: Promise<{ creator: string; slug: string }>;
 }): Promise<Metadata> {
-	const { slug } = await params;
-	const { schedule } = await listOpenSlots(slug);
+	const { creator, slug } = await params;
+	const { schedule } = await listOpenSlots(creator, slug);
 	if (!schedule) return { title: "Booking not available" };
 	return {
 		title: `${schedule.name} — book a time`,
@@ -42,10 +42,10 @@ export async function generateMetadata({
 export default async function BookPage({
 	params,
 }: {
-	params: Promise<{ slug: string }>;
+	params: Promise<{ creator: string; slug: string }>;
 }) {
-	const { slug } = await params;
-	const { schedule, slots } = await listOpenSlots(slug);
+	const { creator, slug } = await params;
+	const { schedule, slots } = await listOpenSlots(creator, slug);
 	if (!schedule) notFound();
 
 	const session = await auth.api.getSession({ headers: await headers() });

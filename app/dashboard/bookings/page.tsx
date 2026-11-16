@@ -90,7 +90,7 @@ export default async function BookingsPage() {
 									<div className="flex flex-wrap gap-2">
 										<Button asChild variant="outline" size="sm">
 											<a
-												href={`/book/${schedule.slug}`}
+												href={`/book/${schedule.creatorHandle}/${schedule.slug}`}
 												target="_blank"
 												rel="noreferrer"
 											>

@@ -28,6 +28,7 @@ import {
 import {
 	cancelBooking,
 	createBooking,
+	creatorHandle as handleFor,
 	listOpenSlots,
 } from "@/lib/services/bookings";
 import { usableBalance } from "@/lib/services/credits";
@@ -186,7 +187,7 @@ test("a booking spends its own plan's credits once and cancellation returns them
 	});
 
 	await t.test("the booked slot disappears from the open slots", async () => {
-		const open = await listOpenSlots(schedule.slug);
+		const open = await listOpenSlots(handleFor(creatorId), schedule.slug);
 		assert.ok(open.schedule);
 		assert.equal(
 			open.slots.some((slot) => slot.start === firstSlot.toISOString()),
@@ -388,6 +389,56 @@ test("a booking spends its own plan's credits once and cancellation returns them
 			{ code: "INVALID_INPUT" },
 		);
 	});
+
+	await t.test(
+		"a public slug resolves to the right creator when two share it",
+		async () => {
+			// Slugs are unique per creator, not globally, so two creators may both
+			// own /book/<handle>/office-hours. Resolving by slug alone would serve
+			// whichever row the database returned first: the wrong creator's
+			// schedule, and a debit against the wrong plan.
+			const otherA = crypto.randomUUID();
+			const otherB = crypto.randomUUID();
+			await db.insert(user).values([
+				{ id: otherA, name: "Ana", email: `${otherA}@example.test` },
+				{ id: otherB, name: "Bea", email: `${otherB}@example.test` },
+			]);
+			const [scheduleA] = await db
+				.insert(bookingSchedules)
+				.values({
+					creatorId: otherA,
+					name: "Ana office hours",
+					slug: "office-hours",
+					durationMinutes: 30,
+					timezone: "UTC",
+				})
+				.returning();
+			const [scheduleB] = await db
+				.insert(bookingSchedules)
+				.values({
+					creatorId: otherB,
+					name: "Bea office hours",
+					slug: "office-hours",
+					durationMinutes: 60,
+					timezone: "Europe/Madrid",
+				})
+				.returning();
+
+			const resolvedA = await listOpenSlots(handleFor(otherA), "office-hours");
+			const resolvedB = await listOpenSlots(handleFor(otherB), "office-hours");
+			assert.equal(resolvedA.schedule?.id, scheduleA.id);
+			assert.equal(resolvedA.schedule?.name, "Ana office hours");
+			assert.equal(resolvedB.schedule?.id, scheduleB.id);
+			assert.equal(resolvedB.schedule?.name, "Bea office hours");
+			assert.notEqual(handleFor(otherA), handleFor(otherB));
+
+			// An unknown handle resolves to nothing rather than the first match.
+			assert.equal(
+				(await listOpenSlots("000000000000", "office-hours")).schedule,
+				null,
+			);
+		},
+	);
 
 	for (const id of [creatorId, otherCreatorId, buyerId, outsiderId])
 		await db.delete(user).where(eq(user.id, id));
