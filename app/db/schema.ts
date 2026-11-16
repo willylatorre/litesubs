@@ -48,6 +48,12 @@ export const transactionStatusEnum = pgEnum(
 export const inviteStatusEnum = pgEnum("invite_status", INVITE_STATUSES);
 export const currencyEnum = pgEnum("currency", CURRENCIES);
 export const integrationTypeEnum = pgEnum("integration_type", ["calcom"]);
+export const bookingStatusEnum = pgEnum("booking_status", [
+	"confirmed",
+	"cancelled",
+	"completed",
+	"no_show",
+]);
 export const customerProvisioningEnum = pgEnum("customer_provisioning", [
 	"provisioning",
 	"ready",
@@ -814,6 +820,279 @@ export const calComAccounts = pgTable(
 	(table) => [unique("cal_com_accounts_user_id_unique").on(table.userId)],
 );
 
+/**
+ * A creator's bookable offer.
+ *
+ * Scheduling is native: no vendor sits between a booking and the credit it
+ * spends. The schedule owns when someone may book; the linked plan owns what a
+ * booking costs. `creditsPerBooking` is copied onto each booking at creation so a
+ * later price change never rewrites what an existing booking spent.
+ */
+export const bookingSchedules = pgTable(
+	"booking_schedules",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		/** Public path segment for /book/[slug]; unique per creator. */
+		slug: text("slug").notNull(),
+		description: text("description"),
+		/**
+		 * The plan a booking spends from. Nullable so a creator can build a
+		 * schedule before deciding what it costs; such a schedule is not bookable.
+		 */
+		planId: text("plan_id").references(() => plans.id, {
+			onDelete: "set null",
+		}),
+		/** Credits one booking spends. Null means free; the debit is skipped. */
+		creditsPerBooking: integer("credits_per_booking"),
+		durationMinutes: integer("duration_minutes").default(30).notNull(),
+		/** Padding that must stay free before and after a booking. */
+		bufferBeforeMinutes: integer("buffer_before_minutes").default(0).notNull(),
+		bufferAfterMinutes: integer("buffer_after_minutes").default(0).notNull(),
+		/** How far ahead a slot may be booked, in days. */
+		horizonDays: integer("horizon_days").default(60).notNull(),
+		/** The zone availability is expressed in; bookings themselves stay UTC. */
+		timezone: text("timezone").default("UTC").notNull(),
+		active: boolean("active").default(true).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		unique("booking_schedule_creator_slug_unique").on(
+			table.creatorId,
+			table.slug,
+		),
+		index("booking_schedule_creator_idx").on(table.creatorId),
+		index("booking_schedule_plan_idx").on(table.planId),
+		check(
+			"booking_schedule_credits_positive",
+			sql`${table.creditsPerBooking} is null or ${table.creditsPerBooking} > 0`,
+		),
+		check(
+			"booking_schedule_duration_positive",
+			sql`${table.durationMinutes} > 0`,
+		),
+		check(
+			"booking_schedule_buffers_non_negative",
+			sql`${table.bufferBeforeMinutes} >= 0 and ${table.bufferAfterMinutes} >= 0`,
+		),
+		check("booking_schedule_horizon_positive", sql`${table.horizonDays} > 0`),
+	],
+);
+
+/**
+ * A repeating weekly window when a creator accepts bookings.
+ *
+ * Stored as minutes-of-day in the schedule's timezone so a wall-clock window
+ * survives DST instead of drifting an hour twice a year. `weekday` follows
+ * JavaScript's 0=Sunday convention.
+ */
+export const bookingAvailability = pgTable(
+	"booking_availability",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		scheduleId: text("schedule_id")
+			.notNull()
+			.references(() => bookingSchedules.id, { onDelete: "cascade" }),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		/** 0 = Sunday .. 6 = Saturday. */
+		weekday: integer("weekday").notNull(),
+		startMinute: integer("start_minute").notNull(),
+		endMinute: integer("end_minute").notNull(),
+	},
+	(table) => [
+		index("booking_availability_schedule_idx").on(table.scheduleId),
+		check(
+			"booking_availability_weekday_range",
+			sql`${table.weekday} >= 0 and ${table.weekday} <= 6`,
+		),
+		check(
+			"booking_availability_minutes_range",
+			sql`${table.startMinute} >= 0 and ${table.endMinute} <= 1440`,
+		),
+		check(
+			"booking_availability_window_ordered",
+			sql`${table.endMinute} > ${table.startMinute}`,
+		),
+	],
+);
+
+/** A one-off blocked range: a holiday, travel, an appointment elsewhere. */
+export const bookingExceptions = pgTable(
+	"booking_exceptions",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		scheduleId: text("schedule_id")
+			.notNull()
+			.references(() => bookingSchedules.id, { onDelete: "cascade" }),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+		endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+		reason: text("reason"),
+	},
+	(table) => [
+		index("booking_exception_schedule_idx").on(table.scheduleId),
+		check(
+			"booking_exception_range_ordered",
+			sql`${table.endsAt} > ${table.startsAt}`,
+		),
+	],
+);
+
+/**
+ * One confirmed booking.
+ *
+ * Overlap is prevented by an exclusion constraint created in the migration
+ * (`btree_gist` on `(creator_id, tstzrange(starts_at, ends_at))`), because a
+ * read-then-insert check loses under concurrency and double-booking a creator is
+ * the one failure a customer notices immediately.
+ */
+export const bookings = pgTable(
+	"bookings",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		scheduleId: text("schedule_id")
+			.notNull()
+			.references(() => bookingSchedules.id, { onDelete: "restrict" }),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		planId: text("plan_id").references(() => plans.id, {
+			onDelete: "set null",
+		}),
+		startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+		endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+		status: bookingStatusEnum("status").default("confirmed").notNull(),
+		/** Units this booking actually spent, frozen at creation. */
+		chargedCredits: integer("charged_credits").default(0).notNull(),
+		/** The debit ledger row, so history relates credits to this booking. */
+		chargeTransactionId: text("charge_transaction_id"),
+		/** Set when the units were returned, so a repeat cancel cannot restore twice. */
+		refundTransactionId: text("refund_transaction_id"),
+		cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+		cancellationReason: text("cancellation_reason"),
+		/** Calendar event id on the creator's connected calendar, when synced. */
+		externalEventId: text("external_event_id"),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("booking_schedule_idx").on(table.scheduleId),
+		index("booking_creator_idx").on(table.creatorId),
+		index("booking_user_idx").on(table.userId),
+		index("booking_starts_idx").on(table.startsAt),
+		check("booking_range_ordered", sql`${table.endsAt} > ${table.startsAt}`),
+		check("booking_charged_non_negative", sql`${table.chargedCredits} >= 0`),
+	],
+);
+
+/**
+ * An optional external calendar.
+ *
+ * Tokens are encrypted at rest (AES-256-GCM) and are never selected into a
+ * client-facing shape. Sync is best-effort: its failure must never roll back a
+ * booking or a credit debit.
+ */
+export const calendarConnections = pgTable(
+	"calendar_connections",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		creatorId: text("creator_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		/** Only Google Calendar is supported in v1. */
+		provider: text("provider").default("google").notNull(),
+		externalAccountEmail: text("external_account_email"),
+		encryptedAccessToken: text("encrypted_access_token").notNull(),
+		encryptedRefreshToken: text("encrypted_refresh_token"),
+		expiresAt: timestamp("expires_at", { withTimezone: true }),
+		scope: text("scope"),
+		/** Free/busy is read for this calendar; events are created on it. */
+		calendarId: text("calendar_id").default("primary").notNull(),
+		lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+		/** Why the last sync failed, so the creator sees a retryable state. */
+		syncFailure: text("sync_failure"),
+		disconnectedAt: timestamp("disconnected_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		unique("calendar_connection_creator_provider_unique").on(
+			table.creatorId,
+			table.provider,
+		),
+		index("calendar_connection_creator_idx").on(table.creatorId),
+	],
+);
+
+/**
+ * An in-app notification.
+ *
+ * `dedupeKey` is the idempotency boundary: the same business event delivered
+ * twice must not produce two notifications. Nothing here sends email.
+ */
+export const notifications = pgTable(
+	"notifications",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		kind: text("kind").notNull(),
+		title: text("title").notNull(),
+		body: text("body"),
+		/** In-app route to open, never an external URL. */
+		href: text("href"),
+		dedupeKey: text("dedupe_key").notNull(),
+		readAt: timestamp("read_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [
+		unique("notification_user_dedupe_unique").on(table.userId, table.dedupeKey),
+		index("notification_user_idx").on(table.userId),
+		index("notification_created_idx").on(table.createdAt),
+	],
+);
+
 // Relations
 
 export const plansRelations = relations(plans, ({ one, many }) => ({
@@ -1035,3 +1314,76 @@ export const creatorCustomersRelations = relations(
 		}),
 	}),
 );
+
+export const bookingSchedulesRelations = relations(
+	bookingSchedules,
+	({ one, many }) => ({
+		creator: one(user, {
+			fields: [bookingSchedules.creatorId],
+			references: [user.id],
+		}),
+		plan: one(plans, {
+			fields: [bookingSchedules.planId],
+			references: [plans.id],
+		}),
+		availability: many(bookingAvailability),
+		exceptions: many(bookingExceptions),
+		bookings: many(bookings),
+	}),
+);
+
+export const bookingAvailabilityRelations = relations(
+	bookingAvailability,
+	({ one }) => ({
+		schedule: one(bookingSchedules, {
+			fields: [bookingAvailability.scheduleId],
+			references: [bookingSchedules.id],
+		}),
+	}),
+);
+
+export const bookingExceptionsRelations = relations(
+	bookingExceptions,
+	({ one }) => ({
+		schedule: one(bookingSchedules, {
+			fields: [bookingExceptions.scheduleId],
+			references: [bookingSchedules.id],
+		}),
+	}),
+);
+
+export const bookingsRelations = relations(bookings, ({ one }) => ({
+	schedule: one(bookingSchedules, {
+		fields: [bookings.scheduleId],
+		references: [bookingSchedules.id],
+	}),
+	creator: one(user, {
+		fields: [bookings.creatorId],
+		references: [user.id],
+	}),
+	customer: one(user, {
+		fields: [bookings.userId],
+		references: [user.id],
+	}),
+	plan: one(plans, {
+		fields: [bookings.planId],
+		references: [plans.id],
+	}),
+}));
+
+export const calendarConnectionsRelations = relations(
+	calendarConnections,
+	({ one }) => ({
+		creator: one(user, {
+			fields: [calendarConnections.creatorId],
+			references: [user.id],
+		}),
+	}),
+);
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+	user: one(user, {
+		fields: [notifications.userId],
+		references: [user.id],
+	}),
+}));

@@ -26,6 +26,7 @@ const MIGRATIONS = [
 	"drizzle/0010_s11_invites.sql",
 	"drizzle/0011_s12_refunds.sql",
 	"drizzle/0012_s15_disconnect.sql",
+	"drizzle/0013_bookings.sql",
 ];
 
 /** Create a fresh database, run `body`, then always drop it. */
@@ -656,5 +657,77 @@ test("0012 records a cancellation cause without relabelling existing subscriptio
 		await client.query(
 			"UPDATE subscriptions SET cancellation_cause = 'creator_disconnect' WHERE id = 's1'",
 		);
+	});
+});
+
+/**
+ * B1: double-booking is prevented in the database, not by a read-then-insert
+ * check. These cases pin the exclusion constraint's actual behaviour, because a
+ * constraint that silently allows an overlap would produce two confirmed
+ * bookings for one slot and charge two customers for it.
+ */
+test("0013 prevents overlapping confirmed bookings without reserving ended slots", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, 14));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES
+				('u1','Creator','c@example.test',true),
+				('u2','Buyer','b@example.test',true);
+			INSERT INTO booking_schedules(id,creator_id,name,slug)
+			VALUES ('s1','u1','Sessions','sessions');
+			INSERT INTO bookings(id,schedule_id,creator_id,user_id,starts_at,ends_at)
+			VALUES ('b1','s1','u1','u2','2026-12-01 10:00Z','2026-12-01 10:30Z');
+		`);
+
+		// The same slot cannot be booked twice.
+		await assert.rejects(
+			client.query(`
+				INSERT INTO bookings(id,schedule_id,creator_id,user_id,starts_at,ends_at)
+				VALUES ('b2','s1','u1','u2','2026-12-01 10:00Z','2026-12-01 10:30Z');
+			`),
+			/exclusion constraint/,
+		);
+		// A partial overlap is a conflict too.
+		await assert.rejects(
+			client.query(`
+				INSERT INTO bookings(id,schedule_id,creator_id,user_id,starts_at,ends_at)
+				VALUES ('b3','s1','u1','u2','2026-12-01 10:15Z','2026-12-01 10:45Z');
+			`),
+			/exclusion constraint/,
+		);
+		// Adjacent slots are not overlapping, so back-to-back bookings are allowed.
+		await client.query(`
+			INSERT INTO bookings(id,schedule_id,creator_id,user_id,starts_at,ends_at)
+			VALUES ('b4','s1','u1','u2','2026-12-01 10:30Z','2026-12-01 11:00Z');
+		`);
+		// A cancelled booking keeps its history but stops reserving the time.
+		await client.query(
+			"UPDATE bookings SET status = 'cancelled' WHERE id = 'b1'",
+		);
+		await client.query(`
+			INSERT INTO bookings(id,schedule_id,creator_id,user_id,starts_at,ends_at)
+			VALUES ('b5','s1','u1','u2','2026-12-01 10:00Z','2026-12-01 10:30Z');
+		`);
+
+		const { rows } = await client.query(
+			"select id, status from bookings order by id",
+		);
+		assert.deepEqual(rows, [
+			{ id: "b1", status: "cancelled" },
+			{ id: "b4", status: "confirmed" },
+			{ id: "b5", status: "confirmed" },
+		]);
+
+		// Two creators can book the same wall-clock time; the constraint is
+		// per creator, never global.
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES ('u3','Other','o@example.test',true);
+			INSERT INTO booking_schedules(id,creator_id,name,slug)
+			VALUES ('s2','u3','Other sessions','sessions');
+			INSERT INTO bookings(id,schedule_id,creator_id,user_id,starts_at,ends_at)
+			VALUES ('b6','s2','u3','u2','2026-12-01 10:00Z','2026-12-01 10:30Z');
+		`);
 	});
 });
