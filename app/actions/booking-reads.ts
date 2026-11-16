@@ -3,8 +3,8 @@
 import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { db } from "@/app/db";
 import { bookingSchedules, bookings, plans } from "@/app/db/schema";
+import { bookingPath } from "@/lib/public-links";
 import { authenticatedAction } from "@/lib/safe-action";
-import { creatorHandle } from "@/lib/services/bookings";
 
 /**
  * Booking read models for the two parties.
@@ -111,14 +111,11 @@ export async function listCreatorSchedules() {
 		for (const row of upcoming)
 			counts.set(row.scheduleId, (counts.get(row.scheduleId) ?? 0) + 1);
 
-		// The public path needs the creator segment, derived from the owner id so it
-		// matches what the booking page resolves against.
-		const handle = creatorHandle(session.user.id);
 		return {
 			success: true,
 			data: schedules.map((schedule) => ({
 				...schedule,
-				creatorHandle: handle,
+				creatorUsername: session.user.username ?? null,
 				upcomingCount: counts.get(schedule.id) ?? 0,
 			})),
 		};
@@ -168,10 +165,11 @@ export async function getBookLinkForPlan(planId: string) {
 			),
 			columns: { slug: true },
 		});
-		if (!schedule) return { success: true, data: null };
+		if (!schedule || !session.user.username)
+			return { success: true, data: null };
 		return {
 			success: true,
-			data: `/book/${creatorHandle(session.user.id)}/${schedule.slug}`,
+			data: bookingPath(session.user.username, schedule.slug),
 		};
 	}).then((result) => (result.success ? (result.data ?? null) : null));
 }

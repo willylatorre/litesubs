@@ -224,9 +224,12 @@ test-mode only until the live-release gate is complete. `comp` requires a reason
 and grants one-time plan credits; monthly complimentary enrollment is not
 supported. Re-comping an existing enrollment is rejected.
 
-Unknown emails receive an expiring invite and a URL to forward. Comp invites
-snapshot the credit grant/reason and grant once on claim, with a row lock and
-transactional enrollment+ledger insertion. An `invited` result is **not** a
+Unknown emails receive an expiring invite and a URL to forward. Invite URLs are
+`/invite/<username>/<token>` and creator-issued payment requests are
+`/pay/<username>/<token>`; the opaque token still owns claim/payment authority.
+Creators must choose a permanent username before these links can be issued. Comp
+invites snapshot the credit grant/reason and grant once on claim, with a row lock
+and transactional enrollment+ledger insertion. An `invited` result is **not** a
 completed enrollment and no email has been sent.
 
 Plan terms include `billingMode` (`one_time` or `recurring`) and, for recurring

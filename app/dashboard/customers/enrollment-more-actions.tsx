@@ -1,9 +1,10 @@
 "use client";
 
-import { Check, Copy, Link2, Loader2, MoreHorizontal } from "lucide-react";
+import { Link2, Loader2, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { createCustomerCheckout } from "@/app/actions/stripe";
+import { ShareLinkActions } from "@/components/share-link-actions";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -35,7 +36,6 @@ export function EnrollmentMoreActions({
 	const [isLoading, setIsLoading] = useState(false);
 	const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
 	const [dialogOpen, setDialogOpen] = useState(false);
-	const [copied, setCopied] = useState(false);
 
 	async function handleGenerate() {
 		setIsLoading(true);
@@ -52,14 +52,6 @@ export function EnrollmentMoreActions({
 		} finally {
 			setIsLoading(false);
 		}
-	}
-
-	async function handleCopy() {
-		if (!checkoutUrl) return;
-		await navigator.clipboard.writeText(checkoutUrl);
-		setCopied(true);
-		toast.success("Checkout link copied");
-		setTimeout(() => setCopied(false), 2000);
 	}
 
 	return (
@@ -88,13 +80,7 @@ export function EnrollmentMoreActions({
 				</DropdownMenuContent>
 			</DropdownMenu>
 
-			<Dialog
-				open={dialogOpen}
-				onOpenChange={(next) => {
-					setDialogOpen(next);
-					if (!next) setCopied(false);
-				}}
-			>
+			<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
 				<DialogContent className="sm:max-w-md">
 					<DialogHeader>
 						<DialogTitle>Checkout Link Created</DialogTitle>
@@ -103,31 +89,24 @@ export function EnrollmentMoreActions({
 							only after Stripe confirms payment.
 						</DialogDescription>
 					</DialogHeader>
-					<div className="flex items-center gap-2 rounded-md border bg-muted/50 p-3">
-						<input
-							type="text"
-							value={checkoutUrl || ""}
-							readOnly
-							className="flex-1 bg-transparent text-sm font-mono truncate outline-none"
-						/>
-						<Button
-							variant="outline"
-							size="sm"
-							className="shrink-0"
-							onClick={handleCopy}
-						>
-							{copied ? (
-								<>
-									<Check className="h-4 w-4 text-green-600" />
-									Copied
-								</>
-							) : (
-								<>
-									<Copy className="h-4 w-4" />
-									Copy
-								</>
-							)}
-						</Button>
+					<div className="flex flex-col gap-3">
+						<div className="rounded-md border bg-muted/50 p-3">
+							<input
+								type="text"
+								value={checkoutUrl || ""}
+								readOnly
+								aria-label="Checkout link"
+								className="w-full bg-transparent text-sm font-mono truncate outline-none"
+							/>
+						</div>
+						{/* A Stripe URL, not an app URL: share it exactly as issued. */}
+						{checkoutUrl && (
+							<ShareLinkActions
+								url={checkoutUrl}
+								title="Complete your purchase"
+								text={`Checkout for ${customerEmail}`}
+							/>
+						)}
 					</div>
 				</DialogContent>
 			</Dialog>

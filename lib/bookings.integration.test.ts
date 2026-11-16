@@ -28,7 +28,6 @@ import {
 import {
 	cancelBooking,
 	createBooking,
-	creatorHandle as handleFor,
 	listOpenSlots,
 } from "@/lib/services/bookings";
 import { usableBalance } from "@/lib/services/credits";
@@ -78,7 +77,12 @@ test("a booking spends its own plan's credits once and cancellation returns them
 	const outsiderId = crypto.randomUUID();
 
 	await db.insert(user).values([
-		{ id: creatorId, name: "Creator", email: `${creatorId}@example.test` },
+		{
+			id: creatorId,
+			name: "Creator",
+			username: "creator-main",
+			email: `${creatorId}@example.test`,
+		},
 		{
 			id: otherCreatorId,
 			name: "Other creator",
@@ -187,7 +191,7 @@ test("a booking spends its own plan's credits once and cancellation returns them
 	});
 
 	await t.test("the booked slot disappears from the open slots", async () => {
-		const open = await listOpenSlots(handleFor(creatorId), schedule.slug);
+		const open = await listOpenSlots("creator-main", schedule.slug);
 		assert.ok(open.schedule);
 		assert.equal(
 			open.slots.some((slot) => slot.start === firstSlot.toISOString()),
@@ -394,14 +398,26 @@ test("a booking spends its own plan's credits once and cancellation returns them
 		"a public slug resolves to the right creator when two share it",
 		async () => {
 			// Slugs are unique per creator, not globally, so two creators may both
-			// own /book/<handle>/office-hours. Resolving by slug alone would serve
+			// own /book/<username>/office-hours. Resolving by slug alone would serve
 			// whichever row the database returned first: the wrong creator's
 			// schedule, and a debit against the wrong plan.
-			const otherA = crypto.randomUUID();
+			// Better Auth ids are not necessarily UUIDs; legacy handles can contain
+			// letters outside hex and must keep resolving too.
+			const otherA = "legacyA1234567890123456789012345678";
 			const otherB = crypto.randomUUID();
 			await db.insert(user).values([
-				{ id: otherA, name: "Ana", email: `${otherA}@example.test` },
-				{ id: otherB, name: "Bea", email: `${otherB}@example.test` },
+				{
+					id: otherA,
+					name: "Ana",
+					username: "ana",
+					email: `${otherA}@example.test`,
+				},
+				{
+					id: otherB,
+					name: "Bea",
+					username: "bea",
+					email: `${otherB}@example.test`,
+				},
 			]);
 			const [scheduleA] = await db
 				.insert(bookingSchedules)
@@ -424,19 +440,30 @@ test("a booking spends its own plan's credits once and cancellation returns them
 				})
 				.returning();
 
-			const resolvedA = await listOpenSlots(handleFor(otherA), "office-hours");
-			const resolvedB = await listOpenSlots(handleFor(otherB), "office-hours");
+			const resolvedA = await listOpenSlots("ana", "office-hours");
+			const resolvedB = await listOpenSlots("bea", "office-hours");
 			assert.equal(resolvedA.schedule?.id, scheduleA.id);
 			assert.equal(resolvedA.schedule?.name, "Ana office hours");
+			assert.equal(resolvedA.schedule?.creatorUsername, "ana");
 			assert.equal(resolvedB.schedule?.id, scheduleB.id);
 			assert.equal(resolvedB.schedule?.name, "Bea office hours");
-			assert.notEqual(handleFor(otherA), handleFor(otherB));
+			assert.equal(resolvedB.schedule?.creatorUsername, "bea");
+
+			// Links issued before usernames existed still resolve to their owner;
+			// the page redirects this response to /book/ana/office-hours.
+			const legacyHandle = otherA.replaceAll("-", "").slice(0, 12);
+			const legacy = await listOpenSlots(legacyHandle, "office-hours");
+			assert.equal(legacy.schedule?.id, scheduleA.id);
+			assert.equal(legacy.schedule?.creatorUsername, "ana");
 
 			// An unknown handle resolves to nothing rather than the first match.
 			assert.equal(
 				(await listOpenSlots("000000000000", "office-hours")).schedule,
 				null,
 			);
+
+			await db.delete(user).where(eq(user.id, otherA));
+			await db.delete(user).where(eq(user.id, otherB));
 		},
 	);
 

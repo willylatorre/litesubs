@@ -17,6 +17,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { bookingPath } from "@/lib/public-links";
 
 /**
  * Native schedule link for a plan (B3).
@@ -114,14 +115,23 @@ export function PlanBookingLink({
 							{linked.creditsPerBooking === 1 ? "" : "s"} per booking
 						</span>
 					)}
-					<a
-						href={`/book/${linked.creatorHandle}/${linked.slug}`}
-						target="_blank"
-						rel="noreferrer"
-						className="underline underline-offset-4"
-					>
-						Open booking page
-					</a>
+					{linked.creatorUsername ? (
+						<a
+							href={bookingPath(linked.creatorUsername, linked.slug)}
+							target="_blank"
+							rel="noreferrer"
+							className="underline underline-offset-4"
+						>
+							Open booking page
+						</a>
+					) : (
+						<a
+							href="/dashboard/account"
+							className="underline underline-offset-4"
+						>
+							Choose a username to share this schedule
+						</a>
+					)}
 					<Button
 						variant="ghost"
 						size="sm"

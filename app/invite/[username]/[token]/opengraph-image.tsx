@@ -125,7 +125,7 @@ export default async function Image({
 					>
 						{creatorInitial}
 					</div>
-					<div style={{ fontSize: 24, color: "#666" }}>
+					<div style={{ display: "flex", gap: 4, fontSize: 24, color: "#666" }}>
 						Invite from{" "}
 						<span style={{ color: "#111", fontWeight: "bold" }}>
 							{invite.creator.name}
@@ -162,7 +162,14 @@ export default async function Image({
 								marginTop: 20,
 							}}
 						>
-							<div style={{ fontSize: 32, fontWeight: "bold", color: "#111" }}>
+							<div
+								style={{
+									display: "flex",
+									fontSize: 32,
+									fontWeight: "bold",
+									color: "#111",
+								}}
+							>
 								{published.credits} Credits
 							</div>
 							<div

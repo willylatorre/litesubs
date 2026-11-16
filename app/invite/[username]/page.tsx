@@ -3,7 +3,7 @@ import { Lock } from "lucide-react";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import { db } from "@/app/db";
 import { invites } from "@/app/db/schema";
@@ -19,10 +19,11 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
+import { invitePath } from "@/lib/public-links";
 import { AcceptInviteButton } from "./accept-invite-button";
 
 // 1. Data Access Layer & Caching
-const getInvite = cache(async (token: string) => {
+export const getInvite = cache(async (token: string) => {
 	return db.query.invites.findFirst({
 		where: eq(invites.token, token),
 		with: {
@@ -39,9 +40,10 @@ const getInvite = cache(async (token: string) => {
 export async function generateMetadata({
 	params,
 }: {
-	params: Promise<{ token: string }>;
+	params: Promise<{ username: string }>;
 }): Promise<Metadata> {
-	const { token } = await params;
+	// One-segment legacy URLs carry the token in this segment.
+	const { username: token } = await params;
 	const invite = await getInvite(token);
 
 	if (!invite) {
@@ -112,14 +114,16 @@ function InviteExpiredState() {
 function GenericInviteCard({
 	creatorName,
 	token,
+	path,
 	session,
 }: {
 	creatorName: string;
 	token: string;
-	session: any;
+	path: string;
+	session: Awaited<ReturnType<typeof auth.api.getSession>>;
 }) {
-	const loginUrl = `/auth/sign-in?callbackURL=/invite/${token}`;
-	const signUpUrl = `/auth/sign-up?callbackURL=/invite/${token}`;
+	const loginUrl = `/auth/sign-in?callbackURL=${encodeURIComponent(path)}`;
+	const signUpUrl = `/auth/sign-up?callbackURL=${encodeURIComponent(path)}`;
 
 	return (
 		<Card className="shadow-xl border-0">
@@ -160,10 +164,14 @@ function GenericInviteCard({
 // 3. Main Component with Parallel Fetching
 export default async function InvitePage({
 	params,
+	canonicalized = false,
 }: {
-	params: Promise<{ token: string }>;
+	params: Promise<{ username: string }>;
+	/** Internal: the username parent already validated the canonical path. */
+	canonicalized?: boolean;
 }) {
-	const { token } = await params;
+	// One-segment legacy URLs carry the token in this segment.
+	const { username: token } = await params;
 
 	// Parallel fetching: Invite data and User Session
 	const [invite, session] = await Promise.all([
@@ -176,6 +184,12 @@ export default async function InvitePage({
 	if (!invite) {
 		return notFound();
 	}
+	if (!canonicalized && invite.creator.username) {
+		redirect(invitePath(invite.creator.username, token));
+	}
+	const path = invite.creator.username
+		? invitePath(invite.creator.username, token)
+		: `/invite/${token}`;
 
 	// Logic for "Accepted" or "Expired" states
 	if (invite.status === "accepted") {
@@ -249,7 +263,7 @@ export default async function InvitePage({
 						productId={invite.plan.id}
 						creditsSuffix={complimentary ? " credits on claim" : " credits"}
 						session={session}
-						loginUrl={`/auth/sign-up?callbackURL=/invite/${token}`}
+						loginUrl={`/auth/sign-up?callbackURL=${encodeURIComponent(path)}`}
 						action={
 							<div className="flex flex-col gap-2">
 								{complimentary && invite.compExpiresAt && (
@@ -276,6 +290,7 @@ export default async function InvitePage({
 					<GenericInviteCard
 						creatorName={invite.creator.name}
 						token={token}
+						path={path}
 						session={session}
 					/>
 				)}

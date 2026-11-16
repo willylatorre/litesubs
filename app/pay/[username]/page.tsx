@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { db } from "@/app/db";
 import { plans } from "@/app/db/schema";
 import { Badge } from "@/components/ui/badge";
@@ -17,8 +18,10 @@ import {
 } from "@/components/ui/card";
 import { appUrl } from "@/lib/app-url";
 import { auth } from "@/lib/auth";
+import { paymentPath } from "@/lib/public-links";
 import { resolvePublishedPlan } from "@/lib/services/plans";
 import { sessionPrincipal } from "@/lib/services/principal";
+import { getCreatorUsername } from "@/lib/services/public-links";
 import {
 	redeemCheckoutToken,
 	startPurchase,
@@ -28,6 +31,12 @@ import {
 function hashToken(token: string) {
 	return createHash("sha256").update(token).digest("hex");
 }
+
+export const getPendingCheckout = cache(async (token: string) => {
+	return db.query.checkoutTokens.findFirst({
+		where: (table, { eq: equals }) => equals(table.tokenHash, hashToken(token)),
+	});
+});
 
 function formatMoney(amount: number, currency: string) {
 	return new Intl.NumberFormat("en-US", {
@@ -39,25 +48,40 @@ function formatMoney(amount: number, currency: string) {
 /**
  * Redeem a creator's single-use purchase request.
  *
- * Sign-in happens first: the token is bound to the intended customer, so a
- * forwarded link cannot be used to buy against someone else's account. The
- * token is consumed only when the buyer actually continues to Checkout.
+ * The token is bound to the intended signed-in customer, so a forwarded link
+ * cannot be used to buy against someone else's account. It is consumed only
+ * when the buyer actually continues to Checkout.
  */
 export default async function PayPage({
 	params,
+	canonicalized = false,
+	canonicalPath,
 }: {
-	params: Promise<{ token: string }>;
+	params: Promise<{ username: string }>;
+	/** Internal: the username parent already validated the canonical path. */
+	canonicalized?: boolean;
+	canonicalPath?: string;
 }) {
-	const { token } = await params;
-	const session = await auth.api.getSession({ headers: await headers() });
-	if (!session?.user) {
-		redirect(`/auth/sign-in?redirectTo=${encodeURIComponent(`/pay/${token}`)}`);
-	}
+	// One-segment legacy URLs carry the token in this segment.
+	const { username: token } = await params;
+	const requestedPath = canonicalPath ?? `/pay/${token}`;
 
 	// Read without consuming so a page refresh does not burn the link.
-	const pending = await db.query.checkoutTokens.findFirst({
-		where: (table, { eq: equals }) => equals(table.tokenHash, hashToken(token)),
-	});
+	const pending = await getPendingCheckout(token);
+	const creatorUsername = pending
+		? await getCreatorUsername(pending.creatorId)
+		: null;
+	if (!canonicalized && creatorUsername) {
+		redirect(paymentPath(creatorUsername, token));
+	}
+	const path = creatorUsername
+		? paymentPath(creatorUsername, token)
+		: requestedPath;
+	const session = await auth.api.getSession({ headers: await headers() });
+	if (!session?.user) {
+		redirect(`/auth/sign-in?redirectTo=${encodeURIComponent(path)}`);
+	}
+
 	const invalid =
 		!pending ||
 		pending.userId !== session.user.id ||
@@ -121,7 +145,7 @@ export default async function PayPage({
 			if (purchase.url) redirect(purchase.url);
 		} catch (error) {
 			redirect(
-				`${appUrl(`/pay/${token}`)}?error=${encodeURIComponent(
+				`${appUrl(path)}?error=${encodeURIComponent(
 					error instanceof Error ? error.message : "Checkout failed",
 				)}`,
 			);

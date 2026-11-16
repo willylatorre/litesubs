@@ -1,6 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { getCreatorCustomers } from "@/app/actions/customers";
+import { InviteCustomerDialog } from "@/components/invite-customer-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import {
 import { isSampleCustomerId } from "@/lib/sample-data";
 import { CustomerDetailsDialog } from "./customer-details-dialog";
 import { DecreaseCreditButton } from "./decrease-credit-button";
+import { PendingInvites } from "./pending-invites";
 
 export const dynamic = "force-dynamic";
 
@@ -23,13 +25,14 @@ export default async function CustomersPage() {
 
 	return (
 		<div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
-			<div className="flex items-center justify-between">
+			<div className="flex flex-wrap items-start justify-between gap-3">
 				<div>
 					<h1 className="text-2xl font-bold tracking-tight">Customers</h1>
 					<p className="text-muted-foreground text-sm">
 						View and manage your customers and their credit balances.
 					</p>
 				</div>
+				<InviteCustomerDialog triggerLabel="Add customer" />
 			</div>
 
 			<div className="rounded-md border bg-card">
@@ -48,12 +51,25 @@ export default async function CustomersPage() {
 							<TableRow>
 								<TableCell colSpan={5} className="h-32 text-center">
 									<div className="flex flex-col items-center gap-2">
-										<p className="text-muted-foreground">
-											No customers yet. After you create a plan, invite a
-											customer or share a checkout link and their balance
-											appears here.
+										<p className="text-muted-foreground max-w-md">
+											No customers yet. Use{" "}
+											<span className="font-medium text-foreground">
+												Add customer
+											</span>{" "}
+											to create a link for someone by email, or leave the email
+											blank for a link anyone can use.
 										</p>
 										<p className="text-sm text-muted-foreground">
+											Their balance appears here once they accept.{" "}
+											<Link
+												href="/dashboard/plans"
+												className="underline underline-offset-4"
+											>
+												Publish a plan
+											</Link>{" "}
+											first so the link can sell one.
+										</p>
+										<p className="text-xs text-muted-foreground">
 											New here?{" "}
 											<Link
 												href="/dashboard/creator"
@@ -158,6 +174,10 @@ export default async function CustomersPage() {
 					</TableBody>
 				</Table>
 			</div>
+
+			{/* Invited people are not customers yet, so they cannot live in the
+			    table above. Showing them here is what makes an invite feel sent. */}
+			<PendingInvites />
 		</div>
 	);
 }

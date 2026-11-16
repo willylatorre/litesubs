@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import {
 	Card,
@@ -10,6 +10,7 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
+import { bookingPath } from "@/lib/public-links";
 import { listOpenSlots } from "@/lib/services/bookings";
 import { BookingSlotPicker } from "./slot-picker";
 
@@ -47,6 +48,9 @@ export default async function BookPage({
 	const { creator, slug } = await params;
 	const { schedule, slots } = await listOpenSlots(creator, slug);
 	if (!schedule) notFound();
+	if (schedule.creatorUsername && creator !== schedule.creatorUsername) {
+		redirect(bookingPath(schedule.creatorUsername, slug));
+	}
 
 	const session = await auth.api.getSession({ headers: await headers() });
 

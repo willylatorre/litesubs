@@ -7,8 +7,10 @@ import { db } from "@/app/db";
 import { plans, user } from "@/app/db/schema";
 import { appUrl } from "@/lib/app-url";
 import { auth } from "@/lib/auth";
+import { paymentPath } from "@/lib/public-links";
 import { resolvePublishedPlan } from "@/lib/services/plans";
 import { sessionPrincipal } from "@/lib/services/principal";
+import { requireCreatorUsername } from "@/lib/services/public-links";
 import {
 	issueCheckoutToken,
 	startPurchase,
@@ -79,8 +81,10 @@ export async function createCustomerCheckout(
 		};
 
 	let resolved: Awaited<ReturnType<typeof resolvePublishedPlan>>;
+	let username: string;
 	try {
 		resolved = await resolvePublishedPlan(session.user.id, planId);
+		username = await requireCreatorUsername(session.user.id);
 	} catch (error) {
 		return {
 			success: false,
@@ -95,7 +99,7 @@ export async function createCustomerCheckout(
 	});
 	return {
 		success: true,
-		url: appUrl(`/pay/${token}`),
+		url: appUrl(paymentPath(username, token)),
 		credits: resolved.terms.credits,
 		message: "No email was sent. Forward this single-use link to the customer.",
 	};

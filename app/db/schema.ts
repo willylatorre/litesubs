@@ -761,7 +761,7 @@ export const bookingSchedules = pgTable(
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
 		name: text("name").notNull(),
-		/** Public path segment for /book/[slug]; unique per creator. */
+		/** Public path segment after /book/[username]/; unique per creator. */
 		slug: text("slug").notNull(),
 		description: text("description"),
 		/**

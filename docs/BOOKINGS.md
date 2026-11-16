@@ -17,9 +17,8 @@ schedule to one of their plans, and a booking spends credits through the same
 credit service every other debit uses. Google Calendar is an optional integration,
 never a requirement.
 
-The Cal.com connection in `app/dashboard/integrations` is left in place. Native
-schedules are additive: a creator may use either, and the vendor path is no longer
-the only option.
+Cal.com and Calendly have been removed. Native schedules are the only booking
+path; Google Calendar remains an optional busy/free and event-sync integration.
 
 ## Non-negotiables
 
@@ -77,10 +76,15 @@ creator's schedule and see the credits it spent.
 
 #### What to build
 
-A public `/book/[slug]` page that lists open slots for a schedule and books one.
-Booking validates the slot against availability, the schedule's horizon and
-buffers, and the customer's enrollment, then debits `creditsPerBooking` through
-`adjustCredits`. Cancelling restores exactly what the booking spent.
+A public `/book/[username]/[slug]` page lists open slots for a schedule and books
+one. The username is the creator's permanent Better Auth username; slugs are only
+unique per creator, so the creator segment is required. Booking validates the
+slot against availability, the schedule's horizon and buffers, and the customer's
+enrollment, then debits `creditsPerBooking` through `adjustCredits`. Cancelling
+restores exactly what the booking spent. Legacy twelve-character account links
+still resolve and redirect to the username URL once the creator has chosen one.
+That length is reserved for legacy handles, so new usernames cannot be ambiguous
+with an old link.
 
 #### Acceptance criteria
 

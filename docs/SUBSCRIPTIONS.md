@@ -579,7 +579,8 @@ the charge belongs to the creator and the application fee belongs to Litesubs.
 
 **Implemented:** yes — see `lib/services/purchase.ts`,
 `lib/stripe-direct-charges.ts`, `drizzle/0005_s05_purchase.sql`, and
-`app/pay/[token]/page.tsx`.
+`app/pay/[username]/page.tsx` (legacy token URL) and
+`app/pay/[username]/[token]/page.tsx` (canonical username URL).
 
 #### Blocked by
 
@@ -917,7 +918,7 @@ subscriptions or hidden free recurring plans.
 #### Implementation notes and relevant files
 
 Start with `lib/services/enroll.ts`, `lib/services/credits.ts`,
-`app/actions/invites.ts`, `app/invite/[token]/*`,
+`app/actions/invites.ts`, `app/invite/[username]/*`,
 `app/dashboard/creator/invite-user-dialog.tsx`,
 `app/dashboard/customers/manage-enrollment-credits-dialog.tsx`, and enrollment
 REST/MCP contracts. Replace mutable-plan credit reads with snapshotted/versioned

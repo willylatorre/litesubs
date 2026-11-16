@@ -8,6 +8,7 @@ import { AuthProvider } from "@/components/auth/auth-provider";
 import { apiKeyPlugin } from "@/lib/auth/api-key-plugin";
 import { dashboardBasePaths } from "@/lib/auth/base-paths";
 import { twoFactorPlugin } from "@/lib/auth/two-factor-plugin";
+import { authUsernamePlugin } from "@/lib/auth/username-plugin";
 import { authClient } from "@/lib/auth-client";
 
 /**
@@ -26,7 +27,7 @@ export function AuthProviders({ children }: { children: ReactNode }) {
 			navigate={({ to, replace }) =>
 				replace ? router.replace(to) : router.push(to)
 			}
-			plugins={[apiKeyPlugin(), twoFactorPlugin()]}
+			plugins={[apiKeyPlugin(), twoFactorPlugin(), authUsernamePlugin()]}
 			redirectTo="/dashboard"
 			socialProviders={["google"]}
 		>

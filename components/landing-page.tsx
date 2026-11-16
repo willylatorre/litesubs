@@ -13,6 +13,7 @@ import {
 import { PlanCard } from "@/components/plan-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { invitePath } from "@/lib/public-links";
 import { cn } from "@/lib/utils";
 import { CustomersTableDemo } from "./landing/customers-table-demo";
 
@@ -32,7 +33,9 @@ export function LandingPage() {
 	};
 
 	const handleCopyLink = () => {
-		navigator.clipboard.writeText(`https://litesubs.com/invite/demo-token`);
+		navigator.clipboard.writeText(
+			`https://litesubs.com${invitePath("demo", "demo-token")}`,
+		);
 		toast.success("Link copied to clipboard");
 	};
 
@@ -258,9 +261,10 @@ export function LandingPage() {
 									<div className="flex gap-2">
 										<Input
 											readOnly
-											value={`https://litesubs.com/invite/${btoa(
-												JSON.stringify(demoPlan),
-											).substring(0, 12)}...`}
+											value={`https://litesubs.com${invitePath(
+												"demo",
+												`${btoa(JSON.stringify(demoPlan)).substring(0, 12)}...`,
+											)}`}
 											className="font-mono text-xs"
 										/>
 										<Button

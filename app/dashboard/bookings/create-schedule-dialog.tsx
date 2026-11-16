@@ -1,7 +1,8 @@
 "use client";
 
 import { IconPlus } from "@tabler/icons-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getGoogleScheduleTimeZone } from "@/app/actions/google-calendar";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -22,18 +23,46 @@ import {
 	timeZoneSuggestions,
 } from "@/lib/booking-time";
 
+function detectedTimeZone() {
+	const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+	return isValidTimeZone(zone) ? zone : "UTC";
+}
+
 /**
  * Create the schedule shell. Availability follows in the editor, so a creator can
  * name the offer first and paint windows second without losing the draft.
  */
-export function CreateScheduleDialog() {
+export function CreateScheduleDialog({
+	creatorUsername,
+}: {
+	creatorUsername: string | null;
+}) {
 	const [open, setOpen] = useState(false);
 	const [name, setName] = useState("");
 	const [slug, setSlug] = useState("");
 	const [slugEdited, setSlugEdited] = useState(false);
 	const [timezone, setTimezone] = useState("UTC");
+	const [timezoneEdited, setTimezoneEdited] = useState(false);
 	const { mutateAsync, isPending } = useCreateSchedule();
 	const zones = timeZoneSuggestions();
+
+	// Start with the browser's zone, then prefer Google when the dialog opens.
+	// A provider failure never blocks schedule creation or discards a manual edit.
+	useEffect(() => {
+		if (timezoneEdited) return;
+		setTimezone(detectedTimeZone());
+		if (!open) return;
+
+		let cancelled = false;
+		void getGoogleScheduleTimeZone().then((result) => {
+			if (!cancelled && result.success && result.data) {
+				setTimezone(result.data);
+			}
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, timezoneEdited]);
 
 	function changeName(value: string) {
 		setName(value);
@@ -62,7 +91,8 @@ export function CreateScheduleDialog() {
 			setName("");
 			setSlug("");
 			setSlugEdited(false);
-			setTimezone("UTC");
+			setTimezone(detectedTimeZone());
+			setTimezoneEdited(false);
 		} catch {
 			// The mutation already surfaced the reason as a toast.
 		}
@@ -110,7 +140,9 @@ export function CreateScheduleDialog() {
 							/>
 							<p className="text-xs text-muted-foreground">
 								Clients will find this schedule at{" "}
-								<span className="font-mono">/book/{slug || "…"}</span>
+								<span className="font-mono">
+									/book/{creatorUsername ?? "username"}/{slug || "…"}
+								</span>
 							</p>
 						</div>
 						<div className="grid gap-2">
@@ -128,7 +160,7 @@ export function CreateScheduleDialog() {
 									id="schedule-duration"
 									name="durationMinutes"
 									type="number"
-									min={1}
+									min={5}
 									step={5}
 									defaultValue={30}
 									required
@@ -142,7 +174,7 @@ export function CreateScheduleDialog() {
 									type="number"
 									min={1}
 									step={1}
-									defaultValue={60}
+									defaultValue={1}
 									required
 								/>
 							</div>
@@ -183,7 +215,10 @@ export function CreateScheduleDialog() {
 								id="schedule-timezone"
 								list="schedule-timezone-options"
 								value={timezone}
-								onChange={(event) => setTimezone(event.target.value)}
+								onChange={(event) => {
+									setTimezoneEdited(true);
+									setTimezone(event.target.value);
+								}}
 								placeholder="America/New_York"
 								required
 							/>

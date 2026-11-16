@@ -30,7 +30,22 @@ const MIGRATIONS = [
 	"drizzle/0014_outgoing_webhooks.sql",
 	"drizzle/0015_split_calendars.sql",
 	"drizzle/0016_remove_calcom.sql",
+	"drizzle/0017_usernames.sql",
 ];
+
+/** Drizzle skips entries whose timestamp is not newer than the last applied. */
+test("migration journal timestamps strictly increase", async () => {
+	const journal = JSON.parse(
+		await readFile("drizzle/meta/_journal.json", "utf8"),
+	) as { entries: Array<{ tag: string; when: number }> };
+	for (const [index, entry] of journal.entries.slice(1).entries()) {
+		const previous = journal.entries[index];
+		assert.ok(
+			entry.when > previous.when,
+			`${entry.tag} must be newer than ${previous.tag} or existing databases skip it`,
+		);
+	}
+});
 
 /** Create a fresh database, run `body`, then always drop it. */
 async function withFreshDatabase(body: (client: pg.Client) => Promise<void>) {
@@ -860,7 +875,9 @@ test("0015 splits the calendar setting without moving existing connections", {
 			INSERT INTO calendar_connections(id,creator_id,provider,encrypted_access_token)
 			VALUES ('cc2','u2','google','v1.envelope');
 		`);
-		const { rows: [fresh] } = await client.query(
+		const {
+			rows: [fresh],
+		} = await client.query(
 			"select busy_calendar_id, write_calendar_id from calendar_connections where id = 'cc2'",
 		);
 		assert.deepEqual(fresh, {
@@ -942,5 +959,51 @@ test("0016 removes Cal.com without touching plans, credits, or bookings", {
 			payments: 1,
 			schedule_plan: "p1",
 		});
+	});
+});
+
+/** Existing users choose their own handle later; none is derived from email. */
+test("0017 preserves users and enforces unique, nullable usernames", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, -1));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES
+				('u1','Creator','creator@example.test',true),
+				('u2','Customer','customer@example.test',true);
+		`);
+
+		await apply(client, MIGRATIONS[MIGRATIONS.length - 1]);
+
+		const { rows } = await client.query(
+			'select id, name, email, username from "user" order by id',
+		);
+		assert.deepEqual(rows, [
+			{
+				id: "u1",
+				name: "Creator",
+				email: "creator@example.test",
+				username: null,
+			},
+			{
+				id: "u2",
+				name: "Customer",
+				email: "customer@example.test",
+				username: null,
+			},
+		]);
+
+		await client.query('update "user" set username = $1 where id = $2', [
+			"john",
+			"u1",
+		]);
+		await assert.rejects(
+			client.query('update "user" set username = $1 where id = $2', [
+				"john",
+				"u2",
+			]),
+			/user_username_unique|duplicate key/,
+		);
 	});
 });

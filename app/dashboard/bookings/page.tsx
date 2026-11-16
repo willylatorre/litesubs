@@ -40,7 +40,10 @@ export default async function BookingsPage() {
 
 			<MyBookings />
 
-			<BookingsEditor initialSchedules={schedules} />
+			<BookingsEditor
+				initialSchedules={schedules}
+				creatorUsername={session.user.username ?? null}
+			/>
 		</div>
 	);
 }

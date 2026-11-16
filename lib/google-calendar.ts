@@ -932,6 +932,8 @@ export type CalendarSummary = {
 	id: string;
 	summary: string;
 	primary: boolean;
+	/** IANA zone reported by Google for this calendar. */
+	timeZone: string | null;
 	/** Whether the creator can write events here, per Google's accessRole. */
 	canWrite: boolean;
 };
@@ -958,6 +960,7 @@ export async function listCalendars(
 			id?: unknown;
 			summary?: unknown;
 			primary?: unknown;
+			timeZone?: unknown;
 			accessRole?: unknown;
 		}[];
 	};
@@ -968,6 +971,7 @@ export async function listCalendars(
 				id: string;
 				summary?: unknown;
 				primary?: unknown;
+				timeZone?: unknown;
 				accessRole?: unknown;
 			};
 			return {
@@ -975,6 +979,7 @@ export async function listCalendars(
 				summary:
 					typeof record.summary === "string" ? record.summary : record.id,
 				primary: record.primary === true,
+				timeZone: typeof record.timeZone === "string" ? record.timeZone : null,
 				canWrite:
 					record.accessRole === "owner" || record.accessRole === "writer",
 			};

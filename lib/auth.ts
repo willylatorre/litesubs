@@ -6,7 +6,7 @@ import { mcp } from "@better-auth/mcp";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
-import { jwt } from "better-auth/plugins";
+import { jwt, username } from "better-auth/plugins";
 import { db } from "@/app/db"; // your drizzle instance
 import { mcpResource } from "@/lib/mcp-config";
 import { CREATOR_SCOPES } from "@/lib/services/principal";
@@ -94,6 +94,20 @@ export const auth = betterAuth({
 			: ["https://litesubs.com", "https://www.litesubs.com", ...devOrigins],
 
 	plugins: [
+		username({
+			// One stable identity for every public link. Existing users may choose
+			// their first username; after that, changing it would strand shared URLs.
+			immutableUsername: true,
+			displayUsername: false,
+			minUsernameLength: 3,
+			maxUsernameLength: 30,
+			usernameValidator: (value) =>
+				/^[a-zA-Z0-9_.]+$/.test(value) &&
+				// Twelve characters are reserved for pre-username account handles.
+				// Better Auth ids are not always UUIDs, so this is not hex-only.
+				value.length !== 12,
+		}),
+
 		// Required by @better-auth/mcp: provides the signing key and /jwks.
 		jwt({ disableSettingJwtHeader: true }),
 

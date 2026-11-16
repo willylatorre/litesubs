@@ -25,7 +25,7 @@ export async function createInvite(_prevState: unknown, formData: FormData) {
 			},
 		);
 		revalidatePath("/dashboard/creator");
-		return { success: true, token: invite.token };
+		return { success: true, token: invite.token, url: invite.url };
 	});
 }
 

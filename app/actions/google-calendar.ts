@@ -215,6 +215,38 @@ export async function listGoogleCalendars() {
 	});
 }
 
+/**
+ * Best-effort timezone for a new native schedule.
+ *
+ * Google's primary calendar is the creator's usual wall-clock zone. The chosen
+ * write/busy calendars are fallbacks, and a provider failure returns null so
+ * schedule creation can fall back to the browser instead of depending on Google.
+ */
+export async function getGoogleScheduleTimeZone() {
+	return authenticatedAction<string | null>(async (session) => {
+		const connection = await findActiveConnection(session.user.id);
+		if (!connection) return { success: true, data: null };
+
+		const result = await withCreatorAccessToken(session.user.id, (token) =>
+			listCalendars(token),
+		);
+		if (!result.ok) return { success: true, data: null };
+
+		const calendars = result.data;
+		const primary = calendars.find((calendar) => calendar.primary);
+		const write = calendars.find(
+			(calendar) => calendar.id === connection.writeCalendarId,
+		);
+		const busy = calendars.find(
+			(calendar) => calendar.id === connection.busyCalendarId,
+		);
+		return {
+			success: true,
+			data: primary?.timeZone ?? write?.timeZone ?? busy?.timeZone ?? null,
+		};
+	});
+}
+
 const CALENDAR_ERROR_COPY: Record<string, string> = {
 	not_configured: "Google Calendar is not configured on this server.",
 	not_connected: "Connect Google Calendar first.",

@@ -15,7 +15,13 @@ import type { ScheduleView } from "@/lib/booking-types";
  * Duration, buffers, horizon, timezone and on/off. Availability and blocks are
  * separate saves so editing one never rewrites the other.
  */
-export function ScheduleSettingsForm({ schedule }: { schedule: ScheduleView }) {
+export function ScheduleSettingsForm({
+	schedule,
+	creatorUsername,
+}: {
+	schedule: ScheduleView;
+	creatorUsername: string | null;
+}) {
 	const zones = timeZoneSuggestions();
 	const [timezone, setTimezone] = useState(schedule.timezone);
 	const [active, setActive] = useState(schedule.active);
@@ -100,7 +106,7 @@ export function ScheduleSettingsForm({ schedule }: { schedule: ScheduleView }) {
 						required
 					/>
 					<p className="text-xs text-muted-foreground font-mono">
-						/book/{slug || "…"}
+						/book/{creatorUsername ?? "username"}/{slug || "…"}
 					</p>
 				</div>
 			</div>
@@ -122,7 +128,7 @@ export function ScheduleSettingsForm({ schedule }: { schedule: ScheduleView }) {
 						id="settings-duration"
 						name="durationMinutes"
 						type="number"
-						min={1}
+						min={5}
 						step={5}
 						defaultValue={schedule.durationMinutes}
 						disabled={readOnly}

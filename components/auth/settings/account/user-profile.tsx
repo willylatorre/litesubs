@@ -8,14 +8,13 @@ import {
 } from "@better-auth-ui/core"
 import type { UsernameAuthClient } from "@better-auth-ui/core/plugins/username"
 import { useAuth, useSession, useUpdateUser } from "@better-auth-ui/react"
+import { cn } from "cn"
 import { useEffect, useMemo } from "react"
 import { toast } from "sonner"
-
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { cn } from "cn"
 import {
   getAuthAdditionalFieldValidators,
   isAuthFormFieldInvalid,
@@ -148,22 +147,37 @@ export function UserProfile({ className }: UserProfileProps) {
                   )
                 }
 
+                const isUsername = configuredField.name === "username"
+                const isPermanentUsername =
+                  isUsername && Boolean(session.user.username)
+                const fieldConfig = isPermanentUsername
+                  ? { ...configuredField, readOnly: true }
+                  : configuredField
+
                 return (
-                  <form.AppField
-                    key={configuredField.name}
-                    name={`additionalFields.${configuredField.name}`}
-                    validators={getAuthAdditionalFieldValidators(
-                      configuredField,
-                      localization.auth.fieldRequired
+                  <div key={configuredField.name} className="space-y-2">
+                    <form.AppField
+                      name={`additionalFields.${configuredField.name}`}
+                      validators={getAuthAdditionalFieldValidators(
+                        fieldConfig,
+                        localization.auth.fieldRequired
+                      )}
+                    >
+                      {(field) => (
+                        <field.AuthFormAdditionalField
+                          field={fieldConfig}
+                          isPending={isPending}
+                        />
+                      )}
+                    </form.AppField>
+                    {isUsername && (
+                      <p className="text-xs text-muted-foreground">
+                        {isPermanentUsername
+                          ? "Used in your public booking and plan links. Usernames are permanent so those links keep working."
+                          : "Choose carefully: this becomes the permanent creator segment in your public links."}
+                      </p>
                     )}
-                  >
-                    {(field) => (
-                      <field.AuthFormAdditionalField
-                        field={configuredField}
-                        isPending={isPending}
-                      />
-                    )}
-                  </form.AppField>
+                  </div>
                 )
               })}
             </CardContent>

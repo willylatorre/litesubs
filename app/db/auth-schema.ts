@@ -4,6 +4,8 @@ import { boolean, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 export const user = pgTable("user", {
 	id: text("id").primaryKey(),
 	name: text("name").notNull(),
+	/** Permanent public creator identity, managed by Better Auth's username plugin. */
+	username: text("username").unique(),
 	email: text("email").notNull().unique(),
 	emailVerified: boolean("email_verified").default(false).notNull(),
 	image: text("image"),

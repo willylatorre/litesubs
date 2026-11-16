@@ -42,7 +42,12 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 	};
 	const studentEmail = `${studentId}@example.test`;
 	await db.insert(user).values([
-		{ id: creatorId, name: "Creator", email: `${creatorId}@example.test` },
+		{
+			id: creatorId,
+			name: "Creator",
+			username: "creator",
+			email: `${creatorId}@example.test`,
+		},
 		{ id: otherId, name: "Other creator", email: `${otherId}@example.test` },
 		{ id: studentId, name: "Student", email: studentEmail },
 	]);
@@ -295,6 +300,10 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 				});
 				assert.equal(invite.status, "invited");
 				assert.ok("inviteUrl" in invite);
+				assert.match(
+					new URL(invite.inviteUrl).pathname,
+					/^\/invite\/creator\/[0-9a-f-]+$/,
+				);
 				const token = new URL(invite.inviteUrl).pathname.split("/").pop();
 				assert.ok(token);
 				await db.insert(user).values({ id: invitedId, name: "Invitee", email });

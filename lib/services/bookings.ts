@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/app/db";
 import {
@@ -95,39 +95,32 @@ export async function getScheduleForCreator(
 }
 
 /**
- * Load the public shape of a schedule by slug.
- *
- * Creator identity is deliberately not exposed beyond the name: a public booking
- * page must not leak account ids or emails.
- */
-/**
- * The public path segment for a creator.
- *
- * Derived from the account id so it needs no extra profile field and cannot be
- * taken over by another creator. Twelve hex characters is short enough to share
- * and long enough that guessing another creator's handle is impractical.
- */
-export function creatorHandle(creatorId: string): string {
-	return creatorId.replace(/-/g, "").slice(0, 12);
-}
-
-/**
- * Public schedules are addressed by `(creatorHandle, slug)`, not by slug alone.
+ * Public schedules are addressed by `(username, slug)`, not by slug alone.
  *
  * The unique constraint is per creator, so two creators may both own
  * `office-hours`. Resolving by slug only would silently serve whichever row the
  * database returned first, which is a data-leak and a wrong-debit risk at once.
+ * Twelve-character account handles remain readable for pre-username links; new
+ * usernames cannot take that reserved length. Better Auth ids are not always
+ * UUIDs, so legacy handles are not necessarily hexadecimal.
  */
 export async function resolvePublicSchedule(
-	creatorHandle: string,
+	username: string,
 	slug: string,
 ): Promise<{
 	schedule: PublicSchedule & {
 		creatorId: string;
 		creatorName: string;
-		creatorHandle: string;
+		creatorUsername: string | null;
 	};
 } | null> {
+	const identities = [eq(user.username, username.toLowerCase())];
+	if (username.length === 12) {
+		identities.push(
+			sql`substring(replace(${user.id}, '-', '') from 1 for 12) = ${username}`,
+		);
+	}
+
 	const [row] = await db
 		.select({
 			id: bookingSchedules.id,
@@ -140,6 +133,7 @@ export async function resolvePublicSchedule(
 			active: bookingSchedules.active,
 			creatorId: bookingSchedules.creatorId,
 			creatorName: user.name,
+			creatorUsername: user.username,
 			planId: plans.id,
 			planName: plans.name,
 			planDescription: plans.description,
@@ -147,17 +141,7 @@ export async function resolvePublicSchedule(
 		.from(bookingSchedules)
 		.innerJoin(user, eq(user.id, bookingSchedules.creatorId))
 		.leftJoin(plans, eq(plans.id, bookingSchedules.planId))
-		.where(
-			and(
-				eq(bookingSchedules.slug, slug),
-				// Matched on the handle, so a collision between two creators cannot
-				// resolve to the wrong schedule.
-				eq(
-					sql`substring(replace(${user.id}, '-', '') from 1 for 12)`,
-					creatorHandle,
-				),
-			),
-		)
+		.where(and(eq(bookingSchedules.slug, slug), or(...identities)))
 		.limit(1);
 	if (!row?.active) return null;
 
@@ -190,7 +174,7 @@ export async function resolvePublicSchedule(
 			plan,
 			creatorId: row.creatorId,
 			creatorName: row.creatorName ?? "",
-			creatorHandle,
+			creatorUsername: row.creatorUsername,
 		},
 	};
 }
@@ -248,8 +232,8 @@ async function slotInputForSchedule(
 }
 
 /** Open slots for a public schedule, computed on read. No cron, no caching. */
-export async function listOpenSlots(creatorHandle: string, slug: string) {
-	const resolved = await resolvePublicSchedule(creatorHandle, slug);
+export async function listOpenSlots(username: string, slug: string) {
+	const resolved = await resolvePublicSchedule(username, slug);
 	if (!resolved) return { schedule: null, slots: [] };
 	const input = await slotInputForSchedule(
 		resolved.schedule.id,
@@ -263,14 +247,10 @@ export async function listOpenSlots(creatorHandle: string, slug: string) {
 	// calendar problem must never take a bookable page offline.
 	const calendarFiltered =
 		generated.length > 0
-			? await filterSlotsByCalendar(
-					resolved.schedule.creatorId,
-					generated,
-					{
-						from: generated[0].start,
-						to: generated[generated.length - 1].end,
-					},
-				)
+			? await filterSlotsByCalendar(resolved.schedule.creatorId, generated, {
+					from: generated[0].start,
+					to: generated[generated.length - 1].end,
+				})
 			: generated;
 
 	return {
@@ -392,11 +372,10 @@ export async function createBooking(
 	// page could still submit a slot the creator became busy for since. Re-check
 	// the one chosen slot. A calendar failure degrades to "allow", because a
 	// Google outage must not stop the business from taking bookings.
-	const stillFree = await filterSlotsByCalendar(
-		schedule.creatorId,
-		[slot],
-		{ from: slot.start, to: slot.end },
-	);
+	const stillFree = await filterSlotsByCalendar(schedule.creatorId, [slot], {
+		from: slot.start,
+		to: slot.end,
+	});
 	if (stillFree.length === 0)
 		throw new ServiceError(
 			"SLOT_UNAVAILABLE",
@@ -462,14 +441,17 @@ export async function createBooking(
 		// Mirror the booking onto the creator's calendar, best-effort and after
 		// commit. The event id is persisted so cancellation can remove it; without
 		// that the event would be orphaned on the calendar forever.
-		const createdEvent = await bestEffortCreateBookingEvent(schedule.creatorId, {
-			bookingId: created.bookingId,
-			summary: `Booking: ${schedule.name}`,
-			description: `Booked through Litesubs. Booking ${created.bookingId}.`,
-			start: new Date(created.startsAt),
-			end: new Date(created.endsAt),
-			timeZone: schedule.timezone,
-		});
+		const createdEvent = await bestEffortCreateBookingEvent(
+			schedule.creatorId,
+			{
+				bookingId: created.bookingId,
+				summary: `Booking: ${schedule.name}`,
+				description: `Booked through Litesubs. Booking ${created.bookingId}.`,
+				start: new Date(created.startsAt),
+				end: new Date(created.endsAt),
+				timeZone: schedule.timezone,
+			},
+		);
 		if (createdEvent.ok) {
 			await db
 				.update(bookings)

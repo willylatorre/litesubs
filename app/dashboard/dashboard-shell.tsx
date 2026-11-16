@@ -11,6 +11,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { apiKeyPlugin } from "@/lib/auth/api-key-plugin";
 import { dashboardBasePaths } from "@/lib/auth/base-paths";
 import { twoFactorPlugin } from "@/lib/auth/two-factor-plugin";
+import { authUsernamePlugin } from "@/lib/auth/username-plugin";
 import { authClient } from "@/lib/auth-client";
 import { getQueryClient } from "@/lib/query-client";
 
@@ -27,7 +28,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 				navigate={({ to, replace }) =>
 					replace ? router.replace(to) : router.push(to)
 				}
-				plugins={[apiKeyPlugin(), twoFactorPlugin()]}
+				plugins={[apiKeyPlugin(), twoFactorPlugin(), authUsernamePlugin()]}
 				queryClient={queryClient}
 				redirectTo="/dashboard"
 				socialProviders={["google"]}

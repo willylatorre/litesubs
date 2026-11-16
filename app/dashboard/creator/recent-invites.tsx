@@ -1,5 +1,6 @@
 "use client";
 
+import { AppShareLinkActions } from "@/components/app-share-link-actions";
 import { Badge } from "@/components/ui/badge";
 import {
 	Card,
@@ -40,6 +41,7 @@ export function RecentInvites() {
 							<TableHead>Email</TableHead>
 							<TableHead>Status</TableHead>
 							<TableHead className="text-right">Date</TableHead>
+							<TableHead />
 						</TableRow>
 					</TableHeader>
 					<TableBody>
@@ -55,19 +57,20 @@ export function RecentInvites() {
 									<TableCell>
 										<Skeleton className="h-4 w-[80px] ml-auto" />
 									</TableCell>
+									<TableCell />
 								</TableRow>
 							))
 						) : invites?.length === 0 ? (
 							<TableRow>
 								<TableCell
-									colSpan={3}
+									colSpan={4}
 									className="py-8 text-center text-muted-foreground"
 								>
 									No invites yet. Use{" "}
 									<span className="font-medium text-foreground">
-										Generate Invite Link
+										Invite customer
 									</span>{" "}
-									to invite someone by email.
+									to create a link you can forward.
 								</TableCell>
 							</TableRow>
 						) : (
@@ -96,6 +99,17 @@ export function RecentInvites() {
 									</TableCell>
 									<TableCell className="text-right text-muted-foreground text-sm">
 										{new Date(invite.createdAt).toLocaleDateString()}
+									</TableCell>
+									<TableCell className="w-0">
+										{/* A pending invite is the one still worth sending, so only
+										    it gets the link controls. */}
+										{invite.status === "pending" && invite.url ? (
+											<AppShareLinkActions
+												url={invite.url}
+												compact
+												className="flex items-center justify-end gap-1"
+											/>
+										) : null}
 									</TableCell>
 								</TableRow>
 							))

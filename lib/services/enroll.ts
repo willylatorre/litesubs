@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/app/db";
 import { enrollments, invites, transactions, user } from "@/app/db/schema";
 import { appUrl } from "@/lib/app-url";
+import { invitePath } from "@/lib/public-links";
 import {
 	currentPaidThrough,
 	grantCredits,
@@ -11,6 +12,7 @@ import {
 import { resolveCustomer } from "./customers";
 import { pageInput, resolvePublishedPlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
+import { getCreatorUsername, requireCreatorUsername } from "./public-links";
 import { startPurchase, startSubscription } from "./purchase";
 
 export const enrollmentInput = z.object({
@@ -86,6 +88,7 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 					"A credit expiry must be in the future",
 				);
 		}
+		const username = await requireCreatorUsername(principal.creatorId);
 		return db.transaction(async (tx) => {
 			await tx.execute(
 				sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify([principal.creatorId, email, plan.id])}, 0))`,
@@ -135,7 +138,7 @@ export async function enrollCustomer(principal: Principal, input: unknown) {
 				)[0];
 			return {
 				status: "invited",
-				inviteUrl: appUrl(`/invite/${invite.token}`),
+				inviteUrl: appUrl(invitePath(username, invite.token)),
 				creditsOnClaim: compCredits,
 				creditsExpireAt: compExpiresAt,
 				message: "No email was sent. Forward this link to the customer.",
@@ -246,12 +249,25 @@ export async function checkoutUrl(
 
 export async function listInvites(principal: Principal, input: unknown = {}) {
 	requireScope(principal, "customers:read");
-	return db.query.invites.findMany({
+	const rows = await db.query.invites.findMany({
 		where: eq(invites.creatorId, principal.creatorId),
 		...pageInput.parse(input),
 		orderBy: (table, { desc }) => [desc(table.createdAt)],
 		with: { plan: true },
 	});
+	// The canonical share URL is the creator's username plus the opaque token.
+	// Building it here keeps every surface (dashboard, mobile share sheet, API
+	// clients) pointing at the same path, and lets a pending invite be re-shared
+	// after the creator closed the dialog that created it. Invites issued before
+	// the creator picked a username still work on the legacy one-segment route,
+	// so they must not disappear from the pending list.
+	const username = await getCreatorUsername(principal.creatorId);
+	return rows.map((row) => ({
+		...row,
+		url: appUrl(
+			username ? invitePath(username, row.token) : `/invite/${row.token}`,
+		),
+	}));
 }
 
 export async function createInvite(principal: Principal, input: unknown) {
@@ -262,22 +278,37 @@ export async function createInvite(principal: Principal, input: unknown) {
 			planId: z.string().optional(),
 		})
 		.parse(input);
+	const username = await requireCreatorUsername(principal.creatorId);
 	if (data.email) {
+		const email = data.email.toLowerCase();
 		const existing = await db.query.invites.findFirst({
 			where: and(
 				eq(invites.creatorId, principal.creatorId),
-				eq(invites.email, data.email.toLowerCase()),
+				eq(invites.email, email),
 				eq(invites.status, "pending"),
 				gt(invites.expiresAt, new Date()),
 			),
 		});
+		// Asking twice for the same offer returns the live link instead of a dead
+		// end: the creator's only copy of an invite URL is the one it handed them,
+		// and refusing here would strand a link nobody can re-read. Different
+		// terms still conflict, because the recipient may already hold the old one.
+		if (existing && (existing.planId ?? null) === (data.planId ?? null))
+			return {
+				...existing,
+				url: appUrl(invitePath(username, existing.token)),
+			};
 		if (existing)
-			throw new ServiceError("INVITE_EXISTS", "A pending invite exists", 409);
+			throw new ServiceError(
+				"INVITE_CONFLICT",
+				"A pending invite for this email offers different terms. Revoke it or wait for it to expire.",
+				409,
+			);
 	}
 	const published = data.planId
 		? await resolvePublishedPlan(principal.creatorId, data.planId)
 		: undefined;
-	return (
+	const invite = (
 		await db
 			.insert(invites)
 			.values({
@@ -291,6 +322,10 @@ export async function createInvite(principal: Principal, input: unknown) {
 			})
 			.returning()
 	)[0];
+	return {
+		...invite,
+		url: appUrl(invitePath(username, invite.token)),
+	};
 }
 
 export async function claimEnrollmentInvite(

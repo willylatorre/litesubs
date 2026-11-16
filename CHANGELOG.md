@@ -12,11 +12,20 @@ All notable changes to this project will be documented in this file.
   instead of a lone right-aligned button. Credits gained the subtitle the page
   could not otherwise convey ("Lessons, products, items, etc."), the derived rate
   sits under the field that produces it ("That works out to $10.00 per credit"),
-  and a live summary states the offer in the customer's terms. Price, currency, and
-  credits are now controlled state, so both readouts follow the currency, the
-  billing mode, and the singular/plural of the count; the form resets on close so
-  a created draft no longer leaves stale values behind. The dialog also scrolls on
-  short viewports, where the footer previously fell off-screen.
+  and a live summary states the offer in the customer's terms ("Your customer will
+  pay $100.00 for 10 credits"). Price, currency, and credits are now controlled
+  state, so both readouts follow the currency, the billing mode, and the
+  singular/plural of the count; the form resets on close so a created draft no
+  longer leaves stale values behind. The dialog also scrolls on short viewports,
+  where the footer previously fell off-screen.
+- **Username-based public links**: schedules now live at
+  `/book/<username>/<slug>`, invites at `/invite/<username>/<token>`, and payment
+  requests at `/pay/<username>/<token>`. Better Auth manages unique, permanent
+  usernames; new email signups choose one, and existing or Google users can choose
+  one under Account instead of having one derived from their email. Legacy links
+  keep working and redirect to the canonical username URL once available. Invite
+  and payment tokens remain opaque and single-use. Migration `0017` adds a
+  nullable unique username without changing existing users or commercial data.
 - **Sidebar grouping**: reordered by the creator's loop rather than page type —
   "My Account", then "Creator" (Dashboard, Plans, Customers, Bookings, Payments,
   Integrations), then "Developer" (API Tokens, Webhooks). Customers now sits
@@ -40,11 +49,34 @@ All notable changes to this project will be documented in this file.
   held a foreign key into them.
 
 ### Added
+- **Invite a customer from the Customers page**: the link generator previously
+  existed only on the Creator dashboard and the plan views, so the page that
+  lists customers had no way to add one — its empty state told you to "invite a
+  customer" and gave you nothing to click. `Add customer` now opens the same
+  email + plan form there, and a new pending-invites card lists links that have
+  not been claimed yet with copy and share controls. Without that card a creator
+  who closed the dialog lost the only copy of the URL and the invite silently
+  expired.
+- **Native sharing**: invite links now offer `navigator.share` (the phone share
+  sheet) next to copy, via `lib/share-link.ts`. A dismissed sheet is treated as a
+  decision and never copies behind the user's back; a browser without a sheet
+  falls back to the clipboard.
+- **Re-requesting a pending invite returns the live link** instead of `409
+  INVITE_EXISTS`. Same email and same offer yields the existing token; different
+  plan terms still conflict, because the recipient may already hold the old link.
+- `GET /api/v1/invites` now returns a share `url` per invite — canonical
+  `/invite/<username>/<token>` once a username exists, legacy `/invite/<token>`
+  before that — so every surface shares the same path and older pending invites
+  do not vanish from the list. In the browser the URL is re-hosted on the current
+  origin: a preview deployment must not hand out production links to records that
+  only exist in the preview database.
+- The single-use Checkout link dialog uses the same copy/share control instead of
+  its own clipboard-only button. Stripe URLs are shared exactly as issued.
 - **Native bookings**:
   - Creators define weekly availability, buffers, a horizon, a timezone, and
     one-off blocks; a schedule links to a one-time plan and a booked slot spends
     that plan's credits. See `docs/BOOKINGS.md`.
-  - Public booking pages are `/book/<creator>/<slug>`: slugs are unique per
+  - Public booking pages include the creator username: slugs are unique per
     creator, so addressing by slug alone would serve the wrong schedule.
   - Slot math is pure and timezone-tested: availability is wall-clock in the
     schedule's zone, bookings are UTC instants, and DST gaps are detected rather

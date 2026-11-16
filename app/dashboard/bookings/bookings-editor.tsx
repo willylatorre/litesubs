@@ -1,6 +1,7 @@
 "use client";
 
 import { IconCalendarEvent } from "@tabler/icons-react";
+import Link from "next/link";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -10,8 +11,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { formatMinutes, weekdayName } from "@/lib/booking-time";
-import type { ScheduleView } from "@/lib/booking-types";
 import {
 	Select,
 	SelectContent,
@@ -19,6 +18,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { formatMinutes, weekdayName } from "@/lib/booking-time";
+import type { ScheduleView } from "@/lib/booking-types";
 import { CreateScheduleDialog } from "./create-schedule-dialog";
 import { ExceptionsEditor } from "./exceptions-editor";
 import { ScheduleSettingsForm } from "./schedule-settings-form";
@@ -43,8 +44,10 @@ function summarize(schedule: ScheduleView) {
 
 export function BookingsEditor({
 	initialSchedules,
+	creatorUsername,
 }: {
 	initialSchedules: ScheduleView[];
+	creatorUsername: string | null;
 }) {
 	const [selectedId, setSelectedId] = useState(initialSchedules[0]?.id ?? null);
 	// A save re-renders with fresh server data; keep the creator's selection.
@@ -63,8 +66,21 @@ export function BookingsEditor({
 						define your normal week; one-off blocks carve out exceptions.
 					</p>
 				</div>
-				<CreateScheduleDialog />
+				<CreateScheduleDialog creatorUsername={creatorUsername} />
 			</div>
+
+			{!creatorUsername && (
+				<p className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+					Your public links need a permanent username.{" "}
+					<Link
+						href="/dashboard/account"
+						className="underline underline-offset-4"
+					>
+						Choose one in Account
+					</Link>{" "}
+					before sharing a schedule or plan.
+				</p>
+			)}
 
 			{initialSchedules.length === 0 ? (
 				<Card>
@@ -76,7 +92,7 @@ export function BookingsEditor({
 							No booking schedules yet. Create one to publish the hours when
 							clients can book you.
 						</p>
-						<CreateScheduleDialog />
+						<CreateScheduleDialog creatorUsername={creatorUsername} />
 					</CardContent>
 				</Card>
 			) : (
@@ -155,6 +171,7 @@ export function BookingsEditor({
 									<ScheduleSettingsForm
 										key={`${schedule.id}-settings`}
 										schedule={schedule}
+										creatorUsername={creatorUsername}
 									/>
 								</CardContent>
 							</Card>
