@@ -21,6 +21,10 @@ import {
 import { usableBalance } from "./credit-balance";
 import { adjustCredits } from "./credits";
 import {
+	notifyBookingCancelled,
+	notifyBookingConfirmed,
+} from "./notifications";
+import {
 	type Principal,
 	requireScope,
 	ServiceError,
@@ -245,6 +249,7 @@ export async function createBooking(
 		where: eq(bookingSchedules.id, data.scheduleId),
 		columns: {
 			id: true,
+			name: true,
 			creatorId: true,
 			planId: true,
 			creditsPerBooking: true,
@@ -328,7 +333,7 @@ export async function createBooking(
 	try {
 		// One transaction: the booking row and the debit succeed or fail together,
 		// so a refused debit cannot leave a confirmed reservation behind.
-		return await db.transaction(async (tx) => {
+		const created = await db.transaction(async (tx) => {
 			// Insert first: the exclusion constraint rejects an overlap here, which
 			// is the only double-booking defense that holds under concurrency.
 			await tx.insert(bookings).values({
@@ -373,6 +378,24 @@ export async function createBooking(
 				balance,
 			};
 		});
+
+		// Notifications run strictly after the booking and its debit committed.
+		// They cannot throw (the service guarantees it), and a failure here must
+		// never make a real booking look failed to the customer.
+		await notifyBookingConfirmed({
+			bookingId: created.bookingId,
+			creatorId: schedule.creatorId,
+			customerId: userId,
+			startsAt: created.startsAt,
+			endsAt: created.endsAt,
+			scheduleName: schedule.name,
+			timeZone: schedule.timezone,
+			chargedCredits: created.chargedCredits,
+			// A booking detail route does not exist yet; the bookings hub is the
+			// honest destination for both parties.
+			href: "/dashboard/bookings",
+		});
+		return created;
 	} catch (error) {
 		// The exclusion constraint is the real guard; translate it into the same
 		// answer a lost race deserves rather than a 500.
@@ -412,6 +435,7 @@ export async function cancelBooking(
 		where: eq(bookings.id, input.bookingId),
 		columns: {
 			id: true,
+			scheduleId: true,
 			creatorId: true,
 			userId: true,
 			planId: true,
@@ -430,7 +454,7 @@ export async function cancelBooking(
 	if (booking.status === "cancelled")
 		return { status: "already_cancelled" as const, restored: 0 };
 
-	return db.transaction(async (tx) => {
+	const result = await db.transaction(async (tx) => {
 		// Lock the row so two concurrent cancels cannot both restore.
 		const [locked] = await tx
 			.select()
@@ -473,6 +497,33 @@ export async function cancelBooking(
 			balance,
 		};
 	});
+
+	// Announced only after the cancellation and the restore committed, so the
+	// credit outcome in the copy is the one that actually happened.
+	if (result.status === "cancelled") {
+		const actor: "creator" | "customer" =
+			principal.creatorId === booking.creatorId &&
+			principal.userId !== booking.userId
+				? "creator"
+				: "customer";
+		const schedule = await db.query.bookingSchedules.findFirst({
+			where: eq(bookingSchedules.id, booking.scheduleId),
+			columns: { name: true, timezone: true },
+		});
+		await notifyBookingCancelled({
+			bookingId: booking.id,
+			creatorId: booking.creatorId,
+			customerId: booking.userId,
+			startsAt: booking.startsAt,
+			scheduleName: schedule?.name,
+			timeZone: schedule?.timezone,
+			chargedCredits: booking.chargedCredits,
+			restoredCredits: result.restored,
+			cancelledBy: actor,
+			href: "/dashboard/bookings",
+		});
+	}
+	return result;
 }
 
 /**
