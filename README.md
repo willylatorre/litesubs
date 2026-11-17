@@ -36,6 +36,34 @@ them with:
 npm test
 ```
 
+### Integration tests
+
+About half the suite (purchase, subscriptions, refunds, webhooks, OAuth,
+publication, credits, bookings, MCP) runs against a real PostgreSQL database and
+**silently skips** unless `MCP_TEST_DATABASE_URL` is set. Only the Stripe adapter
+is stubbed. The tests assert `DATABASE_URL === MCP_TEST_DATABASE_URL`, so a green
+run without it means those paths were never exercised.
+
+```bash
+# One disposable database, migrated once.
+psql -d postgres -c "DROP DATABASE IF EXISTS litesubs_integration_test;"
+psql -d postgres -c "CREATE DATABASE litesubs_integration_test;"
+
+set -a; source .env; set +a
+export DATABASE_URL="postgresql://localhost/litesubs_integration_test"
+export MCP_TEST_DATABASE_URL="$DATABASE_URL"
+npx drizzle-kit migrate
+npm test
+```
+
+Two gotchas found the hard way:
+
+- **Export the whole `.env`, not just the database URLs.** `BETTER_AUTH_URL`
+  missing makes better-auth's JWT issuer empty (`TypeError: Invalid URL`).
+- **Recreate the database after changing secrets.** JWKS rows are encrypted with
+  `BETTER_AUTH_SECRET` at creation; a database seeded before the secret was
+  loaded fails with `Failed to decrypt private key`, not a clear config error.
+
 ## Styling
 
 This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.

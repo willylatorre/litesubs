@@ -66,10 +66,13 @@ test("a different key cannot decrypt the token", () => {
 test("tampered ciphertext is rejected", () => {
 	const envelope = encryptToken("sensitive-refresh-token");
 	const parts = envelope.split(".");
-	// Flip the last character of the ciphertext payload.
-	const body = parts[3];
-	const lastChar = body.at(-1) === "A" ? "B" : "A";
-	parts[3] = `${body.slice(0, -1)}${lastChar}`;
+	// Flip a bit in the decoded ciphertext rather than the last base64url
+	// character: the final character can encode only padding bits, so flipping it
+	// may leave the decoded bytes identical and the "tampered" input would decrypt
+	// successfully. That made this test fail intermittently.
+	const bytes = Buffer.from(parts[3], "base64url");
+	bytes[0] = (bytes[0] ?? 0) ^ 0x01;
+	parts[3] = bytes.toString("base64url");
 
 	assert.throws(
 		() => decryptToken(parts.join(".")),
