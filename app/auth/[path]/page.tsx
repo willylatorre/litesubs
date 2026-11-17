@@ -31,9 +31,9 @@ export default async function AuthPage({
 	if (!validAuthPaths.has(path)) notFound();
 
 	return (
-		<main className="container flex grow flex-col items-center justify-center self-center p-4 md:p-6 gap-8">
+		<main className="container mx-auto flex min-h-svh flex-col items-center justify-center gap-8 p-4 md:p-6">
 			<AnimatedLogo />
-			<div className="w-full max-w-md">
+			<div className="flex w-full max-w-md justify-center">
 				<Auth path={path} />
 			</div>
 		</main>
