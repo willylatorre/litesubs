@@ -339,12 +339,26 @@ export async function claimEnrollmentInvite(
 			.from(invites)
 			.where(and(eq(invites.token, token), eq(invites.status, "pending")))
 			.for("update");
-		if (
-			!invite ||
-			invite.expiresAt.getTime() <= Date.now() ||
-			(invite.email && invite.email.toLowerCase() !== email.toLowerCase())
-		)
+		// Three very different situations, told apart so the recipient can act. A
+		// single "unavailable or expired" for all of them left people unable to
+		// tell "this is someone else's invite" from "this offer was withdrawn",
+		// with no way to know the fix was to sign in with the other address.
+		if (!invite)
 			throw new ServiceError("NOT_FOUND", "Invite unavailable or expired", 404);
+		if (invite.expiresAt.getTime() <= Date.now())
+			throw new ServiceError(
+				"INVITE_EXPIRED",
+				"This invite link has expired. Ask the creator for a new one.",
+				410,
+			);
+		// Never reveal the invite's address: only that the signed-in account is not
+		// the one it was issued to. The holder of the link may not be the invitee.
+		if (invite.email && invite.email.toLowerCase() !== email.toLowerCase())
+			throw new ServiceError(
+				"INVITE_WRONG_ACCOUNT",
+				`This invite was sent to a different email address than the one you are signed in with (${email}). Sign in with the invited address to accept it.`,
+				403,
+			);
 		if (invite.planId) {
 			// An old invite must not resurrect a draft, unpublished, or superseded
 			// offer. It also must not silently apply newer terms than it promised.
