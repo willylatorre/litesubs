@@ -1,8 +1,8 @@
 /**
- * Invite claiming has three distinct failure modes that used to share one
- * message: "Invite unavailable or expired". A recipient could not tell "someone
- * else's invite" from "the creator withdrew it" from "it lapsed", so the only
- * actionable case — sign in with the invited address — looked broken.
+ * An invite's `email` is a convenience, not an authorization gate: it exists so
+ * the invite shows up in the dashboard of whoever registered with that address.
+ * Holding a valid, unexpired link is what authorizes a claim, so any signed-in
+ * account may accept — including one with a different address.
  *
  * These run against the real service and database.
  *
@@ -15,17 +15,18 @@ import { db } from "@/app/db";
 import { invites, user } from "@/app/db/schema";
 import { claimEnrollmentInvite } from "@/lib/services/enroll";
 
-test("invite claims distinguish expiry, wrong account, and a missing token", {
+test("invite claims are authorized by the link, not the address", {
 	skip: !process.env.MCP_TEST_DATABASE_URL,
 }, async (t) => {
 	assert.equal(process.env.DATABASE_URL, process.env.MCP_TEST_DATABASE_URL);
 
 	const creatorId = crypto.randomUUID();
 	const invitedId = crypto.randomUUID();
-	const invitectedEmail = `${invitedId}@example.test`;
+	const invitedEmail = `${invitedId}@example.test`;
+	const otherEmail = "someone-else@example.test";
 	await db.insert(user).values([
 		{ id: creatorId, name: "Creator", email: `${creatorId}@example.test` },
-		{ id: invitedId, name: "Invited", email: invitectedEmail },
+		{ id: invitedId, name: "Invited", email: `${invitedId}@example.test` },
 	]);
 
 	const makeInvite = async (overrides: Record<string, unknown> = {}) => {
@@ -33,7 +34,7 @@ test("invite claims distinguish expiry, wrong account, and a missing token", {
 			.insert(invites)
 			.values({
 				creatorId,
-				email: invitectedEmail,
+				email: invitedEmail,
 				token: crypto.randomUUID(),
 				...overrides,
 			})
@@ -43,53 +44,59 @@ test("invite claims distinguish expiry, wrong account, and a missing token", {
 
 	try {
 		await t.test(
-			"a personalized invite refuses a different signed-in account",
+			"a different signed-in address can accept the link",
 			async () => {
+				// The reported bug: accepting from another account was refused.
 				const invite = await makeInvite();
-				await assert.rejects(
-					claimEnrollmentInvite(
-						invitedId,
-						"someone-else@example.test",
-						invite.token,
-					),
-					(error: { code?: string; message?: string }) => {
-						assert.equal(error.code, "INVITE_WRONG_ACCOUNT");
-						// The invitee's address must not leak to whoever holds the link.
-						assert.doesNotMatch(
-							error.message ?? "",
-							new RegExp(invitectedEmail),
-						);
-						return true;
-					},
-				);
+				await claimEnrollmentInvite(invitedId, invite.token);
+				const after = await db.query.invites.findFirst({
+					where: eq(invites.id, invite.id),
+				});
+				assert.equal(after?.status, "accepted");
 			},
 		);
 
-		await t.test("matching the invited address is accepted", async () => {
-			const invite = await makeInvite();
-			await claimEnrollmentInvite(invitedId, invitectedEmail, invite.token);
+		await t.test(
+			"accepting does not overwrite the address it was sent to",
+			async () => {
+				// The dashboard listing is keyed on this address, so replacing it with
+				// the claimer's would hide the invite from the intended recipient.
+				const invite = await makeInvite({ email: invitedEmail });
+				await claimEnrollmentInvite(invitedId, invite.token);
+				const after = await db.query.invites.findFirst({
+					where: eq(invites.id, invite.id),
+				});
+				assert.equal(after?.email, invitedEmail);
+			},
+		);
+
+		await t.test("an addressless invite is claimable by anyone", async () => {
+			const invite = await makeInvite({ email: null });
+			await claimEnrollmentInvite(invitedId, invite.token);
 			const after = await db.query.invites.findFirst({
 				where: eq(invites.id, invite.id),
 			});
 			assert.equal(after?.status, "accepted");
+			// A shareable link keeps its null address rather than adopting a claimer.
+			assert.equal(after?.email, null);
 		});
 
 		await t.test(
-			"an expired invite says so, rather than 'unavailable'",
+			"an expired invite still fails, with a real reason",
 			async () => {
 				const invite = await makeInvite({
 					expiresAt: new Date(Date.now() - 1000),
 				});
 				await assert.rejects(
-					claimEnrollmentInvite(invitedId, invitectedEmail, invite.token),
+					claimEnrollmentInvite(invitedId, invite.token),
 					{ code: "INVITE_EXPIRED" },
 				);
 			},
 		);
 
-		await t.test("an unknown token stays a plain not-found", async () => {
+		await t.test("an unknown token stays not-found", async () => {
 			await assert.rejects(
-				claimEnrollmentInvite(invitedId, invitectedEmail, crypto.randomUUID()),
+				claimEnrollmentInvite(invitedId, crypto.randomUUID()),
 				{ code: "NOT_FOUND" },
 			);
 		});
@@ -99,7 +106,7 @@ test("invite claims distinguish expiry, wrong account, and a missing token", {
 			async () => {
 				const invite = await makeInvite({ status: "accepted" });
 				await assert.rejects(
-					claimEnrollmentInvite(invitedId, invitectedEmail, invite.token),
+					claimEnrollmentInvite(invitedId, invite.token),
 					{ code: "NOT_FOUND" },
 				);
 			},

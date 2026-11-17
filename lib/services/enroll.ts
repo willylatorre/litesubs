@@ -328,21 +328,21 @@ export async function createInvite(principal: Principal, input: unknown) {
 	};
 }
 
-export async function claimEnrollmentInvite(
-	userId: string,
-	email: string,
-	token: string,
-) {
+/**
+ * Attach an enrollment (and any promised comp credits) to the signed-in account.
+ *
+ * Authorization is the link, not the address: `invites.email` only exists so the
+ * invite shows up in the dashboard of whoever registered with that address. Any
+ * signed-in account holding a valid, unexpired token may claim it, so the
+ * claimer's email is deliberately not a parameter.
+ */
+export async function claimEnrollmentInvite(userId: string, token: string) {
 	return db.transaction(async (tx) => {
 		const [invite] = await tx
 			.select()
 			.from(invites)
 			.where(and(eq(invites.token, token), eq(invites.status, "pending")))
 			.for("update");
-		// Three very different situations, told apart so the recipient can act. A
-		// single "unavailable or expired" for all of them left people unable to
-		// tell "this is someone else's invite" from "this offer was withdrawn",
-		// with no way to know the fix was to sign in with the other address.
 		if (!invite)
 			throw new ServiceError("NOT_FOUND", "Invite unavailable or expired", 404);
 		if (invite.expiresAt.getTime() <= Date.now())
@@ -350,14 +350,6 @@ export async function claimEnrollmentInvite(
 				"INVITE_EXPIRED",
 				"This invite link has expired. Ask the creator for a new one.",
 				410,
-			);
-		// Never reveal the invite's address: only that the signed-in account is not
-		// the one it was issued to. The holder of the link may not be the invitee.
-		if (invite.email && invite.email.toLowerCase() !== email.toLowerCase())
-			throw new ServiceError(
-				"INVITE_WRONG_ACCOUNT",
-				`This invite was sent to a different email address than the one you are signed in with (${email}). Sign in with the invited address to accept it.`,
-				403,
 			);
 		if (invite.planId) {
 			// An old invite must not resurrect a draft, unpublished, or superseded
@@ -440,7 +432,14 @@ export async function claimEnrollmentInvite(
 		}
 		await tx
 			.update(invites)
-			.set({ status: "accepted", email, planVersionId: invite.planVersionId })
+			.set({
+				status: "accepted",
+				// Leave `email` untouched. It records the address the invite was issued
+				// to (how the intended recipient finds it), not who claimed it — and the
+				// claim may come from a different account. The claimer is already
+				// recorded by the enrollment's userId.
+				planVersionId: invite.planVersionId,
+			})
 			.where(eq(invites.id, invite.id));
 		return { success: true };
 	});

@@ -116,14 +116,11 @@ function GenericInviteCard({
 	token,
 	path,
 	session,
-	canAcceptInvite,
 }: {
 	creatorName: string;
 	token: string;
 	path: string;
 	session: Awaited<ReturnType<typeof auth.api.getSession>>;
-	/** False when the invite names a different address than the signed-in user. */
-	canAcceptInvite: boolean;
 }) {
 	const loginUrl = `/auth/sign-in?callbackURL=${encodeURIComponent(path)}`;
 	const signUpUrl = `/auth/sign-up?callbackURL=${encodeURIComponent(path)}`;
@@ -145,14 +142,7 @@ function GenericInviteCard({
 			</CardContent>
 			<CardFooter>
 				{session?.user ? (
-					canAcceptInvite ? (
-						<AcceptInviteButton token={token} className="w-full" />
-					) : (
-						<p className="text-sm text-muted-foreground">
-							This invite was sent to a different email address. Sign in with
-							the invited account to accept it.
-						</p>
-					)
+					<AcceptInviteButton token={token} className="w-full" />
 				) : (
 					<div className="flex flex-col w-full gap-3">
 						<Button className="w-full" size="lg" asChild>
@@ -225,18 +215,9 @@ export default async function InvitePage({
 		invite.email && session?.user?.email === invite.email,
 	);
 
-	/**
-	 * A personalized invite can only be claimed by the address it was sent to, so
-	 * offering the button to anyone else is a guaranteed failure. Someone holding
-	 * the link from a different account is told to switch instead of clicking
-	 * through to "unavailable or expired".
-	 */
-	const inviteBelongsToAnotherAccount = Boolean(
-		invite.email &&
-			session?.user?.email &&
-			invite.email.toLowerCase() !== session.user.email.toLowerCase(),
-	);
-	const canAccept = Boolean(session?.user) && !inviteBelongsToAnotherAccount;
+	// The address on an invite is a convenience, not a permission: it puts the
+	// invite in the dashboard of whoever registered with it. Holding the link is
+	// what authorizes acceptance, so any signed-in account may accept it.
 
 	return (
 		<div className="min-h-screen flex flex-col items-center justify-center p-6 gap-8 bg-muted/30">
@@ -296,23 +277,15 @@ export default async function InvitePage({
 									</p>
 								)}
 								{session?.user ? (
-									canAccept ? (
-										<AcceptInviteButton
-											token={token}
-											label={
-												complimentary
-													? "Claim complimentary credits"
-													: "Accept & Add to Dashboard"
-											}
-											className="w-full"
-										/>
-									) : (
-										<p className="text-xs text-muted-foreground text-center">
-											This invite was sent to a different email address. Sign in
-											with the invited account, or ask{" "}
-											{invite.creator.name.split(" ")[0]} for a new invite.
-										</p>
-									)
+									<AcceptInviteButton
+										token={token}
+										label={
+											complimentary
+												? "Claim complimentary credits"
+												: "Accept & Add to Dashboard"
+										}
+										className="w-full"
+									/>
 								) : undefined}
 							</div>
 						}
@@ -323,7 +296,6 @@ export default async function InvitePage({
 						token={token}
 						path={path}
 						session={session}
-						canAcceptInvite={canAccept}
 					/>
 				)}
 

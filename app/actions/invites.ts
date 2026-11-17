@@ -52,7 +52,7 @@ export async function getUserPendingInvites() {
 
 export async function claimInvite(token: string) {
 	return authenticatedAction(async (session) => {
-		await claimEnrollmentInvite(session.user.id, session.user.email, token);
+		await claimEnrollmentInvite(session.user.id, token);
 		revalidatePath("/dashboard");
 		return { success: true };
 	});
@@ -69,12 +69,7 @@ export async function respondToInvite(inviteId: string, accept: boolean) {
 			),
 		});
 		if (!invite) return { error: "Invite unavailable or expired" };
-		if (accept)
-			await claimEnrollmentInvite(
-				session.user.id,
-				session.user.email,
-				invite.token,
-			);
+		if (accept) await claimEnrollmentInvite(session.user.id, invite.token);
 		else
 			await db
 				.update(invites)

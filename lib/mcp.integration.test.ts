@@ -309,8 +309,8 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 				await db.insert(user).values({ id: invitedId, name: "Invitee", email });
 				try {
 					const claims = await Promise.allSettled([
-						claimEnrollmentInvite(invitedId, email, token),
-						claimEnrollmentInvite(invitedId, email, token),
+						claimEnrollmentInvite(invitedId, token),
+						claimEnrollmentInvite(invitedId, token),
 					]);
 					assert.equal(
 						claims.filter((c) => c.status === "fulfilled").length,
@@ -375,7 +375,7 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 				assert.ok(token);
 				await db.insert(user).values({ id: invitedId, name: "Trial", email });
 				try {
-					await claimEnrollmentInvite(invitedId, email, token);
+					await claimEnrollmentInvite(invitedId, token);
 					const [enrollment] = await db
 						.select()
 						.from(enrollments)
@@ -452,7 +452,7 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 				});
 				await db.insert(user).values({ id: invitedId, name: "Buyer", email });
 				try {
-					await assert.rejects(claimEnrollmentInvite(invitedId, email, token), {
+					await assert.rejects(claimEnrollmentInvite(invitedId, token), {
 						code: "INVITE_OUTDATED",
 					});
 				} finally {
