@@ -22,6 +22,11 @@ const endpoints = [
 	["POST", "/api/v1/credits/consume", "Consume credits with a machine key"],
 	["GET", "/api/v1/transactions", "Read transaction history"],
 	["GET / POST", "/api/v1/invites", "Read or create invites"],
+	["GET / POST", "/api/v1/webhooks", "List or create your webhook endpoints"],
+	["PATCH / DELETE", "/api/v1/webhooks/:id", "Update or delete an endpoint"],
+	["POST", "/api/v1/webhooks/:id/test", "Send a test event"],
+	["GET", "/api/v1/deliveries", "Read delivery history"],
+	["POST", "/api/v1/deliveries/:id/retry", "Retry a failed delivery"],
 ];
 
 const sections: DocSection[] = [
@@ -168,11 +173,18 @@ export function IntegrationDocs({ embedded = false }: { embedded?: boolean }) {
 					</p>
 
 					<p>
-						Creator tools: list/get/create/update plans, list/get customers,
-						enroll customers, grant credits, and list transactions. The
-						consumption tool is available to machine keys only. No refund,
-						payout, or billing-charge tools are exposed. Scope failures return
-						structured tool errors.
+						Creator tools: list/get/create/update plans, publish and unpublish
+						plans, list/get customers, enroll customers, grant credits, and list
+						transactions. The consumption tool is available to machine keys
+						only. No refund, payout, or billing-charge tools are exposed. Scope
+						failures return structured tool errors.
+					</p>
+					<p>
+						Invites and outgoing webhooks are REST-only: they are not exposed as
+						MCP tools. Invites use <code>/api/v1/invites</code> (scopes{" "}
+						<code>customers:read</code> and <code>customers:write</code>);
+						webhooks use <code>/api/v1/webhooks</code> and need{" "}
+						<code>webhooks:manage</code>.
 					</p>
 				</Section>
 
