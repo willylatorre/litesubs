@@ -241,14 +241,34 @@ with no account create one there, so it covers both cases. Without this variable
 the button falls back to creating the account for the creator, so payments still
 work — but the OAuth option stays hidden.
 
-Register the callback in Stripe Dashboard → Connect → Settings → Redirects:
+Two more settings are required in the same Connect settings area, and neither is
+detectable from the client id alone:
 
-```
-https://<your-host>/api/connect/oauth/callback
+1. **Enable Standard OAuth.** A client id can be valid and present while the flow
+   is switched off, in which case Stripe answers the authorize request with
+   `400 Standard OAuth is disabled for this Stripe Connect integration. If you
+   own this integration, you can enable the Standard OAuth flow in the Connect
+   Settings page in your dashboard.` Enable it under Connect → Settings → OAuth.
+2. **Register the callback** under Connect → Settings → Redirects:
+
+   ```
+   https://<your-host>/api/connect/oauth/callback
+   ```
+
+   For local development register `http://localhost:3000/api/connect/oauth/callback`
+   too. `oauthCallbackUrl()` in `lib/services/connect.ts` builds it from the app
+   URL, so the host must match exactly. This is a public client id, not a secret
+   key; do not add it as a secret.
+
+Check the configuration without creating anything — the authorize endpoint is a
+plain GET that renders Stripe's page:
+
+```bash
+curl -sL "https://connect.stripe.com/oauth/authorize?response_type=code&client_id=$STRIPE_CONNECT_CLIENT_ID&scope=read_write&redirect_uri=$(python3 -c 'import urllib.parse;print(urllib.parse.quote("https://<your-host>/api/connect/oauth/callback",safe=""))')&state=probe"
 ```
 
-`oauthCallbackUrl()` in `lib/services/connect.ts` builds it from the app URL, so
-the host must match exactly. This is a public client id, not a secret key.
+A JSON error means the flow is still disabled or the redirect is unregistered; an
+HTML authorization page means OAuth is ready.
 
 ### Which account shapes may sell
 
