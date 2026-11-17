@@ -102,7 +102,7 @@ export function PlanCard({
 	return (
 		<Card
 			className={cn(
-				"relative flex flex-col justify-between p-3 shadow-xl border-0 font-sans h-full min-h-[200px]",
+				"relative @container/plan-card flex flex-col justify-between p-3 shadow-xl border-0 font-sans h-full min-h-[200px]",
 				className,
 			)}
 		>
@@ -148,10 +148,10 @@ export function PlanCard({
 				</div>
 			</div>
 
-			<div className="flex items-center justify-between gap-4 mt-4 w-full">
+			<div className="mt-4 flex w-full flex-col gap-4 @[300px]/plan-card:flex-row @[300px]/plan-card:items-center @[300px]/plan-card:justify-between">
 				<div
 					className={cn(
-						"text-sm font-bold",
+						"whitespace-nowrap text-sm font-bold",
 						withEvents &&
 							onCreditsHover &&
 							"cursor-help hover:text-primary transition-colors",
@@ -169,6 +169,7 @@ export function PlanCard({
 					</span>
 				</div>
 				<div
+					className="w-full min-w-0 @[300px]/plan-card:w-auto"
 					{...(withEvents
 						? {
 								onMouseEnter: handlePriceEnter,

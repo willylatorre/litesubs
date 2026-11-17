@@ -20,7 +20,7 @@ function DashboardSkeleton() {
 				</div>
 				<div className="px-4 lg:px-6">
 					<Skeleton className="h-6 w-48 mb-4" />
-					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+					<div className="grid gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-3">
 						<Skeleton className="h-[200px] w-full rounded-xl" />
 						<Skeleton className="h-[200px] w-full rounded-xl" />
 						<Skeleton className="h-[200px] w-full rounded-xl" />

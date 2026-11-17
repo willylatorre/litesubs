@@ -42,7 +42,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 					}
 				>
 					<AppSidebar variant="inset" />
-					<SidebarInset>
+					<SidebarInset className="min-w-0">
 						<SiteHeader />
 						<div className="flex flex-1 flex-col">{children}</div>
 					</SidebarInset>

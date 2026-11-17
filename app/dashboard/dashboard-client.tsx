@@ -118,7 +118,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 								</div>
 							</div>
 						) : (
-							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+							<div className="grid gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-3">
 								{allEnrollments.map((enrollment) => {
 									const isPurchased =
 										purchasedPlanId && enrollment.plan.id === purchasedPlanId;
