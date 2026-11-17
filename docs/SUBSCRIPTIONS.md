@@ -276,6 +276,17 @@ curl -s https://api.stripe.com/v1/webhook_endpoints -u "$STRIPE_SECRET_KEY:" \
 
 `connect: false`, or a short `enabled_events` list, means fulfillment is dark.
 
+The deployed live endpoint is `we_1UcneaRWjb7lNeYoPJYSUV8Y` (11 events). Its
+signing secret is `STRIPE_WEBHOOK_SECRET`; rotating the endpoint means updating
+that variable and redeploying, since verification fails closed with
+`400 Invalid signature`.
+
+A platform endpoint on the *same URL* is not a harmless duplicate: it delivers
+its own subset to the same handler, so every event it subscribes to is processed
+twice. Keep exactly one Connect endpoint per host. The previous Better Auth
+plugin endpoint (`/api/auth/stripe/webhook`) is dead — that plugin is gone — and
+should not be recreated.
+
 ### 4. Connect OAuth client id, for "Connect with Stripe"
 
 `STRIPE_CONNECT_CLIENT_ID` enables the OAuth path (`/api/connect/oauth/start`).
