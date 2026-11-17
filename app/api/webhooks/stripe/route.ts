@@ -122,6 +122,21 @@ async function handleCheckoutCompleted(
 	}
 }
 
+/**
+ * A connected account lives in exactly one Stripe mode. An event arriving in the
+ * other mode can never legitimately reference it, so a mismatch means a forged or
+ * misrouted event rather than a subscription to fulfil.
+ *
+ * `null` means the row predates mode tracking; Stripe's event is then trusted,
+ * because blocking it would strand accounts created before this was recorded.
+ */
+function modeMismatch(
+	accountLivemode: boolean | null,
+	eventLivemode: boolean | undefined,
+) {
+	return accountLivemode !== null && accountLivemode !== eventLivemode;
+}
+
 async function handleSubscriptionCheckoutCompleted(
 	checkoutSession: Stripe.Checkout.Session,
 	eventId: string,
@@ -129,10 +144,6 @@ async function handleSubscriptionCheckoutCompleted(
 ): Promise<Response> {
 	const localId = checkoutSession.metadata?.subscriptionId;
 	if (!localId) return new Response(null, { status: 200 });
-	if (checkoutSession.livemode)
-		return new Response("Monthly subscriptions are test-mode only", {
-			status: 400,
-		});
 	const stripeSubscriptionId =
 		typeof checkoutSession.subscription === "string"
 			? checkoutSession.subscription
@@ -161,7 +172,7 @@ async function handleSubscriptionCheckoutCompleted(
 		if (
 			!owner ||
 			owner.userId !== subscription.creatorId ||
-			owner.livemode !== false
+			modeMismatch(owner.livemode, checkoutSession.livemode)
 		)
 			return new Response("Account mismatch", { status: 400 });
 		const customerId =
@@ -220,10 +231,6 @@ async function subscriptionInvoiceContext(
 	const localId = details?.metadata?.subscriptionId;
 	// This connected account may also create subscriptions outside Litesubs.
 	if (!localId) return null;
-	if (invoice.livemode)
-		return new Response("Monthly subscriptions are test-mode only", {
-			status: 400,
-		});
 	if (!stripeSubscriptionId)
 		return new Response("Missing subscription metadata", { status: 400 });
 
@@ -253,7 +260,7 @@ async function subscriptionInvoiceContext(
 	if (
 		!owner ||
 		owner.userId !== subscription.creatorId ||
-		owner.livemode !== false
+		modeMismatch(owner.livemode, invoice.livemode)
 	)
 		return new Response("Account mismatch", { status: 400 });
 	const customerId =
@@ -422,8 +429,7 @@ async function handleSubscriptionLifecycle(
 		if (
 			!owner ||
 			owner.userId !== subscription.creatorId ||
-			owner.livemode !== false ||
-			eventLivemode
+			modeMismatch(owner.livemode, eventLivemode)
 		)
 			return new Response("Account mismatch", { status: 400 });
 		const eventCustomerId =

@@ -346,11 +346,11 @@ export async function startPurchase(
 }
 
 /**
- * Start a monthly Checkout on the plan owner's connected account. Monthly sales
- * are intentionally restricted to sandbox-connected accounts until the monthly
- * live-release gate is complete. A partial unique index and a creator/customer/plan lock
- * ensure duplicate requests reuse one pending Checkout instead of creating
- * multiple subscriptions.
+ * Start a monthly Checkout on the plan owner's connected account. Sales work in
+ * both Stripe modes; the subscription is created on the creator's account and
+ * each confirmed paid invoice grants a non-rolling allowance. A partial unique
+ * index and a creator/customer/plan lock ensure duplicate requests reuse one
+ * pending Checkout instead of creating multiple subscriptions.
  */
 export async function startSubscription(
 	principal: Principal,
@@ -392,10 +392,14 @@ export async function startSubscription(
 		),
 		columns: { livemode: true },
 	});
-	if (account?.livemode !== false)
+	// Monthly sales are allowed in both Stripe modes. The account must be in a
+	// consistent mode for its own events to be trustworthy, which the webhook
+	// enforces per event; the subscription is created on the creator's account
+	// with their payment methods, so live billing is the same code path.
+	if (!account)
 		throw new ServiceError(
-			"SUBSCRIPTIONS_SANDBOX_ONLY",
-			"Monthly subscriptions are available in Stripe test mode only until the live-release gate is complete",
+			"PAYMENTS_NOT_READY",
+			"This creator cannot accept payments yet",
 			409,
 		);
 

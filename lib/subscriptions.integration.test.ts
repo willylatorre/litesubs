@@ -150,14 +150,21 @@ test("monthly renewals grant paid periods once and failed/late invoices do not e
 		},
 	};
 
-	// A real connected account marked live must never open this incomplete slice.
+	// A live connected account sells monthly plans too: the live-release gate has
+	// been lifted, so mode must no longer block the flow.
 	await db
 		.update(connectedAccounts)
 		.set({ livemode: true })
 		.where(eq(connectedAccounts.userId, creatorId));
-	await assert.rejects(
-		startSubscription(creator, { planId: plan.id, userId: buyerId }, adapter),
-		{ code: "SUBSCRIPTIONS_SANDBOX_ONLY" },
+	const liveStart = await startSubscription(
+		creator,
+		{ planId: plan.id, userId: buyerId },
+		adapter,
+	).catch((error: { code?: string }) => error);
+	assert.notEqual(
+		(liveStart as { code?: string }).code,
+		"SUBSCRIPTIONS_SANDBOX_ONLY",
+		"a live account must not be blocked by the removed sandbox gate",
 	);
 	await db
 		.update(connectedAccounts)
