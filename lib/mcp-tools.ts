@@ -8,7 +8,12 @@ import {
 	listCustomers,
 	listTransactions,
 } from "@/lib/services/customers";
-import { enrollCustomer, enrollmentInput } from "@/lib/services/enroll";
+import {
+	createInvite,
+	enrollCustomer,
+	enrollmentInput,
+	listInvites,
+} from "@/lib/services/enroll";
 import {
 	createPlan,
 	getPlan,
@@ -23,6 +28,16 @@ import {
 	unpublishInput,
 	unpublishPlan,
 } from "@/lib/services/publish";
+import {
+	createEndpoint,
+	deleteEndpoint,
+	listDeliveries,
+	listEndpoints,
+	retryDelivery,
+	sendTestEvent,
+	updateEndpoint,
+} from "@/lib/services/webhooks";
+import { WEBHOOK_EVENT_TYPES } from "@/lib/webhook-events";
 
 /**
  * Server-level guidance, sent in the initialize response. Clients surface this
@@ -32,7 +47,7 @@ import {
  */
 const instructions = `Litesubs manages credit plans. A plan is a service with commercial terms: credits at a price, either one-time or monthly. An enrollment ties one customer to one plan and holds that customer's balance for it. Typical order: create_plan, enroll_customer, then grant_credits if needed.
 
-Rules worth repeating: a new plan starts as a draft with no published terms, and a draft cannot be enrolled or purchased. Publishing requires a payment-ready connected Stripe account; use publish_plan (or the dashboard) and it provisions the Product/Price on the creator's account. Publishing new terms supersedes the previous version while existing customers keep theirs; unpublish_plan stops new sales and needs confirm: true. Plan prices in create_plan/update_plan are major units (10 means $10), while responses return minor units (cents). Published terms are immutable: editing terms replaces the draft only, and already-sold credits do not change. Monthly plans are subscriptions, not top-ups: the customer authorizes the monthly price and each confirmed paid invoice grants a non-rolling allowance. consume_credits requires an idempotency_key built from the business event, not a timestamp, and is unavailable to OAuth connections (it needs an API key). enroll_customer defaults to invoice mode and returns a payment link; credits arrive only after payment, and no email is sent, so forward the link yourself. Comp enrollment requires a reason and cannot be repeated for an existing enrollment. Complimentary or manually added credits on a monthly plan inherit the current paid period and need expires_at when no period is paid; one-time credits do not expire. No payout, refund, or billing-charge tools exist.`;
+Rules worth repeating: a new plan starts as a draft with no published terms, and a draft cannot be enrolled or purchased. Publishing requires a payment-ready connected Stripe account; use publish_plan (or the dashboard) and it provisions the Product/Price on the creator's account. Publishing new terms supersedes the previous version while existing customers keep theirs; unpublish_plan stops new sales and needs confirm: true. Plan prices in create_plan/update_plan are major units (10 means $10), while responses return minor units (cents). Published terms are immutable: editing terms replaces the draft only, and already-sold credits do not change. Monthly plans are subscriptions, not top-ups: the customer authorizes the monthly price and each confirmed paid invoice grants a non-rolling allowance. consume_credits requires an idempotency_key built from the business event, not a timestamp, and is unavailable to OAuth connections (it needs an API key). enroll_customer defaults to invoice mode and returns a payment link; credits arrive only after payment, and no email is sent, so forward the link yourself. Comp enrollment requires a reason and cannot be repeated for an existing enrollment. Complimentary or manually added credits on a monthly plan inherit the current paid period and need expires_at when no period is paid; one-time credits do not expire. create_invite produces a claimable link for someone without an account; its email is optional and only makes the invite appear in that person's dashboard, so it does not restrict who may accept. Outgoing webhooks (create_webhook and friends) need an https receiver and return their signing secret once; use send_test_webhook before relying on them. No payout, refund, or billing-charge tools exist.`;
 
 export function createServer(principal: Principal) {
 	const server = new McpServer(
@@ -178,6 +193,90 @@ export function createServer(principal: Principal) {
 		}),
 		true,
 		(input) => listTransactions(principal, input),
+	);
+
+	// Invites: REST and MCP expose the same two operations. An invite is how a
+	// customer who has no account yet gets a claimable link, so an assistant that
+	// cannot invite can only work with people who already signed up.
+	register(
+		"list_invites",
+		"List the invites you have issued, newest first, with the plan each offers and whether it is still pending. Paginate with limit/offset. Invite links are personal: do not post them publicly.",
+		pageInput,
+		true,
+		(input) => listInvites(principal, input),
+	);
+	register(
+		"create_invite",
+		"Create a claimable invite link for a customer. planId offers that plan's published terms; omit it for a plain 'connect with me' invite. email is optional and only makes the invite appear in that person's dashboard — it does not restrict who may accept the link. Returns the URL; NO EMAIL IS SENT, so forward it yourself. Asking twice for the same email and plan returns the existing link instead of a second one.",
+		z.object({
+			email: z.email().optional(),
+			planId: z.string().optional(),
+		}),
+		false,
+		(input) => createInvite(principal, input),
+	);
+
+	// Outgoing webhooks: the only way a creator learns about credit changes
+	// without polling, so an assistant needs them to build anything reactive.
+	register(
+		"list_webhooks",
+		"List your outgoing webhook endpoints. Signing secrets are never returned here; the secret is shown once when the endpoint is created.",
+		z.object({}),
+		true,
+		() => listEndpoints(principal),
+	);
+	register(
+		"create_webhook",
+		"Register an HTTPS endpoint to receive signed events. events is one or both of purchase.completed and credits.changed; max 2. Returns the signing secret ONCE, so store it immediately — it cannot be read again. The URL must be public https (loopback may use http).",
+		z.object({
+			name: z.string().trim().min(1).max(120),
+			url: z.string().trim().max(2000),
+			events: z.array(z.enum(WEBHOOK_EVENT_TYPES)).min(1).max(2),
+		}),
+		false,
+		(input) => createEndpoint(principal, input),
+	);
+	register(
+		"update_webhook",
+		"Rename, re-point, re-subscribe, or enable/disable an endpoint. Supply only the fields to change. Setting a new URL does not rotate the signing secret.",
+		z.object({
+			endpointId: z.string().min(1),
+			name: z.string().trim().min(1).max(120).optional(),
+			url: z.string().trim().max(2000).optional(),
+			events: z.array(z.enum(WEBHOOK_EVENT_TYPES)).min(1).max(2).optional(),
+			active: z.boolean().optional(),
+		}),
+		false,
+		({ endpointId, ...changes }) =>
+			updateEndpoint(principal, endpointId, changes),
+	);
+	register(
+		"delete_webhook",
+		"Delete an endpoint and its delivery history. Requires confirm: true because the endpoint stops receiving events immediately and cannot be restored.",
+		z.object({ endpointId: z.string().min(1), confirm: z.literal(true) }),
+		false,
+		({ endpointId }) => deleteEndpoint(principal, endpointId),
+	);
+	register(
+		"list_webhook_deliveries",
+		"Read delivery history for your endpoints, newest first, including failures with their HTTP status so a broken receiver can be diagnosed. Paginate with limit/offset.",
+		pageInput,
+		true,
+		(input) => listDeliveries(principal, input),
+	);
+	register(
+		"retry_webhook_delivery",
+		"Re-send one recorded delivery. Safe to retry: the receiver is expected to deduplicate on the event id in the payload.",
+		z.object({ deliveryId: z.string().min(1) }),
+		false,
+		({ deliveryId }) => retryDelivery(principal, deliveryId),
+	);
+	register(
+		"send_test_webhook",
+		"Send a sample credits.changed event to one endpoint so the receiver's signature verification and parsing can be proven before real events depend on it.",
+		z.object({ endpointId: z.string().min(1) }),
+		false,
+		({ endpointId }) => sendTestEvent(principal, endpointId),
 	);
 	return server;
 }

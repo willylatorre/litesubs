@@ -43,14 +43,15 @@ export function buildLlmsTxt(): string {
 - Scopes: plans:read, plans:write, customers:read, customers:write, billing:read,
   webhooks:manage.
 - Creator tools: list_plans, get_plan, create_plan, update_plan, publish_plan,
-  unpublish_plan, list_customers, get_customer, enroll_customer, grant_credits,
-  list_transactions.
+  unpublish_plan, list_customers, get_customer, enroll_customer, list_invites,
+  create_invite, grant_credits, list_transactions, list_webhooks, create_webhook,
+  update_webhook, delete_webhook, list_webhook_deliveries,
+  retry_webhook_delivery, send_test_webhook.
 - Machine-key tools: consume_credits only (permission credits:consume).
-- Invites and outgoing webhooks have no MCP tools; use REST. Invites:
-  GET/POST /api/v1/invites. Webhooks: GET/POST /api/v1/webhooks,
-  PATCH/DELETE /api/v1/webhooks/:id, POST /api/v1/webhooks/:id/test,
-  GET /api/v1/deliveries, POST /api/v1/deliveries/:id/retry. The
-  webhooks:manage scope is required and a machine key can never hold it.
+- Invites and webhooks work over MCP and REST alike. An invite's email is
+  optional and only decides whose dashboard it appears in. A webhook signing
+  secret is returned once at creation. Webhook tools need webhooks:manage and a
+  machine key can never hold it.
 - No payout or refund tools are exposed. Refunds are issued in the creator's
   Stripe Dashboard; Litesubs then revokes only the refunded purchase's unspent
   credits.
@@ -101,7 +102,7 @@ Content-Type: application/json. Lists accept limit (1-100, default 50) and offse
 - GET /api/v1/deliveries - delivery history for your endpoints
 - POST /api/v1/deliveries/:id/retry - retry one failed delivery
 
-Invites and webhooks are REST-only; they are not MCP tools. Invites use
+Invites and webhooks are available as MCP tools and over REST. Invites use
 customers:read (list) and customers:write (create); webhooks need webhooks:manage.
 
 Errors return code, error, and optional details or fieldErrors. Status codes:

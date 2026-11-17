@@ -62,3 +62,27 @@ test("docs do not advertise a route group that was never implemented", async () 
 		`Documented but unimplemented groups: ${phantom.join(", ")}`,
 	);
 });
+
+/**
+ * The MCP surface drifts separately from REST: a tool can exist while the docs
+ * still call that capability REST-only, which tells an agent not to use a tool it
+ * actually has. Extract the registered tool names from the source (importing
+ * pulls in the auth stack) and require each to be named in both surfaces.
+ */
+test("every MCP tool is named in the agent-facing docs", async () => {
+	const source = await readFile("lib/mcp-tools.ts", "utf8");
+	const registered = [
+		...source.matchAll(/register\(\s*\n?\s*"([a-z_]+)"/g),
+	].map((match) => match[1]);
+	assert.ok(registered.length > 0, "tool registry not parsed");
+
+	for (const file of DOC_SURFACES) {
+		const docs = await readFile(file, "utf8");
+		const missing = registered.filter((tool) => !docs.includes(tool));
+		assert.deepEqual(
+			missing,
+			[],
+			`${file} does not name these MCP tools: ${missing.join(", ")}`,
+		);
+	}
+});

@@ -173,18 +173,27 @@ export function IntegrationDocs({ embedded = false }: { embedded?: boolean }) {
 					</p>
 
 					<p>
-						Creator tools: list/get/create/update plans, publish and unpublish
-						plans, list/get customers, enroll customers, grant credits, and list
-						transactions. The consumption tool is available to machine keys
-						only. No refund, payout, or billing-charge tools are exposed. Scope
-						failures return structured tool errors.
+						Creator tools: <code>list_plans</code>, <code>get_plan</code>,{" "}
+						<code>create_plan</code>, <code>update_plan</code>,{" "}
+						<code>publish_plan</code>, <code>unpublish_plan</code>,{" "}
+						<code>list_customers</code>, <code>get_customer</code>,{" "}
+						<code>enroll_customer</code>, <code>list_invites</code>,{" "}
+						<code>create_invite</code>, <code>grant_credits</code>,{" "}
+						<code>list_transactions</code>, <code>list_webhooks</code>,{" "}
+						<code>create_webhook</code>, <code>update_webhook</code>,{" "}
+						<code>delete_webhook</code>, <code>list_webhook_deliveries</code>,{" "}
+						<code>retry_webhook_delivery</code>, and{" "}
+						<code>send_test_webhook</code>. Machine keys get{" "}
+						<code>consume_credits</code> only. No refund, payout, or
+						billing-charge tools are exposed. Scope failures return structured
+						tool errors.
 					</p>
 					<p>
-						Invites and outgoing webhooks are REST-only: they are not exposed as
-						MCP tools. Invites use <code>/api/v1/invites</code> (scopes{" "}
-						<code>customers:read</code> and <code>customers:write</code>);
-						webhooks use <code>/api/v1/webhooks</code> and need{" "}
-						<code>webhooks:manage</code>.
+						Invites and webhooks work over MCP <em>and</em> REST, with the same
+						rules: an invite&apos;s email is optional and only decides whose
+						dashboard it appears in, and a signing secret is returned once at
+						creation. Webhook tools need the <code>webhooks:manage</code> scope,
+						which a machine key can never hold.
 					</p>
 				</Section>
 
