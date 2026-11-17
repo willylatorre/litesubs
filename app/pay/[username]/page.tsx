@@ -129,6 +129,11 @@ export default async function PayPage({
 		"use server";
 		const current = await auth.api.getSession({ headers: await headers() });
 		if (!current?.user) redirect("/auth/sign-in");
+		// `redirect()` works by throwing NEXT_REDIRECT. Running it inside this
+		// `try` made the catch treat a successful checkout as a failure, so the
+		// buyer was redirected to an error page instead of Stripe. Capture the
+		// destination and redirect after the try block.
+		let destination: string;
 		try {
 			// Consumption happens here, so browsing the page does not burn the link
 			// but a forwarded or replayed link cannot start a second checkout.
@@ -142,7 +147,8 @@ export default async function PayPage({
 				planId,
 				userId: current.user.id,
 			});
-			if (purchase.url) redirect(purchase.url);
+			if (!purchase.url) throw new Error("Checkout did not return a URL");
+			destination = purchase.url;
 		} catch (error) {
 			redirect(
 				`${appUrl(path)}?error=${encodeURIComponent(
@@ -150,6 +156,7 @@ export default async function PayPage({
 				)}`,
 			);
 		}
+		redirect(destination);
 	}
 
 	return (

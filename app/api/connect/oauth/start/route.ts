@@ -15,6 +15,10 @@ export const runtime = "nodejs";
  * state bound to this user.
  */
 export async function GET() {
+	// `redirect()` works by throwing, so it must never run inside a `try` whose
+	// `catch` handles application errors: the thrown NEXT_REDIRECT would be
+	// mistaken for a failure and returned as a 500 instead of redirecting.
+	let target: string;
 	try {
 		const session = await auth.api.getSession({ headers: await headers() });
 		if (!session?.user)
@@ -27,7 +31,7 @@ export async function GET() {
 			);
 
 		const { url } = await startExistingAccountConnection(session.user.id);
-		redirect(url);
+		target = url;
 	} catch (error) {
 		if (
 			error instanceof ServiceError &&
@@ -42,4 +46,6 @@ export async function GET() {
 			);
 		return errorResponse(error);
 	}
+
+	redirect(target);
 }
