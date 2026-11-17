@@ -233,7 +233,50 @@ request id (`Stripe request failed { type, requestId }`) without echoing the key
 Do not paper over a missing scope by widening the key silently, and never log or
 paste the key itself — Stripe's permission message includes a key fragment.
 
-### 3. Connect OAuth client id, for "Connect with Stripe"
+### 3. The webhook endpoint must be a *Connect* endpoint
+
+Litesubs sells with direct charges, so a purchase happens **on the creator's
+connected account**. Stripe raises those events against that account, not the
+platform, and only delivers them to a webhook endpoint marked as a Connect
+endpoint (`connect: true`) with the relevant `*.connect` events enabled.
+
+The handler depends on this in two ways:
+
+- It reads `event.account` (the connected account id) to decide whose credits to
+  grant and which subscriptions to update. Platform-level events carry no
+  `account`, and the code deliberately bails out (`if (!eventAccountId) return`)
+  rather than guessing.
+- Credits are granted **only** by the webhook. The success page never grants, and
+  there is no cron or polling reconciliation, so a missing event means a paid
+  customer never receives credits.
+
+Required on the Connect endpoint (`https://<host>/api/webhooks/stripe`):
+
+| Event | Why |
+| --- | --- |
+| `checkout.session.completed` | One-time pack fulfillment and subscription attach |
+| `checkout.session.async_payment_succeeded` | Delayed payment methods |
+| `checkout.session.expired` | Close the abandoned purchase |
+| `invoice.paid` | Monthly allowance per paid period |
+| `invoice.payment_failed` | Stop/renewal handling |
+| `invoice.payment_action_required` | 3DS/SCA on renewal |
+| `customer.subscription.updated` | Cancel/resume, period changes |
+| `customer.subscription.deleted` | Terminal state |
+| `charge.refunded` | Revoke only the refunded units |
+| `account.updated` | Capability/readiness sync |
+| `account.application.deauthorized` | Creator revoked platform access |
+
+Verify with the API, not the dashboard summary — a platform endpoint looks
+healthy while receiving none of these:
+
+```bash
+curl -s https://api.stripe.com/v1/webhook_endpoints -u "$STRIPE_SECRET_KEY:" \
+  | jq '.data[] | {url, connect, enabled_events}'
+```
+
+`connect: false`, or a short `enabled_events` list, means fulfillment is dark.
+
+### 4. Connect OAuth client id, for "Connect with Stripe"
 
 `STRIPE_CONNECT_CLIENT_ID` enables the OAuth path (`/api/connect/oauth/start`).
 The creator authorizes Litesubs on Stripe's own page, which also lets someone
