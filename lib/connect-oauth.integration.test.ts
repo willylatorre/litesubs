@@ -217,7 +217,13 @@ test("Connect OAuth state is single-use, user-bound, and refuses account switchi
 					adapter,
 				);
 				assert.equal(result.compatible, false);
-				assert.ok(result.issues.includes("platform_controlled"));
+				// Express dashboard, platform-paid fees and platform liability are the
+				// actual disqualifiers; the account's origin no longer matters.
+				assert.deepEqual(result.issues, [
+					"no_full_dashboard",
+					"platform_pays_fees",
+					"platform_liable_for_losses",
+				]);
 
 				const { getPaymentReadiness } = await import("@/lib/services/connect");
 				const readiness = await getPaymentReadiness(newerId);

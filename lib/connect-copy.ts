@@ -6,7 +6,6 @@
  */
 
 export type CompatibilityIssue =
-	| "platform_controlled"
 	| "no_full_dashboard"
 	| "platform_pays_fees"
 	| "platform_liable_for_losses"
@@ -28,8 +27,6 @@ export const RESPONSIBILITY_COPY: ResponsibilityCopy = {
 
 /** Explanation for each incompatibility; the account is never silently changed. */
 export const COMPATIBILITY_MESSAGES: Record<CompatibilityIssue, string> = {
-	platform_controlled:
-		"This is a Stripe account Litesubs manages for you, not a business you operate. Connect the account you log in to yourself.",
 	no_full_dashboard:
 		"This account does not have full Dashboard access, so you would lose control of your own business. Use an account with the full Stripe Dashboard.",
 	platform_pays_fees:

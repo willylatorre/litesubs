@@ -31,26 +31,49 @@ describe("checkCompatibility", () => {
 		assert.equal(result.configuration.controllerType, "account");
 	});
 
-	it("rejects a platform-controlled account", () => {
+	it("accepts a Standard OAuth account even though Stripe omits the sub-fields", () => {
+		// A real Standard account reports exactly `{type: "account"}` and nothing
+		// else. The fee/loss/dashboard fields are only present on platform-created
+		// accounts, so requiring them here would block every OAuth connection.
+		const result = checkCompatibility({
+			controller: { type: "account" },
+		});
+		assert.equal(result.compatible, true);
+		assert.deepEqual(result.issues, []);
+	});
+
+	it("accepts a platform-created account with the agreed responsibilities", () => {
+		// Every account a platform creates reports controller.type = "application";
+		// it is read-only and records who created the account, not who owns the
+		// responsibilities. Gating on it made the new-account flow produce accounts
+		// that could never sell.
 		const result = checkCompatibility(configured({ type: "application" }));
-		assert.equal(result.compatible, false);
-		assert.ok(result.issues.includes("platform_controlled"));
+		assert.equal(result.compatible, true);
+		assert.deepEqual(result.issues, []);
 	});
 
 	it("rejects an account without full Dashboard access", () => {
-		const result = checkCompatibility(configured({ dashboard: "express" }));
+		// Only platform-controlled accounts expose these sub-fields, so the
+		// rejection cases are expressed on that shape.
+		const result = checkCompatibility(
+			configured({ type: "application", dashboard: "express" }),
+		);
 		assert.equal(result.compatible, false);
 		assert.ok(result.issues.includes("no_full_dashboard"));
 	});
 
 	it("rejects an account where the platform would pay Stripe fees", () => {
-		const result = checkCompatibility(configured({ fees: "application" }));
+		const result = checkCompatibility(
+			configured({ type: "application", fees: "application" }),
+		);
 		assert.equal(result.compatible, false);
 		assert.ok(result.issues.includes("platform_pays_fees"));
 	});
 
 	it("rejects an account where the platform is liable for negative balances", () => {
-		const result = checkCompatibility(configured({ losses: "application" }));
+		const result = checkCompatibility(
+			configured({ type: "application", losses: "application" }),
+		);
 		assert.equal(result.compatible, false);
 		assert.ok(result.issues.includes("platform_liable_for_losses"));
 	});
@@ -70,7 +93,6 @@ describe("checkCompatibility", () => {
 			}),
 		);
 		assert.deepEqual(result.issues, [
-			"platform_controlled",
 			"no_full_dashboard",
 			"platform_pays_fees",
 		]);

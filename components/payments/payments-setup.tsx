@@ -149,6 +149,16 @@ export function PaymentsSetup({
 		readiness.status === "restricted" ||
 		readiness.status === "pending";
 
+	/**
+	 * Stripe-hosted Connect OAuth is the primary way in: the creator authorizes
+	 * Litesubs on Stripe's own page, which handles both an existing account and
+	 * creating one there. That produces an account the creator controls.
+	 *
+	 * If the platform has no OAuth client id configured, fall back to creating
+	 * the account for the creator instead of showing a dead link.
+	 */
+	const useOauth = !readiness.hasAccount && readiness.existingAccountAvailable;
+
 	const resultMessage = connectResult
 		? connectResults[connectResult]
 		: undefined;
@@ -301,11 +311,20 @@ export function PaymentsSetup({
 					)}
 
 					<div className="flex flex-wrap gap-2">
-						{needsOnboarding && (
-							<Button onClick={onboarding} disabled={pending}>
-								<IconClock className="mr-2 h-4 w-4" />
-								{readiness.hasAccount ? "Continue setup" : "Set up payments"}
+						{useOauth ? (
+							<Button asChild>
+								<a href="/api/connect/oauth/start">
+									<IconBuilding className="mr-2 h-4 w-4" />
+									Connect with Stripe
+								</a>
 							</Button>
+						) : (
+							needsOnboarding && (
+								<Button onClick={onboarding} disabled={pending}>
+									<IconClock className="mr-2 h-4 w-4" />
+									{readiness.hasAccount ? "Continue setup" : "Set up payments"}
+								</Button>
+							)
 						)}
 						{readiness.dashboardUrl && (
 							<Button asChild variant="outline">
@@ -316,14 +335,6 @@ export function PaymentsSetup({
 								>
 									Open Stripe Dashboard
 									<IconExternalLink className="ml-2 h-4 w-4" />
-								</a>
-							</Button>
-						)}
-						{!readiness.hasAccount && readiness.existingAccountAvailable && (
-							<Button asChild variant="outline">
-								<a href="/api/connect/oauth/start">
-									<IconBuilding className="mr-2 h-4 w-4" />
-									Connect an existing Stripe account
 								</a>
 							</Button>
 						)}
@@ -338,6 +349,12 @@ export function PaymentsSetup({
 							</Button>
 						)}
 					</div>
+					{useOauth && (
+						<p className="text-xs text-muted-foreground">
+							You&apos;ll finish on Stripe&apos;s site, where you can sign in to
+							an existing account or create a new one.
+						</p>
+					)}
 				</CardContent>
 			</Card>
 

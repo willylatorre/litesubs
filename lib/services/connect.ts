@@ -104,11 +104,26 @@ export function checkCompatibility(account: ControllerLike): Compatibility {
 	};
 	const issues: CompatibilityIssue[] = [];
 
-	// An account Litesubs created is platform-controlled; an OAuth-connected
-	// business controls itself. Only the latter matches the agreed model.
-	if (configuration.controllerType === "application")
-		issues.push("platform_controlled");
-	else if (configuration.controllerType !== "account")
+	// Two account shapes are legitimate, and Stripe reports them differently.
+	//
+	// A **self-controlled** account (`controller.type === "account"`) is a Standard
+	// account: the business created it itself and connected it to us over OAuth.
+	// Stripe reports *only* `{type: "account"}` for these — the fees/losses/
+	// dashboard sub-fields are absent, because they are not negotiable: a Standard
+	// account always has the full Dashboard, always pays its own processing fees,
+	// and Stripe always carries its negative-balance liability. Treating the
+	// missing sub-fields as "unknown configuration" would reject exactly the
+	// accounts the agreement is about.
+	if (configuration.controllerType === "account")
+		return { compatible: true, issues: [], configuration };
+
+	// A **platform-controlled** account (`type === "application"`) is one a
+	// platform created via the API. `is_controller` is always true for these and
+	// the field cannot be supplied on creation, so the account's origin alone must
+	// not disqualify it — otherwise every account our own onboarding flow creates
+	// would be unsellable forever. What matters is the negotiated responsibilities
+	// below, which Stripe *does* report for these accounts.
+	if (configuration.controllerType !== "application")
 		issues.push("unknown_configuration");
 
 	if (configuration.dashboardType !== "full") issues.push("no_full_dashboard");

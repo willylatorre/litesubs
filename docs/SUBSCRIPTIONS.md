@@ -199,6 +199,7 @@ Two independent things must be true.
 
 ### 1. Connect is enabled on the platform account
 
+
 Connect is a platform-level signup, not a per-key setting. With it disabled,
 Stripe rejects account creation with `You can only create new accounts if you've
 signed up for Connect`. Enable it once at
@@ -231,6 +232,40 @@ request id (`Stripe request failed { type, requestId }`) without echoing the key
 
 Do not paper over a missing scope by widening the key silently, and never log or
 paste the key itself — Stripe's permission message includes a key fragment.
+
+### 3. Connect OAuth client id, for "Connect with Stripe"
+
+`STRIPE_CONNECT_CLIENT_ID` enables the OAuth path (`/api/connect/oauth/start`).
+The creator authorizes Litesubs on Stripe's own page, which also lets someone
+with no account create one there, so it covers both cases. Without this variable
+the button falls back to creating the account for the creator, so payments still
+work — but the OAuth option stays hidden.
+
+Register the callback in Stripe Dashboard → Connect → Settings → Redirects:
+
+```
+https://<your-host>/api/connect/oauth/callback
+```
+
+`oauthCallbackUrl()` in `lib/services/connect.ts` builds it from the app URL, so
+the host must match exactly. This is a public client id, not a secret key.
+
+### Which account shapes may sell
+
+`checkCompatibility` decides this from the **responsibilities**, never from
+`controller.type`. Two shapes are legitimate:
+
+- **Self-controlled** (`type: "account"`): a Standard account the business made
+  itself and connected over OAuth. Stripe returns *only* `{type: "account"}` for
+  these. Full Dashboard, own fees and Stripe liability are inherent to Standard,
+  so the absent sub-fields must not read as "unknown configuration".
+- **Platform-created** (`type: "application"`): every account our onboarding flow
+  creates is this, with `is_controller: true`, and the field cannot be supplied
+  on creation. Allowed only with full Dashboard, fees `account`, losses `stripe`.
+
+Rejecting on `controller.type` alone made every platform-created account
+permanently unsellable while also rejecting Standard OAuth accounts, so both
+onboarding routes dead-ended.
 
 ## Greenfield cleanup
 
