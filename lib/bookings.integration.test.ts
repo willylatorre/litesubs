@@ -212,6 +212,61 @@ test("a booking spends its own plan's credits once and cancellation returns them
 		assert.equal(await usableBalance(db, enrollment.id), 7);
 	});
 
+	await t.test(
+		"two concurrent bookings of one slot yield one booking and one debit",
+		async () => {
+			// The sequential case above passes even with a read-then-write check,
+			// because the first booking is committed before the second reads. The
+			// promise this schema actually makes -- a `btree_gist` exclusion
+			// constraint, so an overlap is impossible under concurrency -- is only
+			// exercised when both attempts race. Replacing the constraint with a
+			// check-then-insert would still pass every other test in this file.
+			const contested = new Date(dayStart.getTime() + 10 * 60 * 60 * 1000);
+			const before = await usableBalance(db, enrollment.id);
+
+			const results = await Promise.allSettled([
+				createBooking(buyer, {
+					scheduleId: schedule.id,
+					startsAt: contested.toISOString(),
+				}),
+				createBooking(buyer, {
+					scheduleId: schedule.id,
+					startsAt: contested.toISOString(),
+				}),
+			]);
+
+			const fulfilled = results.filter((r) => r.status === "fulfilled");
+			const rejected = results.filter((r) => r.status === "rejected");
+			assert.equal(fulfilled.length, 1, "exactly one attempt may win");
+			assert.equal(rejected.length, 1, "the loser must be refused");
+
+			// The loser must be a clear "slot taken" answer, not a raw 500 or a
+			// leaked Postgres constraint error.
+			const reason = (rejected[0] as PromiseRejectedResult).reason as {
+				code?: string;
+			};
+			assert.equal(reason.code, "SLOT_UNAVAILABLE");
+
+			// One booking row, and exactly one debit: the loser charged nothing.
+			const rows = await db.query.bookings.findMany({
+				where: and(
+					eq(bookings.scheduleId, schedule.id),
+					eq(bookings.startsAt, contested),
+				),
+			});
+			assert.equal(rows.length, 1);
+			assert.equal(rows[0]?.status, "confirmed");
+			assert.equal(
+				await usableBalance(db, enrollment.id),
+				before - 3,
+				"only the winner's debit is applied",
+			);
+
+			// Release the slot so the later subtests see a predictable schedule.
+			await cancelBooking(buyer, { bookingId: rows[0]?.id as string });
+		},
+	);
+
 	await t.test("a slot the page never offered is refused", async () => {
 		await assert.rejects(
 			createBooking(buyer, {

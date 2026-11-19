@@ -490,13 +490,22 @@ export async function createBooking(
 }
 
 function isOverlapViolation(error: unknown) {
-	if (typeof error !== "object" || error === null) return false;
-	const code = (error as { code?: string }).code;
-	const constraint = (error as { constraint?: string }).constraint;
-	return (
-		code === "23P01" || // exclusion_violation
-		(code === "23505" && constraint === "booking_no_overlap_per_creator")
-	);
+	// Drizzle wraps driver failures in `DrizzleQueryError`, whose message is the
+	// SQL text and whose `code` is undefined. The Postgres error actually carries
+	// `23P01`/the constraint name, and it lives on `cause`. Inspecting only the
+	// top-level object meant this never matched, so a lost race surfaced as a 500
+	// instead of "That time was just taken." Walk the chain rather than guessing
+	// one shape: a driver upgrade or an extra wrapper must not resurrect the 500.
+	for (let current: unknown = error; current; ) {
+		if (typeof current !== "object") return false;
+		const code = (current as { code?: string }).code;
+		const constraint = (current as { constraint?: string }).constraint;
+		if (code === "23P01") return true; // exclusion_violation
+		if (code === "23505" && constraint === "booking_no_overlap_per_creator")
+			return true;
+		current = (current as { cause?: unknown }).cause;
+	}
+	return false;
 }
 
 /**

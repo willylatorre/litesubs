@@ -355,16 +355,20 @@ async function assertSlugAvailable(
 
 /** A unique-constraint race can still slip past the check above. */
 function rethrowConflict(error: unknown): never {
-	const code =
-		typeof error === "object" && error && "code" in error
-			? (error as { code?: string }).code
-			: undefined;
-	if (code === "23505")
-		throw new ServiceError(
-			"SLUG_TAKEN",
-			"You already have a schedule with that link",
-			409,
-		);
+	// The SQLSTATE lives on `cause`: Drizzle wraps driver failures in
+	// `DrizzleQueryError`, whose own `code` is undefined (see `safeNotify` for the
+	// same note). Checking only the top level meant a concurrent create/rename
+	// surfaced as a 500 instead of the 409 this function exists to produce.
+	for (let current: unknown = error; current; ) {
+		if (typeof current !== "object") break;
+		if ((current as { code?: string }).code === "23505")
+			throw new ServiceError(
+				"SLUG_TAKEN",
+				"You already have a schedule with that link",
+				409,
+			);
+		current = (current as { cause?: unknown }).cause;
+	}
 	throw error;
 }
 

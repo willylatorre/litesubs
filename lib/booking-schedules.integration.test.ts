@@ -420,6 +420,39 @@ test("availability is creator-scoped, validated, and round-trips exactly", {
 	});
 
 	await t.test(
+		"two concurrent creates of one slug yield one schedule and one SLUG_TAKEN",
+		async () => {
+			// The sequential case above is caught by `assertSlugAvailable`, the
+			// read-then-write pre-check. That check cannot hold under concurrency, so
+			// the unique index is the real guard and `rethrowConflict` must translate
+			// its violation. If that translation misses, the loser gets a 500 instead
+			// of the documented 409 -- and every sequential test still passes.
+			const contested = `race-${crypto.randomUUID().slice(0, 8)}`;
+			const results = await Promise.allSettled([
+				createSchedule(principalA, { ...settings, slug: contested }),
+				createSchedule(principalA, { ...settings, slug: contested }),
+			]);
+
+			const fulfilled = results.filter((r) => r.status === "fulfilled");
+			const rejected = results.filter((r) => r.status === "rejected");
+			assert.equal(fulfilled.length, 1, "exactly one create may win");
+			assert.equal(rejected.length, 1, "the loser must be refused");
+			assert.equal(
+				(rejected[0] as PromiseRejectedResult).reason?.code,
+				"SLUG_TAKEN",
+			);
+
+			const rows = await db.query.bookingSchedules.findMany({
+				where: and(
+					eq(bookingSchedules.creatorId, creatorA),
+					eq(bookingSchedules.slug, contested),
+				),
+			});
+			assert.equal(rows.length, 1);
+		},
+	);
+
+	await t.test(
 		"sample schedules are recognised and never mutated",
 		async () => {
 			const sampleId = `sample-schedule-${creatorA}`;
