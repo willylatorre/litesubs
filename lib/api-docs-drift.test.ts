@@ -19,6 +19,8 @@ const DOC_SURFACES = [
 	"components/integration-docs.tsx",
 	"docs/MCP.md",
 ];
+/** Docs whose source-file references are checked; README is prose, not a tool index. */
+const FILE_SURFACES = [...DOC_SURFACES, "README.md"];
 
 /** Groups the REST router actually answers, from its `case "METHOD group"` arms. */
 async function implementedGroups() {
@@ -104,7 +106,7 @@ test("every MCP tool is named in the agent-facing docs", async () => {
  */
 test("docs only point at source files that exist", async () => {
 	const { access } = await import("node:fs/promises");
-	for (const file of DOC_SURFACES) {
+	for (const file of FILE_SURFACES) {
 		const docs = await readFile(file, "utf8");
 		const paths = [
 			...new Set(
