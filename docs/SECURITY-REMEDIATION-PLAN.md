@@ -67,11 +67,13 @@ Fix: return an error when `!product.active`.
 
 ## P1 — Auth & webhook security
 
-### 7. Cal.com integration — DEFERRED / not ready
-Per product direction, Cal.com is not a supported/ready integration yet. Do not
-implement booking fulfillment or enable this webhook. The route remains a
-fail-closed placeholder; signature verification is not a release requirement
-until the integration is deliberately brought back into scope.
+### 7. Cal.com integration — DEFERRED, then REMOVED
+Per product direction, Cal.com was not a supported/ready integration, so this was
+deferred and the route kept as a fail-closed placeholder. It has since been
+deleted outright along with its tables, OAuth routes, inbound webhook, and
+event-type pickers: native booking schedules replaced it, so no vendor route
+exists to defer. `/api/webhooks/cal` is gone and signature verification is no
+longer a requirement. See `docs/BOOKINGS.md`.
 
 ### 8. Production trusts development origins — DONE
 `lib/auth.ts` `trustedOrigins` ships a Codespaces URL and a Cloud Workstations

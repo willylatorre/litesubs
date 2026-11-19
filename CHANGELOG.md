@@ -48,6 +48,31 @@ All notable changes to this project will be documented in this file.
   touch plans, prices, enrollments, credits, bookings, or payments, which never
   held a foreign key into them.
 
+### Fixed
+- **`docs/MCP.md` described an older product.** It was skipped by the last two
+  documentation passes, which only updated `/llms.txt` and `/docs`, so the
+  reference an operator and agent both read disagreed with the code in six ways:
+  it named eleven creator tools when there are twenty (the nine invite/webhook
+  tools were missing from the scope table), still called Monthly Checkout
+  test-mode only after that gate was removed, documented a Cal.com webhook with
+  `CAL_WEBHOOK_SECRET` and two source files that no longer exist, claimed a plan
+  carries a booking link (the schedule points at the plan, not the reverse), and
+  stopped describing migrations at `0002` when the tree reaches `0017`. It also
+  omitted `publish`/`unpublish` from the REST table and the optional integration
+  env keys (`STRIPE_CONNECT_CLIENT_ID`, Google Calendar, Google sign-in,
+  `NOTIFICATIONS_ENABLED`). It now states that the Stripe webhook must be a
+  **Connect** endpoint with all eleven handled events, which `docs/SUBSCRIPTIONS.md`
+  already required and the handler assumes.
+
+  The drift test that should have caught this only read `/llms.txt` and `/docs`,
+  so it stayed green while `docs/MCP.md` drifted. `docs/MCP.md` is now a checked
+  surface, and a new case fails when a doc names a source file or route module
+  that no longer exists — verified by re-adding `lib/services/cal-bookings.ts` and
+  watching it fail.
+
+- **`PROJECT.md` and `docs/SECURITY-REMEDIATION-PLAN.md`** repeated the same two
+  stale claims about the live-release gate and the Cal.com webhook placeholder.
+
 ### Added
 - **Invite a customer from the Customers page**: the link generator previously
   existed only on the Creator dashboard and the plan views, so the page that

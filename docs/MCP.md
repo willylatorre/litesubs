@@ -4,7 +4,8 @@
 
 Implemented: tenant-scoped services, REST v1, remote MCP, Better Auth OAuth and
 API keys, consent page, public discovery routing, complimentary enrollment and
-invite claims, atomic credit adjustments, and a clean migration baseline.
+invite claims, atomic credit adjustments, invite and outgoing-webhook tools,
+native booking schedules, and a clean migration baseline.
 
 The remote endpoint is **`https://litesubs.com/api/mcp`**, once this code is
 deployed. It is not a local stdio server. No deployment or production database
@@ -18,14 +19,19 @@ renames `products`/`lite_subscriptions` to `plans`/`enrollments`, moves
 commercial terms into `plan_versions`, and removes the platform
 `user.stripe_customer_id`. `drizzle/0002_connected_accounts.sql` replaces the
 Express/account-type model with `connected_accounts` and drops the platform
-payout tables.
+payout tables. `0003`–`0017` then add, in order: Connect OAuth for existing
+accounts, immutable published plan versions, creator-owned direct-charge
+purchases, credit grants, subscriptions and renewals, period-end cancellation,
+expiring invites, refunds, subscription-aware disconnection, native bookings,
+outgoing webhooks, split Google calendar roles, removal of the Cal.com tables,
+and Better Auth usernames.
 
-**An existing database upgrades in place.** `npm run db:migrate` applies 0001
-and preserves accounts, enrollments, and ledger rows. Every previously active
-plan is backfilled as a published version holding its old price and credits; a
-previously disabled plan becomes a draft. Nothing already sold changes terms.
-`lib/migrations.test.ts` runs both files against a throwaway database to keep
-that contract honest.
+**An existing database upgrades in place.** `npm run db:migrate` applies every
+unrecorded migration and preserves accounts, enrollments, and ledger rows. Every
+previously active plan becomes a published version holding its old price and
+credits; a previously disabled plan becomes a draft. Nothing already sold changes
+terms. `lib/migrations.test.ts` replays the whole list against a throwaway
+database to keep that contract honest.
 
 An explicitly approved app-only rebuild can be run with
 `node scripts/reset-app-db.mjs --confirm-reset`. This snapshots old app rows as
@@ -36,8 +42,8 @@ journal is recorded is a no-op, not another reset. This **destroys accounts**, s
 it is never the upgrade path for a live database.
 
 1. Set `DATABASE_URL` to the target database in local/CI/Coolify environments.
-2. Run `npm run db:migrate`. On an empty database this applies 0000 then 0001;
-   on an existing one it applies only the migrations not yet recorded.
+2. Run `npm run db:migrate`. On an empty database this applies 0000 onward; on an
+   existing one it applies only the migrations not yet recorded.
 3. Deploy the app.
 
 Only a deliberate greenfield rebuild needs a reset.
@@ -58,20 +64,57 @@ MCP_RESOURCE_URL=https://litesubs.com/api/mcp
 BETTER_AUTH_SECRET=<stable secret>
 DATABASE_URL=<PostgreSQL database URL>
 STRIPE_SECRET_KEY=<platform secret, used only to act on connected accounts>
-STRIPE_WEBHOOK_SECRET=<signing secret for /api/webhooks/stripe>
+STRIPE_WEBHOOK_SECRET=<signing secret for the Connect endpoint below>
 ```
 
-The Stripe webhook endpoint must subscribe to `checkout.session.completed`,
-`checkout.session.async_payment_succeeded`, `checkout.session.expired`, and
-`account.updated`. Subscribe to `invoice.paid`, `invoice.payment_failed`, and
-`invoice.payment_action_required` on connected accounts for the first monthly
-allowance, renewals, and overdue state. Also subscribe to
-`customer.subscription.updated` and `customer.subscription.deleted` to converge
-customer and creator cancel/resume state, and to `charge.refunded` so a refund
-issued in the creator's Dashboard revokes only that purchase's unspent units.
-Monthly Checkout remains test-mode only until the live-release gate is complete.
-The old
-`STRIPE_WEBHOOK_PURCHASES` variable is unused.
+Optional integrations. Each block is independent: leave one unset and its feature
+is simply not offered, while the rest of the product keeps working.
+
+```env
+# Existing-account connection over Connect OAuth. Without it the setup screen
+# only offers new-account onboarding.
+STRIPE_CONNECT_CLIENT_ID=<Connect client id, not a secret>
+
+# Google sign-in.
+GOOGLE_CLIENT_ID=<oauth client id>
+GOOGLE_CLIENT_SECRET=<oauth client secret>
+
+# Google Calendar sync. The four calendar values are required together, and the
+# encryption key must be 32 bytes (64 hex characters or base64) or the flow
+# refuses to store tokens rather than writing them in plaintext.
+GOOGLE_CALENDAR_CLIENT_ID=<oauth client id>
+GOOGLE_CALENDAR_CLIENT_SECRET=<oauth client secret>
+GOOGLE_CALENDAR_REDIRECT_URI=<https://litesubs.com/api/integrations/google/callback>
+GOOGLE_TOKEN_ENCRYPTION_KEY=<32-byte key>
+
+# Set to "false" to turn the in-app notification bell off. Bookings and debits
+# are unaffected; this is a kill switch, not a requirement.
+NOTIFICATIONS_ENABLED=true
+```
+
+**The Stripe webhook endpoint must be a Connect endpoint** (`connect: true`).
+Litesubs sells with direct charges, so a purchase happens on the creator's
+connected account and Stripe raises those events there. A platform endpoint never
+sees them, and the handler deliberately bails out when `event.account` is absent
+because that field decides whose credits to grant. Credits are granted **only**
+by the webhook — the success page never grants and there is no cron — so a
+missing subscription means a paid customer receives nothing.
+
+Subscribe it to all eleven handled events: `checkout.session.completed`,
+`checkout.session.async_payment_succeeded`, `checkout.session.expired`,
+`invoice.paid`, `invoice.payment_failed`, `invoice.payment_action_required`,
+`customer.subscription.updated`, `customer.subscription.deleted`,
+`charge.refunded`, `account.updated`, and
+`account.application.deauthorized`. A second platform endpoint on the same URL is
+not merely redundant: it delivers its own subset to the same handler, so keep
+exactly one Connect endpoint per host. The old `STRIPE_WEBHOOK_PURCHASES`
+variable is unused.
+
+Monthly Checkout is no longer gated to test mode. One-time and monthly Checkout
+both work in either Stripe mode; what is still enforced is that an event's mode
+matches its connected account's recorded mode. A live event for a test account
+(or the reverse) cannot legitimately reference that account, so it fails closed
+with `400`; a row whose mode was never recorded is trusted rather than blocked.
 
 Keep the MCP resource URL stable: it is the token audience. Development may use
 `http://localhost:3000/api/mcp`; non-loopback resources require HTTPS. Never derive
@@ -165,16 +208,36 @@ session-oriented traffic is rejected.
 | `create_plan`, `update_plan` | `plans:write` |
 | `publish_plan`, `unpublish_plan` | `plans:write` |
 | `list_customers`, `get_customer` | `customers:read` |
-| `enroll_customer`, `grant_credits` | `customers:write` |
+| `list_invites` | `customers:read` |
+| `enroll_customer`, `grant_credits`, `create_invite` | `customers:write` |
 | `list_transactions` | `billing:read` |
+| `list_webhooks`, `create_webhook`, `update_webhook`, `delete_webhook`, `list_webhook_deliveries`, `retry_webhook_delivery`, `send_test_webhook` | `webhooks:manage` |
 | `consume_credits` | API key `credits:consume` only |
 
-Creator connections see eleven creator tools; machine keys see only
-`consume_credits`. Services enforce scopes again even if tool visibility changes.
-Scope failures return structured tool errors; payout/refund tools are absent.
-The earlier draft incorrectly claimed `createInsufficientScopeError` was missing:
-the settled installation exports it from `better-auth/oauth2`. Dynamic step-up
-is not implemented by this version of the application.
+Creator connections see twenty creator tools; machine keys see only
+`consume_credits`. Services enforce scopes again even if tool visibility changes;
+a machine key is rejected at the service layer even where a scope check would
+otherwise pass. Scope failures return structured tool errors; payout/refund
+tools are absent. The earlier draft incorrectly claimed
+`createInsufficientScopeError` was missing: the settled installation exports it
+from `better-auth/oauth2`. Dynamic step-up is not implemented by this version of
+the application.
+
+**Invites and outgoing webhooks were REST-only and are tools now.** Without them
+an assistant could not onboard someone who has no account, or build anything that
+reacts to a credit change. Both use the same services as REST, so validation and
+scoping are identical:
+
+- `create_invite` takes an optional `email` and an optional `planId`. The email
+  only decides whose dashboard the invite appears under; it does **not** restrict
+  who may accept the link, so a forwarded link still works. It returns the URL
+  and sends no email. Asking twice for the same email and plan returns the
+  existing link instead of a second one.
+- `create_webhook` returns the signing secret **once**; it can never be read
+  again. `delete_webhook` requires `confirm: true` because the endpoint stops
+  receiving events immediately and cannot be restored. `send_test_webhook`
+  proves a receiver's signature verification before real events depend on it.
+  See `docs/WEBHOOKS.md` for the payload and verification contract.
 
 **Publication is exposed over MCP.** `publish_plan` provisions the Product/Price
 on the creator's connected account exactly as the dashboard does, and
@@ -197,13 +260,15 @@ the model once, so keep the opening paragraph self-contained.
 
 ## Domain rules
 
-A **plan** holds editable service identity (name, description, booking link).
-Its commercial terms live in **plan versions**: a creator edits a `draft` until
-it is published, and a `published` version is immutable so existing customers
-keep the price and credits they bought. An **enrollment** is the unique
-customer/plan row in `enrollments` holding the credit balance projection. A
-monthly plan also has a separate Stripe subscription record; the enrollment is
-still the customer's credit balance, not the billing identity.
+A **plan** holds editable service identity (name and description). Its commercial
+terms live in **plan versions**: a creator edits a `draft` until it is published,
+and a `published` version is immutable so existing customers keep the price and
+credits they bought. An **enrollment** is the unique customer/plan row in
+`enrollments` holding the credit balance projection. A monthly plan also has a
+separate Stripe subscription record; the enrollment is still the customer's
+credit balance, not the billing identity. Booking is the reverse of that
+reference: a `booking_schedules` row points at a plan, so a plan does not carry a
+booking URL of its own.
 Customer read APIs return usable grant balances alongside subscription status
 and paid-through dates; an overdue status never extends the last paid period.
 
@@ -219,10 +284,11 @@ searches other creators' customers by name or creates bare accounts.
 
 `enroll_customer` defaults to `invoice`. Existing users receive a single-use
 Checkout Session URL and zero initial credits; monthly plans use subscription
-Checkout and grant only after the first paid invoice. Monthly Checkout is
-test-mode only until the live-release gate is complete. `comp` requires a reason
-and grants one-time plan credits; monthly complimentary enrollment is not
-supported. Re-comping an existing enrollment is rejected.
+Checkout and grant only after the first paid invoice. Both billing modes are
+allowed in live Stripe mode; only an event whose mode disagrees with its
+connected account is refused. `comp` requires a reason and grants one-time plan
+credits; monthly complimentary enrollment is not supported. Re-comping an
+existing enrollment is rejected.
 
 Unknown emails receive an expiring invite and a URL to forward. Invite URLs are
 `/invite/<username>/<token>` and creator-issued payment requests are
@@ -254,26 +320,38 @@ payment-ready account cannot sell.
 System paths (Stripe fulfillment and comp enrollment/claim) retain their own
 transactional ledger writes.
 
-Cal.com bookings are a third system path. `/api/webhooks/cal` verifies the
-`X-Cal-Signature-256` HMAC over the raw body with `CAL_WEBHOOK_SECRET` and rejects
-an unconfigured or unsigned delivery. The booking uid is the idempotency
-boundary: `BOOKING_CREATED` (and a reschedule, which reuses the uid) spends the
-plan's configured credits-per-booking once, and `BOOKING_CANCELLED` /
-`BOOKING_REJECTED` returns only the units that booking took, back to the same
-grants. Expired or already re-spent units are never restored, so a cancellation
-cannot mint a balance. Bookings for an unknown event type, an unenrolled booker,
-or a plan detached from the event type are recorded as no-ops; an event type with
-no price is a free booking link. See `lib/services/cal-bookings.ts` and
-`lib/cal-webhook.ts`.
+**Native bookings** are a third system path, and they go through the same credit
+service. A creator owns a `booking_schedules` row (slug, duration, buffers,
+horizon, IANA timezone, optional `plan_id`, `credits_per_booking`), weekly
+`booking_availability` windows, and one-off `booking_exceptions`. The public page
+lives at `/book/<username>/<slug>`; slugs are unique per creator, so the username
+segment is required. Booking a slot inserts the `bookings` row and debits
+`credits_per_booking` in one transaction, and cancellation restores exactly the
+units that booking took, to the same grants — expired or re-spent units are never
+resurrected, so a book/cancel loop cannot mint a balance.
+
+Double-booking is prevented in the database by a `btree_gist` exclusion
+constraint on `(creator_id, tstzrange(starts_at, ends_at))` for confirmed rows,
+not by a read-then-write check, so a lost race returns a clear "slot taken"
+result instead of a partial debit. A booking requires sign-in and an enrollment
+in the linked plan, and rejects a monthly plan: a booking is a single session,
+not a billing period. Availability, expiry, and "starting soon" are computed on
+read — there is no cron. See `docs/BOOKINGS.md`. Google Calendar sync is optional
+and best-effort: busy time subtracts slots and a booked slot is mirrored to a
+chosen calendar, but a Google failure never blocks a booking or rolls back a
+debit.
 
 ## Connected accounts and readiness
 
-Each creator connects their own Stripe account. `connected_accounts` stores the
-account identity, the agreed controller responsibilities (full Dashboard,
-Stripe-billed processing fees, Stripe-managed negative balances), and a cache of
-Stripe's reported capabilities. Readiness is derived from
-`charges_enabled` plus Stripe's requirement/disable state, never from "a row
-exists", so an incomplete or restricted account cannot start a sale.
+Each creator connects their own Stripe account, either by onboarding a new one or
+by authorizing an existing business over Connect OAuth. `connected_accounts`
+stores the account identity, the agreed controller responsibilities (full
+Dashboard, Stripe-billed processing fees, Stripe-managed negative balances), and a
+cache of Stripe's reported capabilities. Readiness is derived from the
+`card_payments` capability plus `charges_enabled` and Stripe's requirement/disable
+state, never from "a row exists", so an incomplete or restricted account cannot
+start a sale. Accounts are judged by those responsibilities, not by which endpoint
+created them.
 
 Litesubs no longer runs a platform payout ledger, payout requests, or payout
 method preferences. Stripe pays out on the creator's own account.
@@ -284,6 +362,8 @@ method preferences. Stripe pays out on the creator's own account.
 | --- | --- |
 | GET / POST | `/api/v1/plans` |
 | GET / PATCH | `/api/v1/plans/:id` |
+| POST | `/api/v1/plans/:id/publish` |
+| POST | `/api/v1/plans/:id/unpublish` |
 | GET | `/api/v1/customers` |
 | GET | `/api/v1/customers/:id` |
 | POST | `/api/v1/enrollments` |
@@ -309,9 +389,11 @@ names or endpoints change. It is an index, not a second copy of this doc.
 
 List routes take `limit` (1–100, default 50) and `offset`. Reads/writes return
 plain JSON. Errors include `code`, `error`, and optional `details`/`fieldErrors`.
-The former `/api/products` compatibility adapter is gone: plans are the only
-contract, so no legacy path can bypass draft status. Cal.com event types are set
-through the authorized plan action. Dashboard hooks use v1.
+`publish` and `unpublish` are third-segment transitions on a plan. Over MCP,
+`unpublish_plan` requires the caller to pass `confirm: true`; the REST route
+supplies that confirmation itself, because an HTTP call is already an explicit
+act. The former `/api/products` compatibility adapter is gone: plans are the only
+contract, so no legacy path can bypass draft status. Dashboard hooks use v1.
 
 Example machine request (substitute your IDs and keep the event key stable):
 
@@ -355,11 +437,18 @@ work.
 Tests cover concurrent retry receipts, overdraft prevention, dry-run persistence,
 tenant and credential boundaries, once-only comp claims, HTTP API-key auth,
 restricted MCP discovery, REST scope denial, public OAuth metadata, and that the
-0001 migration preserves rows and backfills picked terms. An
-HTTP integration test also covers signed consent (including tampering rejection),
-PKCE code exchange, rotating refresh tokens, and an authenticated MCP call plus
-read-token write denial. Browser UI/client compatibility and live Stripe
-checkout still require deployment/sandbox validation.
+0001 migration preserves rows and backfills picked terms. Further integration
+suites cover direct-charge purchases and application fees, subscription
+renewal/cancellation/disconnection, refunds revoking only the refunded units,
+signed outgoing webhooks and their retry/idempotency rules, native bookings
+(including the exclusion constraint under concurrency), Google token encryption,
+and Better Auth usernames. An HTTP integration test also covers signed consent
+(including tampering rejection), PKCE code exchange, rotating refresh tokens, and
+an authenticated MCP call plus read-token write denial. `lib/api-docs-drift.test.ts`
+keeps the agent-facing docs honest: an undocumented route group, an undocumented
+or phantom tool, or a reference to a source file that no longer exists fails the
+suite. Browser UI/client compatibility and live Stripe checkout still require
+deployment/sandbox validation.
 
 For an explicitly approved deployed checkout check, run
 `node scripts/smoke-sandbox-checkout.mjs --sandbox-only` inside the app container.

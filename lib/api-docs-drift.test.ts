@@ -14,7 +14,11 @@ import { test } from "node:test";
  */
 
 const ROUTE = "app/api/v1/[...resource]/route.ts";
-const DOC_SURFACES = ["lib/llms-txt.ts", "components/integration-docs.tsx"];
+const DOC_SURFACES = [
+	"lib/llms-txt.ts",
+	"components/integration-docs.tsx",
+	"docs/MCP.md",
+];
 
 /** Groups the REST router actually answers, from its `case "METHOD group"` arms. */
 async function implementedGroups() {
@@ -83,6 +87,46 @@ test("every MCP tool is named in the agent-facing docs", async () => {
 			missing,
 			[],
 			`${file} does not name these MCP tools: ${missing.join(", ")}`,
+		);
+	}
+});
+
+/**
+ * A doc that names a source file which no longer exists is worse than saying
+ * nothing: the reader trusts a path that cannot be opened. This happened when the
+ * Cal.com integration was deleted but `docs/MCP.md` still pointed at
+ * `lib/cal-webhook.ts` and `lib/services/cal-bookings.ts`.
+ *
+ * Deliberately limited to source paths. URL routes are not checked by walking the
+ * filesystem: docs legitimately name removed endpoints ("the former
+ * `/api/products` adapter is gone") and partial prefixes like `/api/v1`, so a
+ * resolver would report false failures and train readers to ignore it.
+ */
+test("docs only point at source files that exist", async () => {
+	const { access } = await import("node:fs/promises");
+	for (const file of DOC_SURFACES) {
+		const docs = await readFile(file, "utf8");
+		const paths = [
+			...new Set(
+				[
+					...docs.matchAll(
+						/(?<![\w/])((?:app|lib|components|scripts)\/[A-Za-z0-9_./-]+\.(?:tsx|ts|mjs))/g,
+					),
+				].map((match) => match[1]),
+			),
+		];
+		const missing: string[] = [];
+		for (const path of paths) {
+			try {
+				await access(path);
+			} catch {
+				missing.push(path);
+			}
+		}
+		assert.deepEqual(
+			missing,
+			[],
+			`${file} references files that do not exist: ${missing.join(", ")}`,
 		);
 	}
 });
