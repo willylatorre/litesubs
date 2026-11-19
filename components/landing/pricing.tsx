@@ -6,7 +6,7 @@ import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
 
 /**
  * The rate is read from the same constant the charge path uses, so this section
- * cannot drift from what Stripe actually collects. A hard-coded "2%" here would
+ * cannot drift from what Stripe actually collects. A hard-coded percentage here would
  * survive a change to `PLATFORM_FEE_PERCENT` and quietly misprice the offer.
  */
 const FEE_PERCENT_LABEL = `${PLATFORM_FEE_PERCENT * 100}%`;

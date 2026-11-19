@@ -31,4 +31,4 @@ export const TRANSACTION_STATUSES = [
 ] as const;
 
 /** Litesubs' share of each direct charge, charged via Stripe application fee. */
-export const PLATFORM_FEE_PERCENT = 0.02; // 2%
+export const PLATFORM_FEE_PERCENT = 0.01; // 1%

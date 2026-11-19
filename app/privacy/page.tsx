@@ -87,7 +87,7 @@ const sections: LegalSection[] = [
 				items: [
 					"To create and authenticate accounts, and to enforce permissions and scopes on dashboard, API, and MCP actions.",
 					"To record credit grants and consumption accurately, including idempotent retries and receipts.",
-					"To publish offers on a creator\u2019s Stripe account, calculate our 2% application fee, and reconcile refunds.",
+					"To publish offers on a creator\u2019s Stripe account, calculate our 1% application fee, and reconcile refunds.",
 					"To operate bookings and calendar synchronization when a creator enables them.",
 					"To detect abuse, fraud, and security incidents, and to rate-limit automated traffic.",
 					"To send transactional email, security alerts, and product notices about material changes.",

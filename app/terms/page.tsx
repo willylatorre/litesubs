@@ -49,7 +49,7 @@ const sections: LegalSection[] = [
 			},
 			{
 				type: "paragraph",
-				text: "Litesubs retains a 2% application fee on each sale made through the platform, charged through Stripe and shown separately in the creator\u2019s Stripe dashboard. Current pricing is described on the site and may change with notice under \u201cChanges to these Terms\u201d.",
+				text: "Litesubs retains a 1% application fee on each sale made through the platform, charged through Stripe and shown separately in the creator\u2019s Stripe dashboard. Current pricing is described on the site and may change with notice under \u201cChanges to these Terms\u201d.",
 			},
 		],
 	},
@@ -159,7 +159,7 @@ const sections: LegalSection[] = [
 		blocks: [
 			{
 				type: "paragraph",
-				text: "Litesubs is free to use during early access in the sense described on the site: no subscription fee is charged to creators to access the dashboard. The 2% application fee on completed sales still applies. We may introduce or change fees with advance notice.",
+				text: "Litesubs is free to use during early access in the sense described on the site: no subscription fee is charged to creators to access the dashboard. The 1% application fee on completed sales still applies. We may introduce or change fees with advance notice.",
 			},
 			{
 				type: "paragraph",

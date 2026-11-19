@@ -138,7 +138,7 @@ route in a config file. Use `next/link` for navigation.
 - **Money is integer minor units** with an explicit currency. Periods are UTC
   instants plus an explicit IANA timezone.
 - **Payments are direct charges** on each creator's own connected Stripe account
-  with a 2% application fee. There is no platform-charge fallback.
+  with a 1% application fee. There is no platform-charge fallback.
 
 Before changing a money path, read the matching document in `docs/`. Those files
 record the invariants and the reasoning, including what was deliberately not

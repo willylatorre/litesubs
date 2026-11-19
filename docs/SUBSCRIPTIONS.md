@@ -80,7 +80,7 @@ Implemented slices:
 Litesubs supplies software for creators to sell credit packs and monthly plans.
 The creator supplies the service and owns the customer payment relationship.
 Products, Prices, Customers, payments, and subscriptions live on the creator's
-connected Stripe account. Litesubs collects a 2% application fee.
+connected Stripe account. Litesubs collects a 1% application fee.
 
 Use Stripe's normal subscription lifecycle, retries, invoices, and billing portal.
 Do not build a competing billing engine or a configurable policy framework in v1.
@@ -101,7 +101,7 @@ Do not build a competing billing engine or a configurable policy framework in v1
   do not establish these responsibilities or eliminate all platform obligations.
 - Support existing-account connection and new-account onboarding. Verify the current
   supported connection flow and account eligibility before implementing it.
-- Platform fee: 2%; persist the agreed subscription fee rate and actual payment fees.
+- Platform fee: 1%; persist the agreed subscription fee rate and actual payment fees.
 - Monthly subscriptions only. Store the interval explicitly; yearly UI is deferred.
 - Monthly credits do not roll over, and recurring plans have no paid top-ups.
 - Cancel at period end; allow resume before cancellation takes effect.
@@ -381,6 +381,32 @@ Yearly offers, upgrades/downgrades and proration, rollover/top-up options,
 creator-configurable fee/expiry/refund rules, automatic import of arbitrary Stripe
 catalogs, and custom billing/retry/payout engines. Stripe already owns the standard
 billing and payment operations; do not rebuild them in Litesubs.
+
+### Fee shape: percentage, or percentage with a cap
+
+The rate is a single constant (`PLATFORM_FEE_PERCENT`) and both charge paths read
+it: one-time purchases round it into a fixed `application_fee_amount`, and
+subscriptions send it as `application_fee_percent`. Changing the number is a
+one-line change plus the copy and the arithmetic assertions in the tests.
+
+Stripe supports a **cap** as well, and it applies to the two paths differently:
+
+- **Subscriptions** accept `application_fee_percent` only. A cap is not available
+  on the recurring fee, so a percentage-plus-cap model cannot be expressed for
+  monthly plans through this field.
+- **One-time charges** could compute the fee as `min(rate * amount, cap)` in
+  `applicationFeeFor` and pass the result as `application_fee_amount`. This needs
+  no schema change, because the fee is already stored per payment as minor units.
+
+So a cap is a plausible later improvement for packs, but it is not a single
+constant: it would make the one-time and recurring rates diverge, and the
+reporting queries derive recurring fees from the stored percentage rather than
+from a per-invoice amount. Decide that as a product question, not as a tweak.
+
+One floor to keep in mind when choosing a rate: `isValidApplicationFee` requires a
+**strictly positive** fee, so the cheapest sellable amount is `ceil(1 / rate)`
+cents before rounding yields zero. At 1% that is $0.50; at 2% it was $0.25. A
+fractional rate would move that floor again.
 
 ## Draft issue breakdown
 
@@ -687,7 +713,7 @@ credits after confirmed payment, without duplicate grants.
 #### What to build
 
 Deliver the first complete creator-owned purchase: one shared Checkout service,
-an account-scoped Stripe Customer mapping, direct payment with a 2% application
+an account-scoped Stripe Customer mapping, direct payment with a 1% application
 fee, signed connected-account fulfillment, a payment receipt, and a source-linked
 credit grant displayed in the customer enrollment. Route self-service and
 customer-specific purchase requests through the same service.
@@ -698,7 +724,7 @@ customer-specific purchase requests through the same service.
       The requested customer/version/creator ownership is validated server-side.
 - [x] Concurrent first purchases reuse one intended Customer per local customer and
       connected account. A platform Customer is never passed to that account.
-- [x] Checkout uses direct charges and the agreed 2% rounded application fee, with
+- [x] Checkout uses direct charges and the agreed 1% rounded application fee, with
       no `transfer_data` or platform fallback; persist actual paid amounts/fees.
 - [x] A paid pack creates an enrollment as needed, one payment receipt, one credit
       grant, and its ledger entry atomically. Rebuying adds a separate grant.
@@ -820,7 +846,7 @@ usable credits, payment state, and paid-through date in creator/customer views.
 - [x] Monthly publication creates an account-scoped recurring Stripe Price; customers
       see `/month`, the credit allowance, automatic renewal, and no-rollover expiry
       before authorizing payment.
-- [x] Checkout uses `mode: subscription`, the creator-scoped Customer, and a 2%
+- [x] Checkout uses `mode: subscription`, the creator-scoped Customer, and a 1%
       application-fee percentage; persist the agreed rate on the subscription.
 - [x] First invoice fulfillment grants exactly one allowance for the subscription
       item's service period. Checkout completion alone does not also grant credits.
@@ -1310,7 +1336,7 @@ not a ticket to postpone every other slice's tests or rewrite the billing engine
       no dependency on obsolete payout tables or platform Stripe Customers.
 - [ ] New/existing creator connection, publication, pack purchase/consumption,
       monthly start/renewal/failure/retry, Cancel/Resume, portal, comp invitation,
-      and refund journeys are verified with the correct account and 2% fees.
+      and refund journeys are verified with the correct account and 1% fees.
 - [ ] The configured webhook destinations accept required event formats and account
       context; signatures are checked, invalid traffic fails closed, and temporary
       failures can recover through Stripe's normal retry/replay mechanisms.

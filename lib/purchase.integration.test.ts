@@ -149,8 +149,8 @@ test("purchase charges the creator's account once and grants only after payment"
 			assert.ok(payment);
 			assert.equal(payment.status, "pending");
 			assert.equal(payment.amountTotal, 1000);
-			// 2% of $10.
-			assert.equal(payment.applicationFee, 20);
+			// 1% of $10, from PLATFORM_FEE_PERCENT rather than a literal.
+			assert.equal(payment.applicationFee, 10);
 			assert.equal(payment.stripeAccountId, "acct_seller");
 			// The receipt is bound to the immutable version that was sold.
 			const version = await db.query.planVersions.findFirst({

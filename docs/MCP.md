@@ -314,7 +314,7 @@ and debit once. Reusing a key with a different customer/plan/amount/type/reason
 returns `IDEMPOTENCY_CONFLICT`. Dry runs do not reserve keys or write data.
 
 Purchases are direct charges on the creator's own connected Stripe account with
-a 2% application fee. There is no platform-charge fallback: a creator without a
+a 1% application fee. There is no platform-charge fallback: a creator without a
 payment-ready account cannot sell.
 
 System paths (Stripe fulfillment and comp enrollment/claim) retain their own

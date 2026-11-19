@@ -183,7 +183,7 @@ test("monthly renewals grant paid periods once and failed/late invoices do not e
 		1,
 		"Stripe idempotency reuses one Checkout",
 	);
-	assert.equal(checkoutInputs[0].applicationFeePercent, 2);
+	assert.equal(checkoutInputs[0].applicationFeePercent, 1);
 	assert.equal(
 		checkoutInputs[0].lineItem.stripePriceId,
 		`price_${firstVersionId}`,
@@ -193,7 +193,7 @@ test("monthly renewals grant paid periods once and failed/late invoices do not e
 		where: eq(subscriptions.id, subscriptionId),
 	});
 	assert.equal(localSubscription?.status, "pending");
-	assert.equal(localSubscription?.applicationFeePercent, 2);
+	assert.equal(localSubscription?.applicationFeePercent, 1);
 	assert.ok(localSubscription?.stripeCheckoutId);
 	const enrollmentBeforePayment = await db.query.enrollments.findFirst({
 		where: and(

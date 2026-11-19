@@ -31,7 +31,11 @@ export type DirectChargeLineItem = {
 export type CreateDirectCheckoutInput = {
 	stripeAccountId: string;
 	lineItem: DirectChargeLineItem;
-	/** Our 2% application fee, in minor units. */
+	/**
+	 * Our application fee, in minor units. The rate lives in
+	 * `PLATFORM_FEE_PERCENT`; do not restate it here, or this comment will
+	 * disagree with the charge the first time the rate changes.
+	 */
 	applicationFeeAmount: number;
 	customerEmail?: string;
 	/** Reuse the creator's Stripe Customer for this buyer when one exists. */

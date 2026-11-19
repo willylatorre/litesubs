@@ -476,7 +476,7 @@ export const subscriptions = pgTable(
 		stripeCheckoutId: text("stripe_checkout_id").unique(),
 		stripeSubscriptionId: text("stripe_subscription_id").unique(),
 		status: subscriptionStatusEnum("status").default("pending").notNull(),
-		/** Stored as percent (2 means 2%), not a fraction. */
+		/** Stored as percent (1 means 1%), not a fraction. */
 		applicationFeePercent: integer("application_fee_percent").notNull(),
 		paidThroughAt: timestamp("paid_through_at", { withTimezone: true }),
 		cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false).notNull(),

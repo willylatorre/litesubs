@@ -14,6 +14,7 @@ import {
 	transactions,
 	user,
 } from "@/app/db/schema";
+import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
 import { type ActionResponse, authenticatedAction } from "@/lib/safe-action";
 import {
 	SAMPLE_CUSTOMER_NAME,
@@ -214,7 +215,7 @@ export async function createSampleWorkspace(): Promise<
 					credits: SAMPLE_PLAN.credits,
 					amountTotal: SAMPLE_PLAN.price,
 					currency: SAMPLE_PLAN.currency,
-					applicationFee: Math.round(SAMPLE_PLAN.price * 0.02),
+					applicationFee: Math.round(SAMPLE_PLAN.price * PLATFORM_FEE_PERCENT),
 					amountPaid: SAMPLE_PLAN.price,
 					fulfilledAt: new Date(),
 				})
