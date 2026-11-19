@@ -10,9 +10,12 @@ import {
 	CreatePlanDialogDemo,
 	type DemoPlanData,
 } from "@/components/landing/create-plan-dialog-demo";
+import { Pricing } from "@/components/landing/pricing";
+import { StripeConnect } from "@/components/landing/stripe-connect";
 import { PlanCard } from "@/components/plan-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
 import { invitePath } from "@/lib/public-links";
 import { cn } from "@/lib/utils";
 import { CustomersTableDemo } from "./landing/customers-table-demo";
@@ -137,7 +140,7 @@ export function LandingPage() {
 						</Button>
 					</div>
 					<span className="text-xs text-muted-foreground">
-						Free during early access · no credit card required
+						{PLATFORM_FEE_PERCENT * 100}% per sale · no monthly fee
 					</span>
 				</motion.div>
 			</motion.div>
@@ -326,6 +329,10 @@ export function LandingPage() {
 					</div>
 				</div>
 			</motion.section>
+
+			<StripeConnect />
+
+			<Pricing />
 
 			{/* Final CTA Section */}
 			<motion.section
