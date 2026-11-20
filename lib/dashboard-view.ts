@@ -61,6 +61,13 @@ export type MoneyView = {
 	gross: number;
 	refunded: number;
 	net: number;
+	/**
+	 * Litesubs' application fee included in `gross`. Shown next to the total
+	 * because "Collected" otherwise reads as income and the creator would have to
+	 * open Stripe to learn what the platform took. Stored per receipt, so older
+	 * sales keep the rate they were charged at rather than today's.
+	 */
+	platformFees: number;
 };
 
 export type PlanVersionRow = {

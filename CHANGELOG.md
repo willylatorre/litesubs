@@ -40,6 +40,23 @@ All notable changes to this project will be documented in this file.
 - Fixed the light-mode `--sidebar-accent` token: it was oklch(0.98) against a
   0.99 sidebar, so hover and the selected row were effectively invisible.
 
+### Fixed
+- **The platform fee was invisible in the dashboard.** `moneyByCurrency` computes
+  `platformFees` from the fee stored on each receipt, and its integration test
+  asserts the figure — but `MoneyView` dropped the field, so nothing ever rendered
+  it. A creator's "Collected" card showed a net total with no indication that
+  Litesubs had taken a cut, and the only way to find out was to open the Stripe
+  Dashboard. The summary line now reads "collected · refunded · Litesubs fee", and
+  the sample workspace's demo row carries the same figure from
+  `PLATFORM_FEE_PERCENT` rather than a literal.
+
+  Only creator surfaces show it. `MoneySummary` takes `showFees` (default on) for
+  that reason, and the buyer's "Total Spent" card builds its own markup, so a
+  customer never sees the creator's platform fee.
+
+  This mattered more after the rate moved to 1%: the number a creator reads and
+  the number Stripe withheld had no visible relationship.
+
 ### Removed
 - **Cal.com integration**: the vendor card, OAuth routes, inbound webhook, event-type
   pickers, and the `integrations` / `calcom_integrations` / `cal_com_accounts`

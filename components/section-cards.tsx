@@ -8,17 +8,25 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { MoneyView } from "@/lib/dashboard-view";
 
 /**
- * Supporting detail under a net total: what was collected and what was refunded.
- * Currency is never blended, and refunds are explicit rather than implied.
+ * Supporting detail under a net total: what was collected, what was refunded,
+ * and what Litesubs took. Currency is never blended, and refunds and fees are
+ * explicit rather than implied — a creator should not have to open Stripe to
+ * find out why the number is smaller than the sales.
  */
 export function MoneySummary({
 	money,
 	emptyLabel,
 	includesSample,
+	showFees = true,
 }: {
 	money: MoneyView[];
 	emptyLabel: string;
 	includesSample?: boolean;
+	/**
+	 * Customers owe the creator, not the platform, so a buyer's view never shows
+	 * the creator's application fee.
+	 */
+	showFees?: boolean;
 }) {
 	if (money.length === 0) {
 		return (
@@ -37,6 +45,12 @@ export function MoneySummary({
 						<>
 							{" · "}
 							{formatMoney(row.refunded, row.currency)} refunded
+						</>
+					)}
+					{showFees && row.platformFees > 0 && (
+						<>
+							{" · "}
+							{formatMoney(row.platformFees, row.currency)} Litesubs fee
 						</>
 					)}
 				</p>
