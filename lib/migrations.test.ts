@@ -761,9 +761,9 @@ test("0014 adds webhook tables without touching existing data", {
 	});
 });
 /**
- * S15 part two: booking credits. An existing event type must keep working as a
- * free booking link (the price is nullable), and the booking uid must be unique
- * so a replayed Cal.com delivery cannot become a second debit.
+ * S15 part two: the booking uid must be unique so a replayed delivery cannot
+ * become a second debit. (The Cal.com event-type path this originally covered
+ * was removed; the uniqueness half still applies to native bookings.)
  */
 
 /**

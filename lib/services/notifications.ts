@@ -543,10 +543,10 @@ export async function notifyBookingConfirmed(
 		const detail = isCreator
 			? input.chargedCredits
 				? `${when} · ${creditsLabel(Math.trunc(input.chargedCredits))} debited from the customer`
-				: `${when} · free booking`
+				: when
 			: input.chargedCredits
 				? `${when} · ${creditsLabel(Math.trunc(input.chargedCredits))} spent`
-				: `${when} · free booking`;
+				: when;
 
 		return {
 			userId: isCreator ? input.creatorId : input.customerId,

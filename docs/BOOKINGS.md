@@ -42,8 +42,13 @@ path; Google Calendar remains an optional busy/free and event-sync integration.
 ## Consequences to accept
 
 - **Booking requires sign-in.** Without an email/identity we cannot know whose
-  credits to spend. `creditsPerBooking` of `null` still requires sign-in so the
-  booking is attributable.
+  credits to spend, so the booking service refuses an anonymous caller with
+  `SIGN_IN_REQUIRED`. Credits are never taken from a shared or inferred account.
+- **There are no free bookings.** A bookable schedule always has a plan and a
+  positive `creditsPerBooking`; linking a plan without a price is refused with
+  `PRICE_REQUIRED`, because a schedule that silently charged nothing would sell
+  the creator's time for free. A `null` price means the schedule is unlinked, so
+  it is not bookable at all.
 - **Reminders are computed on read.** A "starting in 15 minutes" notification
   appears when the user opens the app, not pushed at a wall-clock moment. That is
   the price of having no scheduler, and it is the right trade for v1.
@@ -88,24 +93,26 @@ with an old link.
 
 #### Acceptance criteria
 
-- [ ] Only a signed-in customer may book; an anonymous visitor is prompted to sign
+- [x] Only a signed-in customer may book; an anonymous visitor is prompted to sign
       in and returns to the same schedule.
-- [ ] A slot is bookable only if it lies inside a weekly window (in the schedule's
+- [x] A slot is bookable only if it lies inside a weekly window (in the schedule's
       timezone), is not inside an exception, is not within the past, and is inside
       the booking horizon.
-- [ ] Two concurrent bookings for the same slot cannot both succeed; the loser gets
+- [x] Two concurrent bookings for the same slot cannot both succeed; the loser gets
       a clear "slot taken" result, not a partial debit.
-- [ ] A booking with `credits_per_booking` set debits exactly that many credits; a
+- [x] A booking with `credits_per_booking` set debits exactly that many credits; a
       customer with too few is refused and spends nothing.
-- [ ] With `credits_per_booking` null, the booking is recorded but no ledger row is
-      written.
-- [ ] Cancelling a booking restores only the units that booking took, back to the
+- [x] With `credits_per_booking` null the schedule is unlinked and not bookable:
+      the service refuses it with `NOT_BOOKABLE` rather than recording a booking
+      that spends nothing. Linking a plan requires a positive price, and a
+      schedule with no plan is refused the same way.
+- [x] Cancelling a booking restores only the units that booking took, back to the
       grants they came from. Expired or already re-spent units are never
       resurrected, so a book/cancel loop cannot mint credits.
-- [ ] Cancellation is idempotent and cannot be repeated to restore twice.
-- [ ] The debit is recorded with the booking as its source, so history relates a
+- [x] Cancellation is idempotent and cannot be repeated to restore twice.
+- [x] The debit is recorded with the booking as its source, so history relates a
       credit effect to its booking.
-- [ ] Another creator's schedule, bookings, or balances are unreachable.
+- [x] Another creator's schedule, bookings, or balances are unreachable.
 
 #### Verification / demo
 
@@ -127,17 +134,17 @@ timezone, and one-off exceptions.
 
 #### Acceptance criteria
 
-- [ ] Weekly windows are stored per weekday in the schedule's timezone and rendered
+- [x] Weekly windows are stored per weekday in the schedule's timezone and rendered
       unambiguously to the creator.
-- [ ] Windows that end before they start, or that overlap each other on the same
+- [x] Windows that end before they start, or that overlap each other on the same
       day, are rejected with a clear message.
-- [ ] Changing the schedule's timezone does not silently shift already-booked
+- [x] Changing the schedule's timezone does not silently shift already-booked
       bookings; existing bookings keep their UTC instants.
-- [ ] Blocking a day removes its slots immediately, including when the block
+- [x] Blocking a day removes its slots immediately, including when the block
       overlaps an existing window.
-- [ ] DST transitions do not produce slots at nonexistent or duplicated local
+- [x] DST transitions do not produce slots at nonexistent or duplicated local
       times.
-- [ ] Sample/demo mode keeps working and is not mutated by real edits.
+- [x] Sample/demo mode keeps working and is not mutated by real edits.
 
 ### B3 — Link a plan to a schedule
 
@@ -153,13 +160,13 @@ and from the schedule editor, and both surfaces show the same state.
 
 #### Acceptance criteria
 
-- [ ] A schedule may be linked to a draft or published plan; booking fails clearly
+- [x] A schedule may be linked to a draft or published plan; booking fails clearly
       while the plan is not sellable, rather than granting credits for nothing.
-- [ ] Unlinking a plan disables new bookings without deleting existing bookings or
+- [x] Unlinking a plan disables new bookings without deleting existing bookings or
       their ledger rows.
-- [ ] The plan details view shows the linked schedule and its credit cost.
-- [ ] Linking is creator-scoped; a schedule cannot reference another creator's plan.
-- [ ] Monthly plans are rejected as booking targets in v1 (a booking is not a
+- [x] The plan details view shows the linked schedule and its credit cost.
+- [x] Linking is creator-scoped; a schedule cannot reference another creator's plan.
+- [x] Monthly plans are rejected as booking targets in v1 (a booking is not a
       billing period), with an explanatory message.
 
 ### B4 — In-app notifications
@@ -175,14 +182,14 @@ cancelled, and "starting soon" appear in-app. No email is sent.
 
 #### Acceptance criteria
 
-- [ ] A confirmed booking notifies both the creator and the customer exactly once.
-- [ ] A cancellation notifies the other party exactly once, and the notification
+- [x] A confirmed booking notifies both the creator and the customer exactly once.
+- [x] A cancellation notifies the other party exactly once, and the notification
       names what happened to the credits.
-- [ ] A dedupe key makes repeated delivery of the same event idempotent.
-- [ ] "Starting soon" is computed on read from booking times, so no scheduled job
+- [x] A dedupe key makes repeated delivery of the same event idempotent.
+- [x] "Starting soon" is computed on read from booking times, so no scheduled job
       is required, and it never appears for a cancelled or past booking.
-- [ ] Users can mark notifications read, and only their own are visible.
-- [ ] A missing/disabled notification path never blocks a booking or a debit.
+- [x] Users can mark notifications read, and only their own are visible.
+- [x] A missing/disabled notification path never blocks a booking or a debit.
 
 ### B5 — Google Calendar sync (optional)
 

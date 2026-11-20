@@ -322,6 +322,107 @@ test("a booking spends its own plan's credits once and cancellation returns them
 		assert.equal(await usableBalance(db, enrollment.id), 7);
 	});
 
+	await t.test(
+		"a schedule linked to a draft plan is not bookable",
+		async () => {
+			// B3 allows linking a draft, because a creator may prepare the schedule
+			// before publishing. Booking must then fail clearly instead of granting
+			// credits for an offer that is not for sale yet.
+			const [draft] = await db
+				.insert(plans)
+				.values({ creatorId, name: "Draft sessions" })
+				.returning();
+			await db.insert(planVersions).values({
+				planId: draft.id,
+				creatorId,
+				status: "draft",
+				billingMode: "one_time",
+				currency: "usd",
+				price: 5000,
+				credits: 5,
+				version: 1,
+			});
+			const [draftSchedule] = await db
+				.insert(bookingSchedules)
+				.values({
+					creatorId,
+					name: "Draft schedule",
+					slug: `draft-${crypto.randomUUID().slice(0, 8)}`,
+					planId: draft.id,
+					creditsPerBooking: 1,
+					durationMinutes: 30,
+					horizonDays: 3,
+					timezone: "UTC",
+				})
+				.returning();
+			await db.insert(bookingAvailability).values({
+				scheduleId: draftSchedule.id,
+				creatorId,
+				weekday,
+				startMinute: 9 * 60,
+				endMinute: 11 * 60,
+			});
+
+			const before = await usableBalance(db, enrollment.id);
+			await assert.rejects(
+				createBooking(buyer, {
+					scheduleId: draftSchedule.id,
+					startsAt: new Date(
+						dayStart.getTime() + 9 * 60 * 60 * 1000,
+					).toISOString(),
+				}),
+				{ code: "NOT_BOOKABLE" },
+			);
+			// Refused before any write: no booking row, no debit.
+			const created = await db.query.bookings.findMany({
+				where: eq(bookings.scheduleId, draftSchedule.id),
+			});
+			assert.equal(created.length, 0);
+			assert.equal(await usableBalance(db, enrollment.id), before);
+		},
+	);
+
+	await t.test(
+		"too few credits refuses the booking and writes nothing",
+		async () => {
+			// The debit and the booking insert share one transaction, and the exclusion
+			// constraint is deferred, so the booking row is already visible when the
+			// debit fails. This proves the rollback removes it: a refused booking must
+			// not hold the slot or touch the balance.
+			const poorId = crypto.randomUUID();
+			await db.insert(user).values({
+				id: poorId,
+				name: "Short on credits",
+				email: `${poorId}@example.test`,
+			});
+			const { enrollment: poorEnrollment } = await seedCredits({
+				creatorId,
+				userId: poorId,
+				planId: plan.id,
+				amount: 2, // the schedule costs 3
+			});
+			const poor = customerPrincipal(poorId);
+
+			await assert.rejects(
+				createBooking(poor, {
+					scheduleId: schedule.id,
+					startsAt: new Date(
+						dayStart.getTime() + 10 * 60 * 60 * 1000,
+					).toISOString(),
+				}),
+				{ code: "INSUFFICIENT_CREDITS" },
+			);
+
+			assert.equal(await usableBalance(db, poorEnrollment.id), 2);
+			const rows = await db.query.bookings.findMany({
+				where: eq(bookings.userId, poorId),
+			});
+			assert.equal(rows.length, 0, "a refused booking leaves no reservation");
+
+			await db.delete(user).where(eq(user.id, poorId));
+		},
+	);
+
 	await t.test("a customer without the plan cannot book", async () => {
 		const outsider = customerPrincipal(outsiderId);
 		await assert.rejects(

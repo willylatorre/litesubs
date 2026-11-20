@@ -771,7 +771,13 @@ export const bookingSchedules = pgTable(
 		planId: text("plan_id").references(() => plans.id, {
 			onDelete: "set null",
 		}),
-		/** Credits one booking spends. Null means free; the debit is skipped. */
+		/**
+		 * Credits one booking spends. Null only while the schedule is unlinked;
+		 * linking a plan requires a positive price (B3), so a bookable schedule
+		 * always has one. Free bookings are not a supported feature: the booking
+		 * service refuses a schedule without a plan and price with `NOT_BOOKABLE`,
+		 * because silently treating "no price" as free would sell time for nothing.
+		 */
 		creditsPerBooking: integer("credits_per_booking"),
 		durationMinutes: integer("duration_minutes").default(30).notNull(),
 		/** Padding that must stay free before and after a booking. */

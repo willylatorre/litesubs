@@ -18,7 +18,9 @@ import { ServiceError } from "@/lib/services/principal";
  * Rules enforced here, not in the UI:
  * - Both sides must belong to the signed-in creator.
  * - A recurring plan is refused: a booking is not a billing period.
- * - A price must be a whole number above zero, or null for a free booking.
+ * - A price must be a whole number above zero. A null price is not a free
+ *   booking; it unlinks the plan, because a schedule with no price would sell
+ *   the creator's time for nothing.
  */
 
 const linkInput = z.object({
