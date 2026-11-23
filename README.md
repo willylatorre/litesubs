@@ -1,10 +1,10 @@
-# Litesubs
+# liteSubs
 
 A platform for creators to sell credit plans. A plan is either a one-time pack
 or a monthly allowance. Creators prepare a plan as a draft, publish immutable
 terms on their own Stripe account, and customers spend credits over time —
 through the API, or from an AI assistant over MCP. Scheduling lives in Plannerie;
-Litesubs owns the price, the credit grant, and the ledger.
+liteSubs owns the price, the credit grant, and the ledger.
 
 # Getting Started
 
@@ -138,7 +138,7 @@ route in a config file. Use `next/link` for navigation.
 - **Money is integer minor units** with an explicit currency. Periods are UTC
   instants plus an explicit IANA timezone.
 - **Payments are direct charges** on each creator's own connected Stripe account
-  with no commission. There is no platform-charge fallback; Litesubs is paid for
+  with no commission. There is no platform-charge fallback; liteSubs is paid for
   by a free/ Premium tier split instead.
 
 Before changing a money path, read the matching document in `docs/`. Those files

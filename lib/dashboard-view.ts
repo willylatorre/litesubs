@@ -62,7 +62,7 @@ export type MoneyView = {
 	refunded: number;
 	net: number;
 	/**
-	 * Litesubs' application fee included in `gross`. Margins take no commission
+	 * liteSubs' application fee included in `gross`. Margins take no commission
 	 * now, so this is zero for every new sale; historical receipts keep the fee
 	 * they actually paid.
 	 */

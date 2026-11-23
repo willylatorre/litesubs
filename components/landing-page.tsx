@@ -58,7 +58,7 @@ export function LandingPage() {
 				<div className="flex flex-col items-center gap-4 max-w-xl">
 					{/* Logo - Wrapped in h1 for SEO, styled to look normal */}
 					<h1 className="sr-only">
-						LiteSubs - Simple credit plans instead of heavy subscriptions
+						liteSubs - Simple credit plans instead of heavy subscriptions
 					</h1>
 					<AnimatedLogo />
 

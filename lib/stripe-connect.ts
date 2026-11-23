@@ -227,7 +227,7 @@ export async function exchangeAuthorizationCode(code: string) {
 }
 
 /**
- * Revoke Litesubs' access through Stripe. Only an OAuth-authorized account can
+ * Revoke liteSubs' access through Stripe. Only an OAuth-authorized account can
  * be deauthorized; a self-created account is disconnected locally instead.
  */
 export async function deauthorizeAccount(stripeAccountId: string) {

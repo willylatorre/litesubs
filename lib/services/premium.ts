@@ -4,7 +4,7 @@ import { subscription } from "@/app/db/schema";
 import { ServiceError } from "./principal";
 
 /**
- * Platform billing: the creator paying Litesubs.
+ * Platform billing: the creator paying liteSubs.
  *
  * The transport lives in `@better-auth/stripe` (`/subscription/upgrade`,
  * `/billing-portal`, `/cancel`, `/restore`). This module only answers the two

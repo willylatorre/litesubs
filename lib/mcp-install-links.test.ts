@@ -68,7 +68,7 @@ test("deeplinks decode back to the server config each client expects", () => {
 
 test("claude.ai connector link pre-fills both fields, and the generic block is valid JSON", () => {
 	const link = new URL(claudeConnectorLink(resource));
-	assert.equal(link.searchParams.get("connectorName"), "Litesubs");
+	assert.equal(link.searchParams.get("connectorName"), "liteSubs");
 	assert.equal(link.searchParams.get("connectorUrl"), resource);
 
 	const config = JSON.parse(clientConfig(resource));

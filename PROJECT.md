@@ -1,7 +1,7 @@
-# Litesubs
+# liteSubs
 
 ## Overview
-Litesubs is a streamlined platform for creators to sell credit plans. A plan is either a one-time pack or a monthly allowance. Creators prepare a plan as a draft, publish immutable terms on their own Stripe account, and customers consume credits over time.
+liteSubs is a streamlined platform for creators to sell credit plans. A plan is either a one-time pack or a monthly allowance. Creators prepare a plan as a draft, publish immutable terms on their own Stripe account, and customers consume credits over time.
 
 This model establishes a direct relationship between the creator and the buyer, allowing creators to monetize their services or content flexibly without the complexity of managing recurring billing cycles initially.
 
@@ -75,15 +75,15 @@ This model establishes a direct relationship between the creator and the buyer, 
 - [x] **Stripe connect:** Explore allowing users to connect their own "stripe" account so the purchases of the packs will go directly to them. If connected, we skip/disable the whole Payouts section as it is handled automatically.
 - [x] **Native bookings:** Creators define weekly availability and one-off blocks, link a schedule to a one-time plan, and a booked slot spends that plan's credits. Public pages live at `/book/<creator>/<slug>`; double-booking is prevented by a database exclusion constraint. No vendor sits in the path. **Removed** — see "Refocus" below.
 - [x] **Remove the Cal.com integration:** native booking schedules replaced it, so the vendor card, OAuth routes, webhook, and tables were removed. `0016` drops them without touching plans, credits, bookings, or payments.
-- [x] **Google Calendar (optional):** A creator connects Google Calendar and chooses two calendars: one whose busy time blocks slots, and one where bookings are written (an existing calendar or a new one Litesubs creates). Tokens are encrypted at rest, the event id is stored so cancellation removes the event, and sync failures never roll back a booking or a debit. Not yet verified against a live Google client. **Removed** — see "Refocus" below.
+- [x] **Google Calendar (optional):** A creator connects Google Calendar and chooses two calendars: one whose busy time blocks slots, and one where bookings are written (an existing calendar or a new one liteSubs creates). Tokens are encrypted at rest, the event id is stored so cancellation removes the event, and sync failures never roll back a booking or a debit. Not yet verified against a live Google client. **Removed** — see "Refocus" below.
 
 ### Refocus: subscriptions and credits only
 
 - [x] **Booking feature moved out:** Scheduling belongs with the teacher's lesson
-  workspace, so it now lives in Plannerie. Litesubs deleted the scheduler, the
+  workspace, so it now lives in Plannerie. liteSubs deleted the scheduler, the
   Google Calendar integration, and the booking-only notifications (`0018`), and
   `/book/<creator>/<slug>` redirects to Plannerie so already-shared links do not
-  404. Litesubs keeps the price, the credit grant, and the ledger; a scheduler
+  404. liteSubs keeps the price, the credit grant, and the ledger; a scheduler
   debits through `POST /api/v1/credits/consume`. See `docs/REFOCUS.md`.
 - [x] **1% commission removed:** A sale is a direct charge on the creator's own
   Stripe account with no application fee — the creator keeps the whole sale

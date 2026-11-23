@@ -9,7 +9,7 @@ import type { MoneyView } from "@/lib/dashboard-view";
 
 /**
  * Supporting detail under a net total: what was collected, what was refunded,
- * and what Litesubs took. Currency is never blended, and refunds and fees are
+ * and what liteSubs took. Currency is never blended, and refunds and fees are
  * explicit rather than implied — a creator should not have to open Stripe to
  * find out why the number is smaller than the sales.
  */
@@ -50,7 +50,7 @@ export function MoneySummary({
 					{showFees && row.platformFees > 0 && (
 						<>
 							{" · "}
-							{formatMoney(row.platformFees, row.currency)} Litesubs fee
+							{formatMoney(row.platformFees, row.currency)} liteSubs fee
 						</>
 					)}
 				</p>

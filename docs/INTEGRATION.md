@@ -115,7 +115,7 @@ A platform with no bookings uses the same two calls for anything else.
 | Consent screen app name | `liteSubs` / `by Plannerie` |
 | Org metadata | `Organization` for liteSubs, `parentOrganization` Plannerie |
 
-Casing note: the repo says **Litesubs** 160 times and `liteSubs` 3. The brand mark
+Casing note: the repo says **liteSubs** 160 times and `liteSubs` 3. The brand mark
 is `liteSubs`; whether prose follows is a separate, mechanical decision — flagged
 rather than mass-renamed here, because a 160-site rename buried in a feature
 commit makes review harder.

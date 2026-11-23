@@ -45,7 +45,7 @@ if (
 }
 
 /**
- * Platform billing: the creator paying Litesubs, not a creator's customer paying
+ * Platform billing: the creator paying liteSubs, not a creator's customer paying
  * the creator. Those are separate domains with separate Stripe accounts — see
  * `docs/PLATFORM-BILLING.md`.
  *
@@ -56,7 +56,7 @@ if (
  *
  * `createCustomerOnSignUp` is deliberately off. Every buyer here is also a user,
  * so enabling it would mint a platform Stripe Customer for people who will never
- * pay Litesubs. The checkout path creates one lazily, which is the only moment
+ * pay liteSubs. The checkout path creates one lazily, which is the only moment
  * it is actually needed.
  */
 const premiumPriceId = process.env.STRIPE_PREMIUM_PRICE_ID?.trim();
@@ -189,7 +189,7 @@ export const auth = betterAuth({
 			},
 		}),
 
-		// Platform billing (creator -> Litesubs). Creator sales are a different
+		// Platform billing (creator -> liteSubs). Creator sales are a different
 		// domain: direct charges on each creator's connected account, handled by
 		// `/api/webhooks/stripe`, never here.
 		...(() => {

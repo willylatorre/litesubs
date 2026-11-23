@@ -3,9 +3,9 @@ import type { LegalSection } from "@/components/legal/legal-document";
 import { LegalDocument } from "@/components/legal/legal-document";
 
 export const metadata: Metadata = {
-	title: "Terms and conditions | Litesubs",
+	title: "Terms and conditions | liteSubs",
 	description:
-		"The agreement between you and Litesubs for using the platform, selling credit plans, and buying credits from creators.",
+		"The agreement between you and liteSubs for using the platform, selling credit plans, and buying credits from creators.",
 	alternates: {
 		canonical: "/terms",
 	},
@@ -18,7 +18,7 @@ const sections: LegalSection[] = [
 		blocks: [
 			{
 				type: "paragraph",
-				text: "These Terms and Conditions (the \u201cTerms\u201d) govern your access to and use of Litesubs, including the website, dashboard, booking pages, REST API, and remote MCP server (together, the \u201cService\u201d). By creating an account, publishing a plan, purchasing credits, or otherwise using the Service, you agree to these Terms.",
+				text: "These Terms and Conditions (the \u201cTerms\u201d) govern your access to and use of liteSubs, including the website, dashboard, booking pages, REST API, and remote MCP server (together, the \u201cService\u201d). By creating an account, publishing a plan, purchasing credits, or otherwise using the Service, you agree to these Terms.",
 			},
 			{
 				type: "paragraph",
@@ -28,15 +28,15 @@ const sections: LegalSection[] = [
 	},
 	{
 		id: "the-service",
-		title: "What Litesubs does",
+		title: "What liteSubs does",
 		blocks: [
 			{
 				type: "paragraph",
-				text: "Litesubs is a platform that lets creators define credit plans, enroll customers, and track consumption of credits. A plan is either a one-time credit pack or a monthly allowance. Creators prepare a plan as a draft and publish it on their own payment account before anything becomes purchasable.",
+				text: "liteSubs is a platform that lets creators define credit plans, enroll customers, and track consumption of credits. A plan is either a one-time credit pack or a monthly allowance. Creators prepare a plan as a draft and publish it on their own payment account before anything becomes purchasable.",
 			},
 			{
 				type: "paragraph",
-				text: "Litesubs is not a payment processor, bank, escrow agent, or merchant of record. Payments for credit plans are processed by Stripe on the creator\u2019s connected Stripe account, which means:",
+				text: "liteSubs is not a payment processor, bank, escrow agent, or merchant of record. Payments for credit plans are processed by Stripe on the creator\u2019s connected Stripe account, which means:",
 			},
 			{
 				type: "list",
@@ -44,12 +44,12 @@ const sections: LegalSection[] = [
 					"The contract for the sale of credits is between the creator and the buyer.",
 					"The creator is the seller and is solely responsible for the services, content, or access those credits represent.",
 					"The creator is responsible for taxes, refunds, chargebacks, and consumer-law obligations arising from their own sales.",
-					"Litesubs never stores full payment card details.",
+					"liteSubs never stores full payment card details.",
 				],
 			},
 			{
 				type: "paragraph",
-				text: "Litesubs takes no commission on sales made through the platform. A creator keeps the full amount paid by their customers on their own Stripe account, less Stripe\u2019s own processing fees, which Stripe charges to the creator directly. Litesubs charges a subscription for its own features: a free tier and a paid Premium tier, as described on the site and in the creator\u2019s Billing settings.",
+				text: "liteSubs takes no commission on sales made through the platform. A creator keeps the full amount paid by their customers on their own Stripe account, less Stripe\u2019s own processing fees, which Stripe charges to the creator directly. liteSubs charges a subscription for its own features: a free tier and a paid Premium tier, as described on the site and in the creator\u2019s Billing settings.",
 			},
 		],
 	},
@@ -81,7 +81,7 @@ const sections: LegalSection[] = [
 					"You will connect a payment-ready Stripe account and comply with Stripe\u2019s services agreement and prohibited-business requirements.",
 					"Published commercial terms are frozen for existing customers. You may edit service details, but changes to price or credits do not retroactively change credits already granted.",
 					"You are responsible for delivering whatever the credits represent, for honoring plans you have sold, and for handling customer support and refunds for your own sales.",
-					"Refunds are issued from your own Stripe dashboard. When a purchase is refunded, Litesubs revokes the unspent credits from that purchase only.",
+					"Refunds are issued from your own Stripe dashboard. When a purchase is refunded, liteSubs revokes the unspent credits from that purchase only.",
 					"You will not use the Service to sell credits for unlawful, deceptive, or prohibited goods and services.",
 					"You will comply with consumer-protection, subscription, and automatic-renewal laws that apply to your offers, including clear disclosure of recurring charges and cancellation routes for monthly plans.",
 				],
@@ -98,7 +98,7 @@ const sections: LegalSection[] = [
 		blocks: [
 			{
 				type: "paragraph",
-				text: "If you buy credits, you are purchasing them from the creator, not from Litesubs. Your payment is charged by the creator\u2019s Stripe account. Credits are personal to the enrolled customer and plan, cannot be transferred, and cannot make a balance negative.",
+				text: "If you buy credits, you are purchasing them from the creator, not from liteSubs. Your payment is charged by the creator\u2019s Stripe account. Credits are personal to the enrolled customer and plan, cannot be transferred, and cannot make a balance negative.",
 			},
 			{
 				type: "paragraph",
@@ -159,7 +159,7 @@ const sections: LegalSection[] = [
 		blocks: [
 			{
 				type: "paragraph",
-				text: "Litesubs offers a free tier that includes two plans and one-time packs, and a paid Premium tier that includes unlimited plans, monthly plans, and developer features. Prices are shown on the site and in the creator\u2019s Billing settings. Paid subscriptions renew monthly until canceled, and canceling stops future renewals while access continues to the end of the period already paid for. We may change prices with advance notice under \u201cChanges to these Terms\u201d.",
+				text: "liteSubs offers a free tier that includes two plans and one-time packs, and a paid Premium tier that includes unlimited plans, monthly plans, and developer features. Prices are shown on the site and in the creator\u2019s Billing settings. Paid subscriptions renew monthly until canceled, and canceling stops future renewals while access continues to the end of the period already paid for. We may change prices with advance notice under \u201cChanges to these Terms\u201d.",
 			},
 			{
 				type: "paragraph",
@@ -187,7 +187,7 @@ const sections: LegalSection[] = [
 		blocks: [
 			{
 				type: "paragraph",
-				text: "The Service is provided \u201cas is\u201d and \u201cas available\u201d. To the maximum extent permitted by law, Litesubs disclaims all warranties, express or implied, including merchantability, fitness for a particular purpose, non-infringement, and any warranty arising from course of dealing. We do not warrant that the Service will be error-free, that defects will be corrected, or that credit accounting will be uninterrupted.",
+				text: "The Service is provided \u201cas is\u201d and \u201cas available\u201d. To the maximum extent permitted by law, liteSubs disclaims all warranties, express or implied, including merchantability, fitness for a particular purpose, non-infringement, and any warranty arising from course of dealing. We do not warrant that the Service will be error-free, that defects will be corrected, or that credit accounting will be uninterrupted.",
 			},
 			{
 				type: "paragraph",
@@ -201,11 +201,11 @@ const sections: LegalSection[] = [
 		blocks: [
 			{
 				type: "paragraph",
-				text: "To the maximum extent permitted by law, Litesubs and its officers, employees, and suppliers will not be liable for indirect, incidental, special, consequential, or punitive damages, or for lost profits, revenue, data, or goodwill, arising from your use of the Service.",
+				text: "To the maximum extent permitted by law, liteSubs and its officers, employees, and suppliers will not be liable for indirect, incidental, special, consequential, or punitive damages, or for lost profits, revenue, data, or goodwill, arising from your use of the Service.",
 			},
 			{
 				type: "paragraph",
-				text: "Our total aggregate liability for all claims relating to the Service will not exceed the greater of the fees you paid to Litesubs in the twelve months before the event giving rise to the claim, or one hundred US dollars (US$100).",
+				text: "Our total aggregate liability for all claims relating to the Service will not exceed the greater of the fees you paid to liteSubs in the twelve months before the event giving rise to the claim, or one hundred US dollars (US$100).",
 			},
 			{
 				type: "paragraph",
@@ -219,7 +219,7 @@ const sections: LegalSection[] = [
 		blocks: [
 			{
 				type: "paragraph",
-				text: "You agree to indemnify and hold harmless Litesubs from claims, damages, liabilities, and reasonable legal fees arising from your content, your plans and sales, your violation of these Terms, or your infringement of another party\u2019s rights. If a creator\u2019s offer gives rise to a consumer or regulatory claim, that creator is responsible for defending it.",
+				text: "You agree to indemnify and hold harmless liteSubs from claims, damages, liabilities, and reasonable legal fees arising from your content, your plans and sales, your violation of these Terms, or your infringement of another party\u2019s rights. If a creator\u2019s offer gives rise to a consumer or regulatory claim, that creator is responsible for defending it.",
 			},
 		],
 	},
@@ -239,7 +239,7 @@ const sections: LegalSection[] = [
 		blocks: [
 			{
 				type: "paragraph",
-				text: "These Terms are governed by the laws of the State of Delaware, United States, without regard to conflict-of-law rules. You and Litesubs agree to submit to the exclusive jurisdiction of the state and federal courts located in Delaware for disputes arising from the Service, except that either party may bring a claim in small-claims court where eligible.",
+				text: "These Terms are governed by the laws of the State of Delaware, United States, without regard to conflict-of-law rules. You and liteSubs agree to submit to the exclusive jurisdiction of the state and federal courts located in Delaware for disputes arising from the Service, except that either party may bring a claim in small-claims court where eligible.",
 			},
 			{
 				type: "paragraph",
@@ -247,7 +247,7 @@ const sections: LegalSection[] = [
 			},
 			{
 				type: "paragraph",
-				text: "If a provision of these Terms is found unenforceable, the rest remains in effect. Our failure to enforce a provision is not a waiver. These Terms, together with the Privacy Policy, are the entire agreement between you and Litesubs regarding the Service.",
+				text: "If a provision of these Terms is found unenforceable, the rest remains in effect. Our failure to enforce a provision is not a waiver. These Terms, together with the Privacy Policy, are the entire agreement between you and liteSubs regarding the Service.",
 			},
 		],
 	},
@@ -268,7 +268,7 @@ export default function TermsPage() {
 		<LegalDocument
 			eyebrow="Legal"
 			title="Terms and conditions"
-			summary="How Litesubs works, what creators and buyers each agree to, and the limits of our responsibility."
+			summary="How liteSubs works, what creators and buyers each agree to, and the limits of our responsibility."
 			lastUpdated="November 16, 2026"
 			sections={sections}
 		/>

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 /**
- * Litesubs sells with **direct charges**: the session is created as the
+ * liteSubs sells with **direct charges**: the session is created as the
  * connected account. Adding `transfer_data` silently converts it into a
  * destination charge, moving the charge onto the platform and away from the
  * creator's balance.
@@ -38,7 +38,7 @@ test("checkout code never turns a direct charge into a destination charge", asyn
 });
 
 /**
- * No commission is taken from a sale. The creator keeps it, and Litesubs is
+ * No commission is taken from a sale. The creator keeps it, and liteSubs is
  * paid for by a creator subscription instead. This is a revenue-model change,
  * so it is pinned: reintroducing an application fee in the charge path without
  * changing the pricing would silently tax every sale again.

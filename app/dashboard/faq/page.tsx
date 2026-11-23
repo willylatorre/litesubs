@@ -15,8 +15,8 @@ import {
 const generalFaqItems = [
 	{
 		id: "general-what-is-litesubs",
-		q: "What is LiteSubs?",
-		a: "LiteSubs lets you sell credits instead of traditional subscriptions. Customers buy credits, you assign them to a person, and credits are used only when needed.",
+		q: "What is liteSubs?",
+		a: "liteSubs lets you sell credits instead of traditional subscriptions. Customers buy credits, you assign them to a person, and credits are used only when needed.",
 	},
 	{
 		id: "general-what-are-credits",
@@ -30,8 +30,8 @@ const generalFaqItems = [
 	},
 	{
 		id: "general-subscription-tool",
-		q: "Is LiteSubs a subscription tool?",
-		a: "Not really — and that’s the point. LiteSubs replaces heavy subscriptions with lighter, more flexible credits. A monthly plan is optional and simply grants a new allowance each paid period.",
+		q: "Is liteSubs a subscription tool?",
+		a: "Not really — and that’s the point. liteSubs replaces heavy subscriptions with lighter, more flexible credits. A monthly plan is optional and simply grants a new allowance each paid period.",
 	},
 	{
 		id: "general-assigned-to-who",
@@ -45,8 +45,8 @@ const generalFaqItems = [
 	},
 	{
 		id: "general-what-businesses",
-		q: "What kind of businesses is LiteSubs for?",
-		a: "LiteSubs works well for consultants & coaches, creators & educators, agencies, internal tools, and SaaS products with usage-based access — anywhere subscriptions feel too rigid.",
+		q: "What kind of businesses is liteSubs for?",
+		a: "liteSubs works well for consultants & coaches, creators & educators, agencies, internal tools, and SaaS products with usage-based access — anywhere subscriptions feel too rigid.",
 	},
 	{
 		id: "general-account-required",
@@ -56,12 +56,12 @@ const generalFaqItems = [
 	{
 		id: "general-payments",
 		q: "How does payment work?",
-		a: "Each creator connects their own Stripe account, so customers pay the creator directly and the creator keeps the whole sale. Litesubs takes no commission and never stores credit card details.",
+		a: "Each creator connects their own Stripe account, so customers pay the creator directly and the creator keeps the whole sale. liteSubs takes no commission and never stores credit card details.",
 	},
 	{
 		id: "general-free",
-		q: "Is LiteSubs free?",
-		a: "Yes — LiteSubs is free during early access. No credit card is required to get started right now.",
+		q: "Is liteSubs free?",
+		a: "Yes — liteSubs is free during early access. No credit card is required to get started right now.",
 	},
 	{
 		id: "general-switch-later",
@@ -84,7 +84,7 @@ const paymentFaqItems = [
 	{
 		id: "payments-fees",
 		q: "Who pays Stripe fees?",
-		a: "You do, on your own Stripe account, at Stripe's standard rates. Litesubs takes no commission on your sales; it is paid for by an optional Premium subscription.",
+		a: "You do, on your own Stripe account, at Stripe's standard rates. liteSubs takes no commission on your sales; it is paid for by an optional Premium subscription.",
 	},
 	{
 		id: "payments-dashboard",
@@ -106,7 +106,7 @@ export default function DashboardFaqPage() {
 					<div className="space-y-1">
 						<h1 className="text-2xl font-bold tracking-tight">FAQ</h1>
 						<p className="text-sm text-muted-foreground">
-							Answers to common questions about LiteSubs.
+							Answers to common questions about liteSubs.
 						</p>
 					</div>
 				</div>
@@ -116,7 +116,7 @@ export default function DashboardFaqPage() {
 						<CardHeader>
 							<CardTitle>General</CardTitle>
 							<CardDescription>
-								How LiteSubs works at a high level.
+								How liteSubs works at a high level.
 							</CardDescription>
 						</CardHeader>
 						<CardContent>

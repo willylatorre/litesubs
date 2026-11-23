@@ -3,13 +3,13 @@ import { getStripe } from "@/lib/stripe";
 /**
  * Server-only adapter for payments that happen **on a connected account**.
  *
- * Litesubs uses direct charges: the Checkout Session is created *as* the
+ * liteSubs uses direct charges: the Checkout Session is created *as* the
  * connected account (the `Stripe-Account` request option), so the charge lives
  * on the creator's balance, the creator is the merchant of record, Stripe bills
  * them the processing fees, and refunds/chargebacks hit their account.
  *
  * This is deliberately not a destination charge. Adding
- * `payment_intent_data.transfer_data` would move the charge onto the Litesubs
+ * `payment_intent_data.transfer_data` would move the charge onto the liteSubs
  * platform balance and change who is liable, which is the opposite of the
  * agreed model. There is exactly one place that creates these sessions so the
  * two cannot drift apart.
@@ -80,7 +80,7 @@ export async function createDirectCheckoutSession(
 			cancel_url: input.cancelUrl,
 			metadata: input.metadata,
 			// No `application_fee_amount` and no `transfer_data`: this is a plain
-			// direct charge and the creator keeps the whole sale. Litesubs is paid
+			// direct charge and the creator keeps the whole sale. liteSubs is paid
 			// for by a creator subscription (`docs/REFOCUS.md`), never by a cut.
 			payment_intent_data: { metadata: input.metadata },
 		},
@@ -95,7 +95,7 @@ export async function createDirectCheckoutSession(
 /**
  * Create a monthly subscription through direct-charge Checkout. The request is
  * scoped to the creator account. No platform fee is attached: the creator keeps
- * the whole sale and Litesubs is paid for by a creator subscription.
+ * the whole sale and liteSubs is paid for by a creator subscription.
  */
 export async function createDirectSubscriptionCheckoutSession(
 	input: CreateSubscriptionCheckoutInput,

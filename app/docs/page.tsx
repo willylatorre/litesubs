@@ -6,9 +6,9 @@ import { PublicShell } from "@/components/public-shell";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-	title: "API & MCP documentation | Litesubs",
+	title: "API & MCP documentation | liteSubs",
 	description:
-		"Connect an AI assistant to Litesubs or integrate credit consumption through the REST API.",
+		"Connect an AI assistant to liteSubs or integrate credit consumption through the REST API.",
 };
 
 export default function DocsPage() {

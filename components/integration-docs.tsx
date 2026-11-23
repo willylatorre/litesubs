@@ -143,7 +143,7 @@ export function IntegrationDocs({ embedded = false }: { embedded?: boolean }) {
 
 				<Section id="mcp" title="Connect an AI assistant">
 					<p>
-						Litesubs is a remote MCP server. Add this endpoint to a compatible
+						liteSubs is a remote MCP server. Add this endpoint to a compatible
 						client and your assistant can manage plans, enroll customers and
 						grant credits for you:
 					</p>

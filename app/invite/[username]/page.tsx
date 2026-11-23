@@ -48,7 +48,7 @@ export async function generateMetadata({
 
 	if (!invite) {
 		return {
-			title: "Invite Not Found | LiteSubs",
+			title: "Invite Not Found | liteSubs",
 			description: "This invite link is invalid or has expired.",
 		};
 	}
@@ -58,14 +58,14 @@ export async function generateMetadata({
 	);
 	if (invite.plan && published) {
 		return {
-			title: `${invite.plan.name} by ${invite.creator.name} | LiteSubs`,
+			title: `${invite.plan.name} by ${invite.creator.name} | liteSubs`,
 			description: `Get ${published.credits} credits for ${published.price / 100} ${published.currency.toUpperCase()}.`,
 		};
 	}
 
 	return {
-		title: `Invite from ${invite.creator.name} | LiteSubs`,
-		description: `${invite.creator.name} has invited you to connect on LiteSubs.`,
+		title: `Invite from ${invite.creator.name} | liteSubs`,
+		description: `${invite.creator.name} has invited you to connect on liteSubs.`,
 	};
 }
 

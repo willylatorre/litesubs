@@ -151,7 +151,7 @@ export function PaymentsSetup({
 
 	/**
 	 * Stripe-hosted Connect OAuth is the primary way in: the creator authorizes
-	 * Litesubs on Stripe's own page, which handles both an existing account and
+	 * liteSubs on Stripe's own page, which handles both an existing account and
 	 * creating one there. That produces an account the creator controls.
 	 *
 	 * If the platform has no OAuth client id configured, fall back to creating
@@ -273,7 +273,7 @@ export function PaymentsSetup({
 									))}
 								</ul>
 								<p className="text-xs text-muted-foreground">
-									Litesubs will not change these settings for you, and will not
+									liteSubs will not change these settings for you, and will not
 									sell on an account with a different agreement.
 								</p>
 							</div>
@@ -392,7 +392,7 @@ export function PaymentsSetup({
 							disconnecting?
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							Stripe does not cancel subscriptions when Litesubs disconnects, so
+							Stripe does not cancel subscriptions when liteSubs disconnects, so
 							they would keep charging customers for credits nobody can grant.
 							Continuing schedules each renewal to stop at the end of its paid
 							period. Customers keep the credits they already paid for until

@@ -44,7 +44,7 @@ export function Pricing() {
 				</h2>
 				<p className="mx-auto max-w-xl text-muted-foreground">
 					Customers pay you directly on your own Stripe account and you keep the
-					whole sale. Litesubs charges you a subscription, never a percentage of
+					whole sale. liteSubs charges you a subscription, never a percentage of
 					what you sell.
 				</p>
 			</div>

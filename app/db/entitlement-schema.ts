@@ -22,7 +22,7 @@ export const creatorTierEnum = pgEnum("creator_tier", ["free", "premium"]);
 export const FREE_PLAN_LIMIT = 2;
 
 /**
- * Litesubs' own billing — the creator paying Litesubs.
+ * liteSubs' own billing — the creator paying liteSubs.
  *
  * **This is not `subscriptions`.** That table is a creator's customer paying the
  * creator for credits, charged as a direct charge on the creator's connected

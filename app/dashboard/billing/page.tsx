@@ -55,7 +55,7 @@ export default async function BillingPage({
 			<div>
 				<h1 className="text-2xl font-bold tracking-tight">Billing</h1>
 				<p className="text-muted-foreground text-sm">
-					What your Litesubs account includes. Sale payments are separate —
+					What your liteSubs account includes. Sale payments are separate —
 					those go straight to your own Stripe account, with no commission.
 				</p>
 			</div>

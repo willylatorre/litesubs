@@ -31,7 +31,7 @@ export const TRANSACTION_STATUSES = [
 ] as const;
 
 /**
- * Litesubs takes no share of a sale.
+ * liteSubs takes no share of a sale.
  *
  * The old 1% application fee was replaced by a flat creator subscription
  * (`docs/REFOCUS.md`), so nothing in the charge path attaches a fee. This is

@@ -103,7 +103,7 @@ export function McpInstall() {
 						</li>
 						<li>Add the connector, then press Connect and approve access.</li>
 						<li>
-							In a chat, open the connectors menu and pick Litesubs before
+							In a chat, open the connectors menu and pick liteSubs before
 							asking for something like{" "}
 							<q>Create an Algebra plan with 10 credits for $100.</q>
 						</li>
@@ -126,7 +126,7 @@ export function McpInstall() {
 							the plus button, then <strong>Add custom MCP server</strong>.
 						</li>
 						<li>
-							Name it <code>Litesubs</code> and paste the server URL:
+							Name it <code>liteSubs</code> and paste the server URL:
 							<CodeBlock language="endpoint" code={resource} className="mt-2" />
 						</li>
 						<li>
@@ -134,13 +134,13 @@ export function McpInstall() {
 							warning, and create the plugin.
 						</li>
 						<li>
-							Install it from your personal plugins, then approve the Litesubs
+							Install it from your personal plugins, then approve the liteSubs
 							sign-in when you first use a tool.
 						</li>
 						<li>
-							In a conversation, type <code>@</code> and choose Litesubs. Be
+							In a conversation, type <code>@</code> and choose liteSubs. Be
 							specific:{" "}
-							<q>Use Litesubs to enroll ana@example.com in Algebra.</q>
+							<q>Use liteSubs to enroll ana@example.com in Algebra.</q>
 						</li>
 					</Steps>
 					<Callout type="warning" title="Check plan eligibility">
@@ -201,7 +201,7 @@ export function McpInstall() {
 }`}
 					/>
 					<Callout type="note" title="Why the token, not sign-in">
-						Cursor registers OAuth clients dynamically. Litesubs deliberately
+						Cursor registers OAuth clients dynamically. liteSubs deliberately
 						declines open dynamic registration because it lets any caller mint a
 						creator-level client. Supporting Cursor with full OAuth needs a
 						pre-registered client ID — see the note at the end of this section.
@@ -229,7 +229,7 @@ export function McpInstall() {
 						</li>
 						<li>
 							Approve the server in the prompt, then run{" "}
-							<strong>MCP: List Servers</strong> and start Litesubs.
+							<strong>MCP: List Servers</strong> and start liteSubs.
 						</li>
 						<li>
 							Choose the server when prompted to sign in, and approve access in

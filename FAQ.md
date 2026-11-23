@@ -1,8 +1,8 @@
 ## FAQ
 
-### **What is LiteSubs?**
+### **What is liteSubs?**
 
-LiteSubs lets you sell **credits instead of traditional subscriptions**.
+liteSubs lets you sell **credits instead of traditional subscriptions**.
 Customers buy credits, you assign them to a person, and credits are used only when needed.
 
 ---
@@ -33,11 +33,11 @@ From the user’s point of view, it’s always just **credits**.
 
 ---
 
-### **Is LiteSubs a subscription tool?**
+### **Is liteSubs a subscription tool?**
 
 Not really — and that’s the point.
 
-LiteSubs replaces heavy subscriptions with **lighter, more flexible credits**.
+liteSubs replaces heavy subscriptions with **lighter, more flexible credits**.
 A monthly plan is optional: it grants a fresh allowance each paid month, and
 unused monthly credits do not roll over.
 
@@ -64,9 +64,9 @@ You stay in control.
 
 ---
 
-### **What kind of businesses is LiteSubs for?**
+### **What kind of businesses is liteSubs for?**
 
-LiteSubs works well for:
+liteSubs works well for:
 
 * consultants & coaches
 * creators & educators
@@ -90,13 +90,13 @@ You decide how lightweight the flow should be.
 ### **How does payment work?**
 
 Payments are handled securely via **Stripe**.
-LiteSubs never stores credit card details.
+liteSubs never stores credit card details.
 
 ---
 
-### **Is LiteSubs free?**
+### **Is liteSubs free?**
 
-Yes — **LiteSubs is free during early access**.
+Yes — **liteSubs is free during early access**.
 No credit card is required to get started right now.
 
 ---

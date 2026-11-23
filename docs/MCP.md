@@ -1,4 +1,4 @@
-# Litesubs API and remote MCP
+# liteSubs API and remote MCP
 
 ## Implementation status
 
@@ -80,7 +80,7 @@ STRIPE_CONNECT_CLIENT_ID=<Connect client id, not a secret>
 GOOGLE_CLIENT_ID=<oauth client id>
 GOOGLE_CLIENT_SECRET=<oauth client secret>
 
-# Platform billing (creator -> Litesubs, $5/mo). Created on the platform's own
+# Platform billing (creator -> liteSubs, $5/mo). Created on the platform's own
 # account. Without BOTH values the @better-auth/stripe plugin is not registered,
 # so checkout is simply not offered and the rest of the app runs on the free tier.
 STRIPE_PREMIUM_PRICE_ID=<price id for $5/month>
@@ -88,7 +88,7 @@ STRIPE_WEBHOOK_BILLING=<signing secret for the platform endpoint>
 ```
 
 **The Stripe webhook endpoint must be a Connect endpoint** (`connect: true`).
-Litesubs sells with direct charges, so a purchase happens on the creator's
+liteSubs sells with direct charges, so a purchase happens on the creator's
 connected account and Stripe raises those events there. A platform endpoint never
 sees them, and the handler deliberately bails out when `event.account` is absent
 because that field decides whose credits to grant. Credits are granted **only**
@@ -96,7 +96,7 @@ by the webhook — the success page never grants and there is no cron — so a
 missing subscription means a paid customer receives nothing.
 
 > **There are two endpoints, one per billing domain.** The table
-> `litesub_subscription` is Litesubs being paid; `subscriptions` is a creator's
+> `litesub_subscription` is liteSubs being paid; `subscriptions` is a creator's
 > customer paying the creator. They use different Stripe accounts, so they need
 > different endpoints and **different signing secrets**. See
 > `docs/PLATFORM-BILLING.md`.
@@ -337,13 +337,13 @@ returns `IDEMPOTENCY_CONFLICT`. Dry runs do not reserve keys or write data.
 Purchases are direct charges on the creator's own connected Stripe account with
 **no application fee**: the creator keeps the whole sale. There is no
 platform-charge fallback: a creator without a payment-ready account cannot sell.
-The only subscription Litesubs bills itself is the optional Premium tier, which
+The only subscription liteSubs bills itself is the optional Premium tier, which
 is collected on the platform account and therefore carries no `event.account`.
 
 System paths (Stripe fulfillment and comp enrollment/claim) retain their own
 transactional ledger writes.
 
-**Scheduling is not a Litesubs feature.** Litesubs exposes the credit-consuming
+**Scheduling is not a liteSubs feature.** liteSubs exposes the credit-consuming
 API; an external scheduler (Plannerie) calls `POST /api/v1/credits/consume` with
 a stable `idempotency_key` derived from its own booking id and stores the
 returned transaction id as its reference. It never keeps a local balance. See
@@ -361,7 +361,7 @@ state, never from "a row exists", so an incomplete or restricted account cannot
 start a sale. Accounts are judged by those responsibilities, not by which endpoint
 created them.
 
-Litesubs no longer runs a platform payout ledger, payout requests, or payout
+liteSubs no longer runs a platform payout ledger, payout requests, or payout
 method preferences. Stripe pays out on the creator's own account.
 
 ## REST v1

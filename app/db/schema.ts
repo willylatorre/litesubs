@@ -283,7 +283,7 @@ export const transactions = pgTable(
 /**
  * A creator's Stripe Customer on **their own** connected account.
  *
- * Stripe Customers are account-scoped, so the same Litesubs user is a different
+ * Stripe Customers are account-scoped, so the same liteSubs user is a different
  * Customer object for every creator they buy from. This mapping is what makes
  * "reuse one intended Customer" possible without ever passing a platform
  * Customer to a connected account.

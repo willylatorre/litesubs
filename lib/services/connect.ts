@@ -59,7 +59,7 @@ export type { PaymentReadiness } from "@/lib/connect-copy";
 
 /**
  * Whether a connected account's *configuration* is compatible with what
- * Litesubs depends on: a self-controlled account that keeps its own Dashboard,
+ * liteSubs depends on: a self-controlled account that keeps its own Dashboard,
  * pays Stripe's fees, and carries Stripe negative-balance liability.
  *
  * This is a check, not a change. Controller configuration cannot be edited

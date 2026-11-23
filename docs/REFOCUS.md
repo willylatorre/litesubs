@@ -5,8 +5,8 @@ Status: agreed direction, being implemented.
 Two changes, decided together because they both remove surface area:
 
 1. **Bookings move to Plannerie.** Scheduling was the biggest non-subscription
-   feature in Litesubs and it belongs with the teacher's lesson workspace.
-   Litesubs stops owning availability, slots, and calendar sync, and keeps only
+   feature in liteSubs and it belongs with the teacher's lesson workspace.
+   liteSubs stops owning availability, slots, and calendar sync, and keeps only
    what it is good at: a price, a credit grant, and a ledger.
 2. **The 1% commission is replaced by a flat $5/month premium tier.** A free
    creator can publish two one-time packs. Premium removes that cap and unlocks
@@ -16,14 +16,14 @@ Two changes, decided together because they both remove surface area:
 
 The native scheduler is ~6,000 lines across five tables, a slot engine, a
 Google Calendar client, and a booking dashboard. It shares almost nothing with
-the money path except a call to `adjustCredits`. Keeping it in Litesubs means
+the money path except a call to `adjustCredits`. Keeping it in liteSubs means
 maintaining a calendar product inside a billing product, and it pulls the
 roadmap toward scheduling instead of subscriptions.
 
 The moved feature is not a thin adapter: there is no public booking API to
 re-point. Plannerie builds its own schedule model, and the only surviving
 contract is the one that matters financially — **a booking debits credits
-through the Litesubs API**, never through a second ledger.
+through the liteSubs API**, never through a second ledger.
 
 ## Booking ↔ credit boundary
 
@@ -32,9 +32,9 @@ through the Litesubs API**, never through a second ledger.
 | Weekly availability, exceptions, slot generation, double-booking | Plannerie |
 | Google Calendar busy/free and event sync | Plannerie |
 | Booking lifecycle and notifications | Plannerie |
-| Price, packs, published terms | Litesubs |
-| Credit grants, debits, refunds, expiry | Litesubs |
-| "This booking spent N credits" | Litesubs ledger row, referenced by Plannerie |
+| Price, packs, published terms | liteSubs |
+| Credit grants, debits, refunds, expiry | liteSubs |
+| "This booking spent N credits" | liteSubs ledger row, referenced by Plannerie |
 
 Plannerie calls `POST /api/v1/credits/consume` with a stable
 `idempotency_key` derived from its booking id, and a compensating grant for a

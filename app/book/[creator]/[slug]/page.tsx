@@ -5,7 +5,7 @@ import { appUrl } from "@/lib/app-url";
  * Bookings moved to Plannerie.
  *
  * Scheduling was never the subscription business: it is the teacher's lesson
- * workspace, and it now lives beside the lesson it belongs to. Litesubs keeps
+ * workspace, and it now lives beside the lesson it belongs to. liteSubs keeps
  * the price, the credit grant, and the ledger; see `docs/REFOCUS.md`.
  *
  * This route stays so a link a customer already has — printed on a lesson
@@ -40,7 +40,7 @@ export default async function MovedBookingPage({
 				this link for their new booking address.
 			</p>
 			<a className="text-sm font-medium underline" href={appUrl("/")}>
-				Go to Litesubs
+				Go to liteSubs
 			</a>
 		</main>
 	);

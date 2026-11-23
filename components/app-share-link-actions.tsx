@@ -6,7 +6,7 @@ import { useOrigin } from "@/hooks/use-origin";
 import { rehostUrl } from "@/lib/share-link";
 
 /**
- * Share a LiteSubs-owned URL on the host the creator is browsing.
+ * Share a liteSubs-owned URL on the host the creator is browsing.
  *
  * Invite and payment links come back absolute against NEXT_PUBLIC_APP_URL. On a
  * preview deployment that would hand a customer a production URL for a record

@@ -6,7 +6,7 @@ import { Building2, Landmark, User, Wallet } from "lucide-react";
  * Where money actually goes.
  *
  * The geometry is the argument: the customer's payment lands on the creator's
- * own Stripe account and **stays there**. Nothing branches off for Litesubs —
+ * own Stripe account and **stays there**. Nothing branches off for liteSubs —
  * the platform is paid for by a separate monthly subscription, drawn as its own
  * path so the two flows can never be mistaken for each other.
  *
@@ -118,7 +118,7 @@ export function StripeConnectDiagram() {
 			</title>
 			<desc id="connect-diagram-desc">
 				A customer pays on the creator&apos;s own connected Stripe account and
-				the creator keeps the whole sale, with no commission. Litesubs is paid
+				the creator keeps the whole sale, with no commission. liteSubs is paid
 				for separately by a monthly subscription, and Stripe pays the creator
 				out on their own schedule.
 			</desc>
@@ -132,7 +132,7 @@ export function StripeConnectDiagram() {
 				strokeLinecap="round"
 			/>
 
-			{/* Litesubs is paid by its own subscription, not from the sale. The
+			{/* liteSubs is paid by its own subscription, not from the sale. The
 			    dashed path deliberately does not touch the money line: no commission
 			    leaves the creator's payment. */}
 			<path
@@ -185,7 +185,7 @@ export function StripeConnectDiagram() {
 			<Slab
 				x={litesubs.cx - W / 2}
 				y={litesubs.cy - D / 2}
-				label="LiteSubs"
+				label="liteSubs"
 				Icon={Building2}
 				labelAbove
 			/>

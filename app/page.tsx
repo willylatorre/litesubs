@@ -2,21 +2,21 @@ import type { Metadata } from "next";
 import { LandingPage } from "@/components/landing-page";
 
 export const metadata: Metadata = {
-	title: "LiteSubs - Simple Credit Plans",
+	title: "liteSubs - Simple Credit Plans",
 	description:
 		"Simple credit plans instead of heavy subscriptions. Sell one-time credit packs or monthly allowances, charged on your own Stripe account.",
 	openGraph: {
-		title: "LiteSubs - Simple Credit Plans",
+		title: "liteSubs - Simple Credit Plans",
 		description:
 			"Simple credit plans instead of heavy subscriptions. Sell one-time credit packs or monthly allowances, charged on your own Stripe account.",
 		url: "https://litesubs.com",
-		siteName: "LiteSubs",
+		siteName: "liteSubs",
 		images: [
 			{
 				url: "/og-image.png", // Assuming this exists or will exist, usually good practice to define
 				width: 1200,
 				height: 630,
-				alt: "LiteSubs - Simple Credit Plans",
+				alt: "liteSubs - Simple Credit Plans",
 			},
 		],
 		locale: "en_US",
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 	},
 	twitter: {
 		card: "summary_large_image",
-		title: "LiteSubs - Simple Credit Plans",
+		title: "liteSubs - Simple Credit Plans",
 		description:
 			"Simple credit plans instead of heavy subscriptions. Sell one-time credit packs or monthly allowances, charged on your own Stripe account.",
 		creator: "@litesubs", // Placeholder, adjust if known

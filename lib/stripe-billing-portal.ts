@@ -6,7 +6,7 @@ const CONFIGURATION_KEY = "litesubs_customer_billing_v1";
 
 function configurationParams(): Stripe.BillingPortal.ConfigurationCreateParams {
 	return {
-		name: "Litesubs customer billing",
+		name: "liteSubs customer billing",
 		default_return_url: appUrl("/dashboard/account"),
 		metadata: { litesubs_configuration: CONFIGURATION_KEY },
 		features: {

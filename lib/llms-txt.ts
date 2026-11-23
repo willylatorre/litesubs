@@ -10,9 +10,9 @@ import { mcpResource } from "@/lib/mcp-config";
 export function buildLlmsTxt(): string {
 	const base = getAppUrl();
 
-	return `# Litesubs
+	return `# liteSubs
 
-> Litesubs is a platform for selling credit plans instead of recurring
+> liteSubs is a platform for selling credit plans instead of recurring
 > subscriptions. Creators define plans (a number of credits at a price), enroll
 > customers, and consume credits from their own apps through a remote MCP server
 > or a REST API. Credits belong to one customer and one plan; their balance cannot
@@ -53,7 +53,7 @@ export function buildLlmsTxt(): string {
   secret is returned once at creation. Webhook tools need webhooks:manage and a
   machine key can never hold it.
 - No payout or refund tools are exposed. Refunds are issued in the creator's
-  Stripe Dashboard; Litesubs then revokes only the refunded purchase's unspent
+  Stripe Dashboard; liteSubs then revokes only the refunded purchase's unspent
   credits.
 - Mutation tools request client confirmation, but that is not a security
   boundary; every operation is re-checked server-side.
@@ -149,7 +149,7 @@ Errors return code, error, and optional details or fieldErrors. Status codes:
 - [Landing page](${base}): product overview and demo.
 - [API tokens](${base}/dashboard/developers/api-keys): generate or revoke machine
   keys (requires sign-in).
-- [Terms](${base}/terms): the agreement between users and Litesubs.
-- [Privacy](${base}/privacy): what data Litesubs collects and why.
+- [Terms](${base}/terms): the agreement between users and liteSubs.
+- [Privacy](${base}/privacy): what data liteSubs collects and why.
 `;
 }

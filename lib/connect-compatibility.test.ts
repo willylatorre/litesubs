@@ -4,7 +4,7 @@ import { checkCompatibility } from "@/lib/services/connect";
 
 /**
  * An existing Stripe account can only be used if its *responsibilities* match
- * what Litesubs agreed to. These cases pin that the check refuses rather than
+ * what liteSubs agreed to. These cases pin that the check refuses rather than
  * silently changing an account or quietly charging it the wrong way.
  */
 const configured = (

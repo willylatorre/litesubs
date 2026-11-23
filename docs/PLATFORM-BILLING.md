@@ -1,4 +1,4 @@
-# Platform billing: use `@better-auth/stripe` for Litesubs' own subscription
+# Platform billing: use `@better-auth/stripe` for liteSubs' own subscription
 
 Status: implemented. Supersedes the hand-rolled `lib/services/premium.ts` from
 `docs/REFOCUS.md` slice R4.
@@ -9,7 +9,7 @@ Status: implemented. Supersedes the hand-rolled `lib/services/premium.ts` from
 >   physical name from `pgTable(...)`, so the alias needs no adapter config.
 >   Verified by round-tripping a row through `auth.$context.adapter`.
 > - **`createCustomerOnSignUp` stays off.** Every buyer is also a user, so it
->   would mint a platform Customer for people who never pay Litesubs. The
+>   would mint a platform Customer for people who never pay liteSubs. The
 >   checkout path creates one lazily — verified: a real test-mode
 >   `cs_test_` session carried the $5 price and a freshly created customer.
 > - `referenceId` is **unique**: one creator, one platform subscription.
@@ -24,9 +24,9 @@ Status: implemented. Supersedes the hand-rolled `lib/services/premium.ts` from
 Two billing domains live in this product and they must never be confused. They
 share a database and a Stripe account list; they share nothing else.
 
-| | **Platform billing** (Litesubs ↔ creator) | **Connect sales** (creator ↔ their customer) |
+| | **Platform billing** (liteSubs ↔ creator) | **Connect sales** (creator ↔ their customer) |
 | --- | --- | --- |
-| What is sold | access to Litesubs features | credits, per creator |
+| What is sold | access to liteSubs features | credits, per creator |
 | Who pays | the creator | the creator's customer |
 | Stripe account | **the platform's** | the creator's **connected** account |
 | Evidence in a webhook | `event.account` **absent** | `event.account` **present** |

@@ -16,9 +16,9 @@ import {
 } from "@/components/ui/table";
 
 export const metadata: Metadata = {
-	title: "Sample workspace | Litesubs",
+	title: "Sample workspace | liteSubs",
 	description:
-		"A filled-in Litesubs workspace: one credit plan, one enrolled customer, and the ledger behind their balance.",
+		"A filled-in liteSubs workspace: one credit plan, one enrolled customer, and the ledger behind their balance.",
 };
 
 const plan = {
