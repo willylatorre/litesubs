@@ -198,11 +198,17 @@ OAuth scopes:
   history. Separate from `plans:write` because an endpoint decides where customer
   ids and balances are sent. See `docs/WEBHOOKS.md`.
 
-Machine keys use **`x-api-key`**, with Better Auth's `{ credits: ["consume"] }`
-permissions. They may only consume credits, never grant credits, read billing,
-or edit plans. `enableSessionForAPIKeys` stays **false**. Explicit credentials
-take precedence over session cookies, and invalid credentials never fall back
-to a more privileged cookie. Key verification applies expiration and rate limits.
+Machine keys use **`x-api-key`**. A key holds whatever `{ resource: [action] }`
+map it was created with, and `apiKeyPrincipal` derives its scopes from that map —
+so a key minted for `credits:consume` can only spend, while a key minted with
+creator scopes can manage plans and customers through the same `requireScope`
+every other transport uses. **Scopes come from the stored key, never from the
+request**, which is what keeps a leaked key bounded by what its owner chose.
+`credits:consume` is refused to OAuth, so the money-spending credential stays one
+a teacher can name and revoke on its own. `enableSessionForAPIKeys` stays
+**false**. Explicit credentials take precedence over session cookies, and invalid
+credentials never fall back to a more privileged cookie. Key verification applies
+expiration and rate limits.
 
 REST accepts OAuth, API keys, or dashboard session cookies. Cookie-authenticated
 mutations require a trusted Origin. MCP does not accept cookie sessions.

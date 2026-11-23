@@ -76,9 +76,10 @@ Full per-client instructions: ${base}/docs#mcp
 - Codex CLI: codex mcp add litesubs --url ${mcpResource} then codex mcp login.
 - Cursor: OAuth is not possible yet (it does not support CIMD and this server
   does not run open dynamic client registration). Configure the URL with an
-  x-api-key header instead; that connection can only consume credits.
+  x-api-key header instead. A key may carry management scopes as well as
+  consumption, but Cursor will not see the OAuth-only tools.
 - Other clients: remote streamable HTTP over HTTPS plus CIMD support for OAuth,
-  or an API key for consumption only.
+  or an API key, whose reach is whatever scopes it was created with.
 
 ## REST API
 
