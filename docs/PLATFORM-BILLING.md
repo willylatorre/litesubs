@@ -209,3 +209,48 @@ exists, `subscriptions` still holds every Connect row, and dropping
   and get the second secret configured.
 - `periodEnd` cannot be kept current from available events. Entitlement would
   then expire wrongly; stop and use the invoice path before wiring the UI.
+
+## Operator checklist (not agent-doable)
+
+Recording these because the code is ready and the dashboard is not. Each item was
+verified as *missing* on 2026-11-22 unless noted.
+
+**Stripe — test mode**
+
+1. Create the $5/month Price on the platform account. Done on 2026-11-22:
+   `price_1UecmNDBzN1ABLUPcZMD2sch` (product `prod_VfyjFTB1R7uZWS`, lookup key
+   `litesubs_premium_monthly_usd`). Repeat for live with `--allow-live`-style
+   deliberation; a live Price is a new id and a new env value.
+2. Add a **platform** webhook endpoint at
+   `https://litesubs.com/api/auth/stripe/webhook`, subscribed to
+   `checkout.session.completed`, `customer.subscription.created`,
+   `customer.subscription.updated`, `customer.subscription.deleted`,
+   `invoice.paid`, `invoice.payment_failed`. Copy its signing secret into
+   `STRIPE_WEBHOOK_BILLING`. It is a *different* secret from the Connect one.
+3. **Fix the Connect endpoint.** `https://litesubs.com/api/webhooks/stripe` is
+   subscribed to only five events. It is missing `invoice.paid`,
+   `invoice.payment_failed`, `invoice.payment_action_required`,
+   `customer.subscription.updated`, `customer.subscription.deleted`, and
+   `checkout.session.async_payment_succeeded`. Without the invoice and
+   subscription events, **monthly renewals never grant credits** and a delayed
+   payment method is paid for and never fulfilled. This is a live correctness
+   bug, not a nicety.
+
+**Environment**
+
+4. Set `STRIPE_PREMIUM_PRICE_ID` and `STRIPE_WEBHOOK_BILLING`. Both are required
+   together: with either missing the plugin is not registered and checkout is not
+   offered, which is the intended degrade rather than a half-configured plan.
+
+**Verification still owed**
+
+5. A real payment through the platform endpoint. The local proof created a
+   `cs_test_` session but never completed it, so "paid invoice → premium, and
+   renewal extends `periodEnd`" is unproven end to end. Use
+   `stripe listen --forward-to localhost:3000/api/auth/stripe/webhook` with the
+   tunnel secret, then complete a test payment.
+6. Confirm the renewal path: whether `customer.subscription.updated` fires on
+   every renewal with a fresh `period_end`. If it does not, entitlement will
+   expire a month early and the invoice event must extend `periodEnd` (the
+   Plannerie T011 pattern). This is the one behavioural unknown left in the
+   platform-billing design.
