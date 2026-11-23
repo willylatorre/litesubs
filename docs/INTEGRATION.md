@@ -139,8 +139,12 @@ who it is only for. The product still has to work for any platform.
 
 ## STOP conditions
 
-- A shortcut widens machine keys beyond `credits:consume`. Stop; that trades a
-  drainable balance for a rewritable catalogue.
+- A key could hold a scope its **owner lacks**, or a caller could name its own
+  scopes. Stop; scopes come from the stored key and from nothing else. Widening a
+  key's *granted* scopes is legitimate work (the owner chose them); letting the
+  request choose them is the bug.
+- `webhooks:manage` is granted to an integration key. Stop; a delegated key must
+  not choose where a tenant's data is sent.
 - Provisioning would email a password or skip address proof. Stop; use the invite.
 - Any liteSubs change branches on "is the caller Plannerie". Stop; it is a general
   contract or it is not built.
