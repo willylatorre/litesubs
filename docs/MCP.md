@@ -236,6 +236,19 @@ session-oriented traffic is rejected.
 | `list_webhooks`, `create_webhook`, `update_webhook`, `delete_webhook`, `list_webhook_deliveries`, `retry_webhook_delivery`, `send_test_webhook` | `webhooks:manage` |
 | `consume_credits` | API key `credits:consume` only |
 
+**Integration endpoints** (OAuth only — a machine key is refused with `FORBIDDEN`):
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/v1/customers` | Provision a customer by email (unclaimed account, idempotent) |
+| `POST /api/v1/integrationkeys` | Mint the consume-scoped key for this connection |
+| `GET /api/v1/integrationkeys` | List minted keys as metadata, never secrets |
+| `DELETE /api/v1/integrationkeys/:id` | Revoke a key minted by this connection |
+
+A connection needs two credentials by design: OAuth for management, and the
+minted machine key for consumption. `POST /integrationkeys` requires
+`customers:write`; the raw key is returned once and cannot be retrieved again.
+
 Creator connections see twenty creator tools; machine keys see only
 `consume_credits`. Services enforce scopes again even if tool visibility changes;
 a machine key is rejected at the service layer even where a scope check would

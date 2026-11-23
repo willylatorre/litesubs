@@ -1,6 +1,7 @@
 # Integration contract: liteSubs as a platform other products can drive
 
-Status: plan. Extends `docs/REFOCUS.md` and `docs/PLATFORM-BILLING.md`.
+Status: **I1 and I2 implemented** (2026-11-23). Extends `docs/REFOCUS.md` and
+`docs/PLATFORM-BILLING.md`. I3 is Plannerie-side; I4 is partial (prose casing done).
 
 ## Ownership model
 
@@ -125,10 +126,14 @@ who it is only for. The product still has to work for any platform.
 
 ## Slices
 
-- **I1 — key minting on consent.** `POST /api/v1/integration/key`, OAuth-only,
-  consume-scoped, revocable with the connection. Test: machine key cannot mint.
-- **I2 — customer provisioning.** `POST /api/v1/customers`, idempotent, unclaimed
-  account + invite, no emailed password. Test: consume works before claim.
+- **I1 — key minting on consent.** **Done.** `POST /api/v1/integrationkeys`
+  (OAuth only), `GET` to list metadata, `DELETE /:id` to revoke. Machine keys are
+  refused with `FORBIDDEN`; a second mint refuses with `KEY_EXISTS` because the
+  secret cannot be shown twice. Proven by `lib/integration-contract.integration.test.ts`.
+- **I2 — customer provisioning.** **Done.** `POST /api/v1/customers`, idempotent
+  per `(creator, email)`, creates an unclaimed account, links a
+  `creator_customers` row, and emails nothing. Proven: the customer is granted
+  and debited while `emailVerified` is still false.
 - **I3 — the enable flow in Plannerie.** Two buttons, one connection per teacher,
   Stripe onboarding surfaced only when it blocks selling.
 - **I4 — brand subtitle.** Chrome + landing + consent + org metadata.
