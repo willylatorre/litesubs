@@ -23,6 +23,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
 				<div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 md:px-6">
 					<Link href="/" className="shrink-0" aria-label="liteSubs home">
 						<AnimatedLogo
+							subtitle
 							iconClassName="size-5"
 							textClassName="text-lg font-semibold tracking-tight md:text-lg"
 						/>

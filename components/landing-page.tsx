@@ -60,7 +60,7 @@ export function LandingPage() {
 					<h1 className="sr-only">
 						liteSubs - Simple credit plans instead of heavy subscriptions
 					</h1>
-					<AnimatedLogo />
+					<AnimatedLogo subtitle />
 
 					{/* Description */}
 					<p className="text-base md:text-lg text-muted-foreground">

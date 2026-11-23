@@ -129,6 +129,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 						>
 							<Link href="/" className="flex items-center gap-0">
 								<AnimatedLogo
+									subtitle
 									iconClassName="size-6 md:size-6"
 									textClassName="text-base font-semibold md:text-base tracking-normal"
 								/>
