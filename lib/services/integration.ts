@@ -1,6 +1,10 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/app/db";
 import { apikey } from "@/app/db/mcp-auth-schema";
+import {
+	assertCanUseDeveloperFeatures,
+	getEntitlement,
+} from "./entitlements";
 import { type Principal, ServiceError } from "./principal";
 
 /**
@@ -71,6 +75,12 @@ export async function mintIntegrationKey(
 			{ id: existing.id },
 		);
 	}
+
+	// A key is a developer feature, and the same tier gate that guards
+	// `/api-key/create` must hold here. Without this, the integration endpoint is
+	// a free way to mint the very credential the Premium tier sells — the gate
+	// would be real for the dashboard and bypassed by the back door.
+	assertCanUseDeveloperFeatures(await getEntitlement(principal.creatorId));
 
 	// Imported lazily: `@/lib/auth` initialises Better Auth (and touches the
 	// database) at module load, so a top-level import would make merely importing

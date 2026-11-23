@@ -39,6 +39,7 @@ import {
 	sessionPrincipal,
 } from "@/lib/services/principal";
 import { provisionCustomer } from "@/lib/services/provisioning";
+import { grantTestPremium } from "@/lib/test-premium";
 
 function oauth(creatorId: string): Principal {
 	return {
@@ -108,6 +109,18 @@ test("a connection mints a consume key, and only a connection may", {
 	const creatorId = crypto.randomUUID();
 	await seedCreator(creatorId);
 
+	// Minting a key is a developer feature: the integration endpoint must not be
+	// a back door around the Premium tier that sells it. This is the regression
+	// that a probe caught — a free creator could mint via this path while the
+	// dashboard gate refused.
+	await assert.rejects(
+		() => mintIntegrationKey(oauth(creatorId)),
+		(error) =>
+			error instanceof ServiceError && error.code === "PREMIUM_REQUIRED",
+	);
+
+	await grantTestPremium(creatorId);
+
 	// A machine key must never mint: that would let a leaked key escalate to a
 	// fresh long-lived credential and make the scope split meaningless.
 	await assert.rejects(
@@ -163,6 +176,9 @@ test("a teacher can provision a customer who never signs in, then debit them", {
 }, async () => {
 	const creatorId = crypto.randomUUID();
 	const plan = await seedCreator(creatorId);
+	// Provisioning is customers:write, not a developer feature, so free is fine —
+	// but grant premium anyway so the test is not accidentally coupled to it.
+	await grantTestPremium(creatorId);
 	const email = `learner-${creatorId.slice(0, 8)}@example.test`;
 
 	const provisioned = await provisionCustomer(oauth(creatorId), { email });
