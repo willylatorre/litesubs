@@ -3,13 +3,13 @@ import { getStripe } from "@/lib/stripe";
 /**
  * Server-only adapter for payments that happen **on a connected account**.
  *
- * Litesubs uses direct charges: the Checkout Session is created *as* the
+ * liteSubs uses direct charges: the Checkout Session is created *as* the
  * connected account (the `Stripe-Account` request option), so the charge lives
  * on the creator's balance, the creator is the merchant of record, Stripe bills
  * them the processing fees, and refunds/chargebacks hit their account.
  *
  * This is deliberately not a destination charge. Adding
- * `payment_intent_data.transfer_data` would move the charge onto the Litesubs
+ * `payment_intent_data.transfer_data` would move the charge onto the liteSubs
  * platform balance and change who is liable, which is the opposite of the
  * agreed model. There is exactly one place that creates these sessions so the
  * two cannot drift apart.
@@ -31,12 +31,6 @@ export type DirectChargeLineItem = {
 export type CreateDirectCheckoutInput = {
 	stripeAccountId: string;
 	lineItem: DirectChargeLineItem;
-	/**
-	 * Our application fee, in minor units. The rate lives in
-	 * `PLATFORM_FEE_PERCENT`; do not restate it here, or this comment will
-	 * disagree with the charge the first time the rate changes.
-	 */
-	applicationFeeAmount: number;
 	customerEmail?: string;
 	/** Reuse the creator's Stripe Customer for this buyer when one exists. */
 	stripeCustomerId?: string | null;
@@ -47,24 +41,7 @@ export type CreateDirectCheckoutInput = {
 	idempotencyKey?: string;
 };
 
-export type CreateSubscriptionCheckoutInput = Omit<
-	CreateDirectCheckoutInput,
-	"applicationFeeAmount"
-> & {
-	/** Stripe's subscription application fee is a percentage, not minor units. */
-	applicationFeePercent: number;
-};
-
-/**
- * The application fee must be strictly positive and less than the charge; a
- * zero or full-price fee is rejected by Stripe rather than silently ignored.
- */
-export function isValidApplicationFee(
-	amount: number,
-	chargeAmount: number,
-): boolean {
-	return Number.isSafeInteger(amount) && amount > 0 && amount < chargeAmount;
-}
+export type CreateSubscriptionCheckoutInput = CreateDirectCheckoutInput;
 
 export async function createDirectCheckoutSession(
 	input: CreateDirectCheckoutInput,
@@ -102,11 +79,10 @@ export async function createDirectCheckoutSession(
 			success_url: input.successUrl,
 			cancel_url: input.cancelUrl,
 			metadata: input.metadata,
-			payment_intent_data: {
-				// Fee only. No `transfer_data`: this stays a direct charge.
-				application_fee_amount: input.applicationFeeAmount,
-				metadata: input.metadata,
-			},
+			// No `application_fee_amount` and no `transfer_data`: this is a plain
+			// direct charge and the creator keeps the whole sale. liteSubs is paid
+			// for by a creator subscription (`docs/REFOCUS.md`), never by a cut.
+			payment_intent_data: { metadata: input.metadata },
 		},
 		{
 			// The connected account this session belongs to.
@@ -118,8 +94,8 @@ export async function createDirectCheckoutSession(
 
 /**
  * Create a monthly subscription through direct-charge Checkout. The request is
- * scoped to the creator account; the platform fee is attached as a percentage
- * to the Stripe subscription so it applies to each successful invoice.
+ * scoped to the creator account. No platform fee is attached: the creator keeps
+ * the whole sale and liteSubs is paid for by a creator subscription.
  */
 export async function createDirectSubscriptionCheckoutSession(
 	input: CreateSubscriptionCheckoutInput,
@@ -144,10 +120,7 @@ export async function createDirectSubscriptionCheckoutSession(
 			success_url: input.successUrl,
 			cancel_url: input.cancelUrl,
 			metadata: input.metadata,
-			subscription_data: {
-				application_fee_percent: input.applicationFeePercent,
-				metadata: input.metadata,
-			},
+			subscription_data: { metadata: input.metadata },
 		},
 		{
 			stripeAccount: input.stripeAccountId,

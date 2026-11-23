@@ -1,5 +1,5 @@
 /**
- * Outgoing webhooks are the one place Litesubs sends customer and balance data
+ * Outgoing webhooks are the one place liteSubs sends customer and balance data
  * outside the app. These tests target what would actually leak or mislead:
  * a forged/unverifiable signature, a secret readable after creation, an event
  * that never reaches the receiver, a retry that looks like a second purchase,
@@ -46,6 +46,7 @@ import {
 	updateEndpoint,
 	verifySignature,
 } from "@/lib/services/webhooks";
+import { grantTestPremium } from "@/lib/test-premium";
 
 type Received = {
 	body: string;
@@ -122,6 +123,9 @@ test("outgoing webhooks sign, deliver, and stay tenant-scoped", {
 		},
 		{ id: buyerId, name: "Buyer", email: `${buyerId}@example.test` },
 	]);
+	// Outgoing webhooks are Premium-only; this fixture says so explicitly.
+	await grantTestPremium(creatorId);
+	await grantTestPremium(otherCreatorId);
 	const [plan] = await db
 		.insert(plans)
 		.values({ creatorId, name: "Lessons" })

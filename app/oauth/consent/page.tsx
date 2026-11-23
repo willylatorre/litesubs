@@ -45,7 +45,7 @@ export default async function ConsentPage({
 					Authorization request expired or invalid
 				</h1>
 				<p>
-					Reconnect to Litesubs from your MCP client to start a new request.
+					Reconnect to liteSubs from your MCP client to start a new request.
 				</p>
 				<Link href="/dashboard" className="underline">
 					Back to dashboard
@@ -73,7 +73,7 @@ export default async function ConsentPage({
 		<main className="mx-auto max-w-lg px-4 py-16">
 			<Card>
 				<CardHeader>
-					<CardTitle className="text-2xl">Connect to Litesubs</CardTitle>
+					<CardTitle className="text-2xl">Connect to liteSubs</CardTitle>
 				</CardHeader>
 				<CardContent className="space-y-6">
 					<div className="space-y-2">

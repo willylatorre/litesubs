@@ -10,7 +10,7 @@ import { WebhookDeliveries } from "./webhook-deliveries";
 import { WebhookEndpoints } from "./webhook-endpoints";
 
 export const metadata = {
-	title: "Webhooks | Litesubs",
+	title: "Webhooks | liteSubs",
 	description:
 		"Notify your own services when a pack is purchased or a credit balance changes.",
 };

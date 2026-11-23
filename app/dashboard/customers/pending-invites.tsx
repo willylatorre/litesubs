@@ -98,7 +98,7 @@ export function PendingInvites() {
 								<TableCell>
 									<AppShareLinkActions
 										url={invite.url as string}
-										title="You're invited to LiteSubs"
+										title="You're invited to liteSubs"
 										compact
 										className="flex items-center justify-end gap-1"
 									/>

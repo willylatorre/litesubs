@@ -207,7 +207,7 @@ type SubscriptionInvoiceContext = {
 	billingReason: "subscription_create" | "subscription_cycle";
 };
 
-/** Resolve only the exact immutable monthly Price line for a Litesubs subscription. */
+/** Resolve only the exact immutable monthly Price line for a liteSubs subscription. */
 async function subscriptionInvoiceContext(
 	invoice: Stripe.Invoice,
 	eventId: string,
@@ -229,7 +229,7 @@ async function subscriptionInvoiceContext(
 			: details.subscription.id
 		: null;
 	const localId = details?.metadata?.subscriptionId;
-	// This connected account may also create subscriptions outside Litesubs.
+	// This connected account may also create subscriptions outside liteSubs.
 	if (!localId) return null;
 	if (!stripeSubscriptionId)
 		return new Response("Missing subscription metadata", { status: 400 });
@@ -551,7 +551,7 @@ async function handleAccountUpdated(
 }
 
 /**
- * A creator revoked Litesubs' access from their Stripe Dashboard. New sales
+ * A creator revoked liteSubs' access from their Stripe Dashboard. New sales
  * must stop immediately, and their account identity must survive on every
  * historical record (which is why only the connection row is updated).
  *

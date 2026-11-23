@@ -22,7 +22,7 @@ export const RESPONSIBILITY_COPY: ResponsibilityCopy = {
 		"You get the full Stripe Dashboard for your business, customers, and payments.",
 	fees: "Stripe bills you for payment processing fees on your own account.",
 	losses:
-		"Stripe manages negative balance liability for your account under the agreed configuration. Litesubs still has its own legal and platform obligations.",
+		"Stripe manages negative balance liability for your account under the agreed configuration. liteSubs still has its own legal and platform obligations.",
 };
 
 /** Explanation for each incompatibility; the account is never silently changed. */
@@ -30,11 +30,11 @@ export const COMPATIBILITY_MESSAGES: Record<CompatibilityIssue, string> = {
 	no_full_dashboard:
 		"This account does not have full Dashboard access, so you would lose control of your own business. Use an account with the full Stripe Dashboard.",
 	platform_pays_fees:
-		"On this account Litesubs would pay Stripe's processing fees instead of you. That is not the agreed setup for creator-owned payments.",
+		"On this account liteSubs would pay Stripe's processing fees instead of you. That is not the agreed setup for creator-owned payments.",
 	platform_liable_for_losses:
-		"Litesubs would be responsible for this account's negative balances. Connect an account where Stripe carries that responsibility.",
+		"liteSubs would be responsible for this account's negative balances. Connect an account where Stripe carries that responsibility.",
 	unknown_configuration:
-		"Stripe did not report a responsibility configuration Litesubs recognises. Contact support instead of changing it silently.",
+		"Stripe did not report a responsibility configuration liteSubs recognises. Contact support instead of changing it silently.",
 };
 
 /** Account status as the UI shows it; no database types required. */

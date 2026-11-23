@@ -7,9 +7,19 @@ interface AnimatedLogoProps {
   className?: string;
   textClassName?: string;
   iconClassName?: string;
+  /**
+   * Show the "by Plannerie" attribution under the wordmark.
+   *
+   * Off by default so tight chrome (auth screens, collapsed sidebar) does not
+   * get a second line; on for full-width headers and the landing hero. It stays
+   * out of the wordmark itself: liteSubs is its own product, and putting the
+   * maker inside the logo reads as a feature of Plannerie rather than a product
+   * any platform can use.
+   */
+  subtitle?: boolean;
 }
 
-export function AnimatedLogo({ className, textClassName, iconClassName }: AnimatedLogoProps) {
+export function AnimatedLogo({ className, textClassName, iconClassName, subtitle = false }: AnimatedLogoProps) {
   return (
     <motion.div 
       className={cn("flex items-center gap-2 group cursor-default", className)}
@@ -40,10 +50,17 @@ export function AnimatedLogo({ className, textClassName, iconClassName }: Animat
           </svg>
         </motion.div>
       </div>
-      <span 
-        className={cn("text-4xl md:text-5xl font-bold tracking-tight select-none font-sans  transition-colors", textClassName)}
-      >
-        liteSubs
+      <span className="flex flex-col leading-none">
+        <span
+          className={cn("text-4xl md:text-5xl font-bold tracking-tight select-none font-sans transition-colors", textClassName)}
+        >
+          liteSubs
+        </span>
+        {subtitle && (
+          <span className="mt-1 text-[0.6rem] font-medium uppercase tracking-[0.14em] text-muted-foreground select-none">
+            by Plannerie
+          </span>
+        )}
       </span>
     </motion.div>
   );

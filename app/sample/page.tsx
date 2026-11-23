@@ -16,9 +16,9 @@ import {
 } from "@/components/ui/table";
 
 export const metadata: Metadata = {
-	title: "Sample workspace | Litesubs",
+	title: "Sample workspace | liteSubs",
 	description:
-		"A filled-in Litesubs workspace: one credit plan, one enrolled customer, and the ledger behind their balance.",
+		"A filled-in liteSubs workspace: one credit plan, one enrolled customer, and the ledger behind their balance.",
 };
 
 const plan = {
@@ -192,7 +192,7 @@ export default function SampleWorkspacePage() {
 								code={`curl -X POST 'https://litesubs.com/api/v1/credits/consume' \\
   -H 'x-api-key: <your token>' \\
   -H 'Content-Type: application/json' \\
-  -d '{"customer":"ana.rivera@example.com","plan":"Algebra Tutoring","amount":1,"reason":"Lesson completed","idempotency_key":"booking_8812"}'`}
+  -d '{"customer":"ana.rivera@example.com","plan":"Algebra Tutoring","amount":1,"reason":"Lesson completed","idempotency_key":"delivery_8812"}'`}
 							/>
 						</div>
 					</div>

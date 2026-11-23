@@ -5,7 +5,7 @@ import { invites } from "@/app/db/schema";
 
 export const runtime = "nodejs";
 
-export const alt = "LiteSubs Invite";
+export const alt = "liteSubs Invite";
 export const size = {
 	width: 1200,
 	height: 630,
@@ -46,7 +46,7 @@ export default async function Image({
 					flexDirection: "column",
 				}}
 			>
-				<div>LiteSubs</div>
+				<div>liteSubs</div>
 				<div style={{ fontSize: 24, marginTop: 20 }}>Invite Not Found</div>
 			</div>,
 			{
@@ -99,7 +99,7 @@ export default async function Image({
 					}}
 				>
 					<div style={{ fontSize: 32, fontWeight: 900, color: "#111" }}>
-						LiteSubs
+						liteSubs
 					</div>
 				</div>
 
@@ -198,7 +198,7 @@ export default async function Image({
 							color: "#111",
 						}}
 					>
-						Connect on LiteSubs
+						Connect on liteSubs
 					</div>
 				)}
 			</div>

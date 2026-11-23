@@ -31,6 +31,10 @@ const MIGRATIONS = [
 	"drizzle/0015_split_calendars.sql",
 	"drizzle/0016_remove_calcom.sql",
 	"drizzle/0017_usernames.sql",
+	"drizzle/0018_drop_bookings.sql",
+	"drizzle/0019_drop_commission.sql",
+	"drizzle/0020_creator_entitlements.sql",
+	"drizzle/0021_platform_billing.sql",
 ];
 
 /** Drizzle skips entries whose timestamp is not newer than the last applied. */
@@ -761,143 +765,11 @@ test("0014 adds webhook tables without touching existing data", {
 	});
 });
 /**
- * S15 part two: the booking uid must be unique so a replayed delivery cannot
- * become a second debit. (The Cal.com event-type path this originally covered
- * was removed; the uniqueness half still applies to native bookings.)
+ * 0016 retires the Cal.com vendor integration. The danger is collateral
+ * damage: dropping a table must not take plans, prices, enrollments, credits,
+ * or payments with it.
  */
-
-/**
- * B1: double-booking is prevented in the database, not by a read-then-insert
- * check. These cases pin the exclusion constraint's actual behaviour, because a
- * constraint that silently allowed an overlap would produce two confirmed
- * bookings for one slot and charge two customers for it.
- */
-test("0013 prevents overlapping confirmed bookings without reserving ended slots", {
-	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
-}, async () => {
-	await withFreshDatabase(async (client) => {
-		await apply(client, ...MIGRATIONS.slice(0, 14));
-		await client.query(`
-			INSERT INTO "user"(id,name,email,email_verified) VALUES
-				('u1','Creator','c@example.test',true),
-				('u2','Buyer','b@example.test',true);
-			INSERT INTO booking_schedules(id,creator_id,name,slug)
-			VALUES ('s1','u1','Sessions','sessions');
-			INSERT INTO bookings(id,schedule_id,creator_id,user_id,starts_at,ends_at)
-			VALUES ('b1','s1','u1','u2','2026-12-01 10:00Z','2026-12-01 10:30Z');
-		`);
-
-		// The same slot cannot be booked twice.
-		await assert.rejects(
-			client.query(`
-				INSERT INTO bookings(id,schedule_id,creator_id,user_id,starts_at,ends_at)
-				VALUES ('b2','s1','u1','u2','2026-12-01 10:00Z','2026-12-01 10:30Z');
-			`),
-			/exclusion constraint/,
-		);
-		// A partial overlap is a conflict too.
-		await assert.rejects(
-			client.query(`
-				INSERT INTO bookings(id,schedule_id,creator_id,user_id,starts_at,ends_at)
-				VALUES ('b3','s1','u1','u2','2026-12-01 10:15Z','2026-12-01 10:45Z');
-			`),
-			/exclusion constraint/,
-		);
-		// Adjacent slots are not overlapping, so back-to-back bookings are allowed.
-		await client.query(`
-			INSERT INTO bookings(id,schedule_id,creator_id,user_id,starts_at,ends_at)
-			VALUES ('b4','s1','u1','u2','2026-12-01 10:30Z','2026-12-01 11:00Z');
-		`);
-		// A cancelled booking keeps its history but stops reserving the time.
-		await client.query(
-			"UPDATE bookings SET status = 'cancelled' WHERE id = 'b1'",
-		);
-		await client.query(`
-			INSERT INTO bookings(id,schedule_id,creator_id,user_id,starts_at,ends_at)
-			VALUES ('b5','s1','u1','u2','2026-12-01 10:00Z','2026-12-01 10:30Z');
-		`);
-
-		const { rows } = await client.query(
-			"select id, status from bookings order by id",
-		);
-		assert.deepEqual(rows, [
-			{ id: "b1", status: "cancelled" },
-			{ id: "b4", status: "confirmed" },
-			{ id: "b5", status: "confirmed" },
-		]);
-
-		// Two creators can book the same wall-clock time; the constraint is per
-		// creator, never global.
-		await client.query(`
-			INSERT INTO "user"(id,name,email,email_verified) VALUES ('u3','Other','o@example.test',true);
-			INSERT INTO booking_schedules(id,creator_id,name,slug)
-			VALUES ('s2','u3','Other sessions','sessions');
-			INSERT INTO bookings(id,schedule_id,creator_id,user_id,starts_at,ends_at)
-			VALUES ('b6','s2','u3','u2','2026-12-01 10:00Z','2026-12-01 10:30Z');
-		`);
-	});
-});
-
-/**
- * 0015 splits one calendar setting into two roles. An existing connection must
- * keep its behaviour: whatever id the creator had chosen is carried into both
- * new columns, so nobody starts writing bookings to an unexpected calendar.
- */
-test("0015 splits the calendar setting without moving existing connections", {
-	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
-}, async () => {
-	await withFreshDatabase(async (client) => {
-		await apply(client, ...MIGRATIONS.slice(0, 15));
-		await client.query(`
-			INSERT INTO "user"(id,name,email,email_verified)
-			VALUES ('u1','Creator','c@example.test',true);
-			INSERT INTO calendar_connections(id,creator_id,provider,encrypted_access_token,calendar_id)
-			VALUES ('cc1','u1','google','v1.envelope','team@group.calendar.google.com');
-		`);
-		await apply(client, MIGRATIONS[15]);
-
-		const { rows } = await client.query(
-			"select busy_calendar_id, write_calendar_id, write_calendar_created from calendar_connections where id = 'cc1'",
-		);
-		assert.deepEqual(rows, [
-			{
-				busy_calendar_id: "team@group.calendar.google.com",
-				write_calendar_id: "team@group.calendar.google.com",
-				write_calendar_created: false,
-			},
-		]);
-
-		// A fresh connection defaults to the creator's main calendar for both.
-		// One connection per (creator, provider), so this needs its own creator.
-		await client.query(`
-			INSERT INTO "user"(id,name,email,email_verified)
-			VALUES ('u2','Other','o@example.test',true);
-			INSERT INTO calendar_connections(id,creator_id,provider,encrypted_access_token)
-			VALUES ('cc2','u2','google','v1.envelope');
-		`);
-		const {
-			rows: [fresh],
-		} = await client.query(
-			"select busy_calendar_id, write_calendar_id from calendar_connections where id = 'cc2'",
-		);
-		assert.deepEqual(fresh, {
-			busy_calendar_id: "primary",
-			write_calendar_id: "primary",
-		});
-		// The old single column is gone, so nothing can read a stale value.
-		const { rows: old } = await client.query(
-			"select column_name from information_schema.columns where table_name='calendar_connections' and column_name='calendar_id'",
-		);
-		assert.deepEqual(old, []);
-	});
-});
-
-/**
- * 0016 retires the Cal.com vendor integration. The danger is collateral damage:
- * dropping a table must not take plans, prices, enrollments, credits, bookings,
- * or payments with it, and native schedule links must survive.
- */
-test("0016 removes Cal.com without touching plans, credits, or bookings", {
+test("0016 removes Cal.com without touching plans, credits, or payments", {
 	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
 }, async () => {
 	await withFreshDatabase(async (client) => {
@@ -913,10 +785,6 @@ test("0016 removes Cal.com without touching plans, credits, or bookings", {
 			VALUES ('e1','u2','p1','u1',10);
 			INSERT INTO credit_grants(id,enrollment_id,creator_id,user_id,plan_id,kind,amount,remaining)
 			VALUES ('g1','e1','u1','u2','p1','purchase',10,7);
-			INSERT INTO booking_schedules(id,creator_id,name,slug,plan_id,credits_per_booking)
-			VALUES ('s1','u1','Sessions','sessions','p1',3);
-			INSERT INTO bookings(id,schedule_id,creator_id,user_id,plan_id,starts_at,ends_at,charged_credits)
-			VALUES ('b1','s1','u1','u2','p1','2026-12-01 10:00Z','2026-12-01 10:30Z',3);
 			INSERT INTO payments(id,creator_id,user_id,plan_id,plan_version_id,stripe_account_id,status,credits,amount_total,currency,application_fee)
 			VALUES ('pay1','u1','u2','p1','pv1','acct_x','paid',10,10000,'usd',200);
 		`);
@@ -943,10 +811,7 @@ test("0016 removes Cal.com without touching plans, credits, or bookings", {
 				(select count(*)::int from enrollments) as enrollments,
 				(select credits from enrollments where id='e1') as enrollment_credits,
 				(select remaining from credit_grants where id='g1') as grant_remaining,
-				(select count(*)::int from bookings) as bookings,
-				(select charged_credits from bookings where id='b1') as charged,
-				(select count(*)::int from payments) as payments,
-				(select plan_id from booking_schedules where id='s1') as schedule_plan
+				(select count(*)::int from payments) as payments
 		`);
 		assert.deepEqual(rows[0], {
 			plans: 1,
@@ -954,11 +819,225 @@ test("0016 removes Cal.com without touching plans, credits, or bookings", {
 			enrollments: 1,
 			enrollment_credits: 10,
 			grant_remaining: 7,
-			bookings: 1,
-			charged: 3,
 			payments: 1,
-			schedule_plan: "p1",
 		});
+	});
+});
+
+/**
+ * 0018 removes scheduling, which moved to Plannerie (`docs/REFOCUS.md`). Same
+ * collateral-damage risk as 0016, but larger: five tables and one enum go, and
+ * every balance, purchase, refund, and subscription row must survive verbatim.
+ * A `CASCADE` that reached through `plans` would erase the business.
+ */
+test("0018 drops booking tables and leaves every money row intact", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, 18));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES
+				('u1','Creator','c@example.test',true),
+				('u2','Buyer','b@example.test',true);
+			INSERT INTO plans(id,creator_id,name) VALUES ('p1','u1','Coaching');
+			INSERT INTO plan_versions(id,plan_id,creator_id,status,billing_mode,currency,price,credits,version)
+			VALUES ('pv1','p1','u1','published','one_time','usd',10000,10,1);
+			INSERT INTO enrollments(id,user_id,plan_id,creator_id,credits)
+			VALUES ('e1','u2','p1','u1',10);
+			INSERT INTO credit_grants(id,enrollment_id,creator_id,user_id,plan_id,kind,amount,remaining)
+			VALUES ('g1','e1','u1','u2','p1','purchase',10,7);
+			INSERT INTO transactions(id,creator_id,user_id,plan_id,type,amount,balance_after,description)
+			VALUES ('t1','u1','u2','p1','usage',-3,7,'A lesson');
+			INSERT INTO payments(id,creator_id,user_id,plan_id,plan_version_id,stripe_account_id,status,credits,amount_total,currency,application_fee)
+			VALUES ('pay1','u1','u2','p1','pv1','acct_x','paid',10,10000,'usd',200);
+			INSERT INTO booking_schedules(id,creator_id,name,slug,plan_id,credits_per_booking)
+			VALUES ('s1','u1','Sessions','sessions','p1',3);
+			INSERT INTO booking_availability(id,schedule_id,creator_id,weekday,start_minute,end_minute)
+			VALUES ('a1','s1','u1',1,540,720);
+			INSERT INTO bookings(id,schedule_id,creator_id,user_id,plan_id,starts_at,ends_at,charged_credits)
+			VALUES ('b1','s1','u1','u2','p1','2026-12-01 10:00Z','2026-12-01 10:30Z',3);
+			INSERT INTO notifications(id,user_id,kind,title,dedupe_key)
+			VALUES ('n1','u2','booking.confirmed','Confirmed','b1');
+		`);
+		await apply(client, MIGRATIONS[18]);
+
+		// The scheduling surface is gone.
+		const { rows: tables } = await client.query(`
+			select table_name from information_schema.tables
+			where table_schema='public'
+			  and table_name in ('booking_schedules','booking_availability','booking_exceptions','bookings','calendar_connections','notifications')
+		`);
+		assert.deepEqual(tables, []);
+		const { rows: type } = await client.query(
+			"select 1 from pg_type where typname = 'booking_status'",
+		);
+		assert.deepEqual(type, []);
+
+		// Every money and entitlement row is exactly where it was.
+		const { rows } = await client.query(`
+			select
+				(select count(*)::int from plans) as plans,
+				(select count(*)::int from plan_versions) as versions,
+				(select count(*)::int from enrollments) as enrollments,
+				(select credits from enrollments where id='e1') as enrollment_credits,
+				(select remaining from credit_grants where id='g1') as grant_remaining,
+				(select amount from transactions where id='t1') as tx_amount,
+				(select count(*)::int from payments) as payments,
+				(select application_fee from payments where id='pay1') as payment_fee
+		`);
+		assert.deepEqual(rows[0], {
+			plans: 1,
+			versions: 1,
+			enrollments: 1,
+			enrollment_credits: 10,
+			grant_remaining: 7,
+			tx_amount: -3,
+			payments: 1,
+			payment_fee: 200,
+		});
+	});
+});
+
+/**
+ * 0020 adds the creator tier. The commission is gone, so this table is what
+ * pays for the platform. Two properties matter and neither is visible from the
+ * DDL: an existing creator is free without a backfill, and a paywall cannot be
+ * smuggled in as a NOT NULL column with no default.
+ */
+test("0020 defaults every creator to free and stores a premium period", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, 20));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified)
+			VALUES ('u1','Creator','c@example.test',true);
+		`);
+		await apply(client, MIGRATIONS[20]);
+
+		// An existing creator has no row, which reads as free. Nothing was
+		// backfilled, so nothing was granted by the migration itself.
+		const { rows: before } = await client.query(
+			"select count(*)::int as n from creator_entitlements",
+		);
+		assert.equal(before[0].n, 0);
+
+		// A default row is free, and a premium row records its paid period.
+		await client.query(
+			"INSERT INTO creator_entitlements(creator_id) VALUES ('u1')",
+		);
+		const {
+			rows: [free],
+		} = await client.query(
+			"select tier, paid_through_at, cancel_at_period_end from creator_entitlements where creator_id='u1'",
+		);
+		assert.deepEqual(free, {
+			tier: "free",
+			paid_through_at: null,
+			cancel_at_period_end: false,
+		});
+
+		await client.query(`
+			UPDATE creator_entitlements
+			SET tier='premium', status='active', paid_through_at='2027-01-01T00:00:00Z'
+			WHERE creator_id='u1';
+		`);
+		const {
+			rows: [premium],
+		} = await client.query(
+			"select tier, status, paid_through_at from creator_entitlements where creator_id='u1'",
+		);
+		assert.equal(premium.tier, "premium");
+		assert.equal(premium.status, "active");
+		assert.ok(premium.paid_through_at);
+
+		// The tier enum rejects an invented tier rather than storing a string
+		// that no service knows how to interpret.
+		await assert.rejects(
+			client.query(
+				"UPDATE creator_entitlements SET tier='enterprise' WHERE creator_id='u1'",
+			),
+			/invalid input value/,
+		);
+	});
+});
+
+/**
+ * 0021 moves platform billing onto `@better-auth/stripe`. Three things must hold:
+ * the new table exists under its own physical name, the *Connect* sales table is
+ * untouched, and the retired mirror is gone so there is one source of truth.
+ */
+test("0021 adds platform billing and leaves Connect sales untouched", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, 21));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES
+				('u1','Creator','c@example.test',true),
+				('u2','Buyer','b@example.test',true);
+			INSERT INTO plans(id,creator_id,name) VALUES ('p1','u1','Coaching');
+			INSERT INTO plan_versions(id,plan_id,creator_id,status,billing_mode,currency,price,credits,version)
+			VALUES ('pv1','p1','u1','published','one_time','usd',10000,10,1);
+			INSERT INTO enrollments(id,user_id,plan_id,creator_id,credits)
+			VALUES ('e1','u2','p1','u1',10);
+			-- A real Connect sale: this is the domain that must not move.
+			INSERT INTO subscriptions(id,creator_id,user_id,plan_id,plan_version_id,stripe_account_id,stripe_customer_id,status,application_fee_percent)
+			VALUES ('s1','u1','u2','p1','pv1','acct_creator','cus_on_connected','active',0);
+			INSERT INTO creator_entitlements(creator_id,tier,status)
+			VALUES ('u1','premium','active');
+		`);
+		await apply(client, MIGRATIONS[21]);
+
+		// The platform table exists under its unambiguous physical name.
+		const { rows: tables } = await client.query(`
+			select table_name from information_schema.tables
+			where table_schema='public'
+			  and table_name in ('litesub_subscription','creator_entitlements','subscriptions')
+			order by 1
+		`);
+		assert.deepEqual(
+			tables.map((r) => r.table_name),
+			["litesub_subscription", "subscriptions"],
+		);
+
+		// The retired mirror is gone, including its status enum.
+		const { rows: enums } = await client.query(
+			"select 1 from pg_type where typname = 'creator_subscription_status'",
+		);
+		assert.deepEqual(enums, []);
+
+		// The Connect sale survived verbatim: same account, same customer, same row.
+		const { rows: sale } = await client.query(`
+			select stripe_account_id, stripe_customer_id, status, application_fee_percent
+			from subscriptions where id='s1'
+		`);
+		assert.deepEqual(sale[0], {
+			stripe_account_id: "acct_creator",
+			stripe_customer_id: "cus_on_connected",
+			status: "active",
+			application_fee_percent: 0,
+		});
+
+		// One creator, one platform subscription.
+		await client.query(`
+			INSERT INTO litesub_subscription(id,plan,reference_id,status)
+			VALUES ('ls1','premium','u1','active');
+		`);
+		await assert.rejects(
+			client.query(`
+				INSERT INTO litesub_subscription(id,plan,reference_id,status)
+				VALUES ('ls2','premium','u1','active');
+			`),
+			/unique constraint/,
+		);
+
+		// The platform customer id column was re-added for this domain only.
+		const { rows: col } = await client.query(`
+			select column_name from information_schema.columns
+			where table_name='user' and column_name='stripe_customer_id'
+		`);
+		assert.equal(col.length, 1);
 	});
 });
 

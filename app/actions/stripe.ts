@@ -77,7 +77,7 @@ export async function createCustomerCheckout(
 		return {
 			success: false,
 			error:
-				"That customer needs a Litesubs account before you can request payment",
+				"That customer needs a liteSubs account before you can request payment",
 		};
 
 	let resolved: Awaited<ReturnType<typeof resolvePublishedPlan>>;

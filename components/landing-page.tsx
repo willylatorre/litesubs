@@ -15,7 +15,6 @@ import { StripeConnect } from "@/components/landing/stripe-connect";
 import { PlanCard } from "@/components/plan-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
 import { invitePath } from "@/lib/public-links";
 import { cn } from "@/lib/utils";
 import { CustomersTableDemo } from "./landing/customers-table-demo";
@@ -59,9 +58,9 @@ export function LandingPage() {
 				<div className="flex flex-col items-center gap-4 max-w-xl">
 					{/* Logo - Wrapped in h1 for SEO, styled to look normal */}
 					<h1 className="sr-only">
-						LiteSubs - Simple credit plans instead of heavy subscriptions
+						liteSubs - Simple credit plans instead of heavy subscriptions
 					</h1>
-					<AnimatedLogo />
+					<AnimatedLogo subtitle />
 
 					{/* Description */}
 					<p className="text-base md:text-lg text-muted-foreground">
@@ -140,7 +139,7 @@ export function LandingPage() {
 						</Button>
 					</div>
 					<span className="text-xs text-muted-foreground">
-						{PLATFORM_FEE_PERCENT * 100}% per sale · no monthly fee
+						No commission · free tier, or $5/month
 					</span>
 				</motion.div>
 			</motion.div>

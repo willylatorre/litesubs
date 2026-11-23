@@ -10,11 +10,11 @@ import {
 /**
  * Disconnecting a Stripe account does not end subscriptions in Stripe.
  *
- * Litesubs therefore has to decide what happens to live subscriptions from its
+ * liteSubs therefore has to decide what happens to live subscriptions from its
  * own records, and say so plainly instead of quietly leaving them billing. The
  * policy is deliberately narrow:
  *
- * - Enumerate from Litesubs' records, never by scanning Stripe, so the count a
+ * - Enumerate from liteSubs' records, never by scanning Stripe, so the count a
  *   creator is shown is the count we are accountable for.
  * - A disconnect with live subscriptions refuses until the creator explicitly
  *   chooses to stop renewals at each paid period.

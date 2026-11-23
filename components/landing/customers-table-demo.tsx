@@ -14,7 +14,6 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
 
 interface CustomersTableDemoProps {
 	plan: DemoPlanData;
@@ -36,7 +35,8 @@ export function CustomersTableDemo({ plan }: CustomersTableDemoProps) {
 				gross: plan.price * 100,
 				refunded: 0,
 				net: plan.price * 100,
-				platformFees: Math.round(plan.price * 100 * PLATFORM_FEE_PERCENT),
+				// No commission: the creator keeps the whole sale.
+				platformFees: 0,
 			},
 		],
 		enrollments: [

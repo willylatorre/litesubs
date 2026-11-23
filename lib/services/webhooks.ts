@@ -17,6 +17,7 @@ import {
 	type WebhookEvent,
 	type WebhookEventType,
 } from "@/lib/webhook-events";
+import { assertCanUseDeveloperFeatures, getEntitlement } from "./entitlements";
 import { type Principal, requireScope, ServiceError } from "./principal";
 
 export {
@@ -209,6 +210,9 @@ export async function listEndpoints(
 
 export async function createEndpoint(principal: Principal, input: unknown) {
 	requireCreatorWrites(principal);
+	// Outgoing webhooks are a Premium feature: they let a creator's own systems
+	// act on every sale and balance change.
+	assertCanUseDeveloperFeatures(await getEntitlement(principal.creatorId));
 	const data = endpointInput.parse(input);
 	const signingSecret = newSigningSecret();
 	const [created] = await db

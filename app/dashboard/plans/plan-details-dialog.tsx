@@ -3,7 +3,7 @@
 import { IconMailPlus, IconUsers } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { getPlanDetails } from "@/app/actions/plans";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -17,14 +17,6 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import {
 	Table,
@@ -35,7 +27,6 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { InviteUserDialog } from "../creator/invite-user-dialog";
-import { PlanBookingLink } from "./plan-booking-link";
 
 export function PlanDetailsDialog({
 	planId,
@@ -95,9 +86,7 @@ export function PlanDetailsDialog({
 				<DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
 					<DialogHeader>
 						<DialogTitle>Plan Details</DialogTitle>
-						<DialogDescription>
-							Terms, booking integration, and enrolled customers.
-						</DialogDescription>
+						<DialogDescription>Terms and enrolled customers.</DialogDescription>
 					</DialogHeader>
 
 					{loading || !plan ? (
@@ -173,11 +162,6 @@ export function PlanDetailsDialog({
 									; customers still buy it until you publish.
 								</p>
 							)}
-
-							<PlanBookingLink
-								planId={plan.id}
-								isRecurring={terms?.billingMode === "recurring"}
-							/>
 
 							<div className="flex flex-col gap-4 border-t pt-4">
 								<h3 className="font-semibold flex items-center gap-2">

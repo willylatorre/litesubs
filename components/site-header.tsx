@@ -1,7 +1,6 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { NotificationBell } from "@/components/notifications/notification-bell";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 
@@ -17,9 +16,8 @@ export function SiteHeader() {
 		if (path.startsWith("/dashboard/developers/api-keys")) return "API Tokens";
 		if (path.startsWith("/dashboard/developers/webhooks")) return "Webhooks";
 		if (path.startsWith("/dashboard/developers")) return "API & MCP";
-		if (path.startsWith("/dashboard/bookings")) return "Bookings";
-		if (path.startsWith("/dashboard/integrations")) return "Integrations";
 		if (path.startsWith("/dashboard/payments")) return "Payments";
+		if (path.startsWith("/dashboard/billing")) return "Billing";
 		if (path.startsWith("/dashboard/faq")) return "FAQ";
 		if (path.startsWith("/dashboard/account")) return "Account";
 		if (path.startsWith("/dashboard/security")) return "Security";
@@ -41,9 +39,6 @@ export function SiteHeader() {
 					className="mx-2 data-[orientation=vertical]:h-4"
 				/>
 				<h1 className="text-base font-medium">{getPageTitle(pathname)}</h1>
-				<div className="ml-auto flex items-center">
-					<NotificationBell />
-				</div>
 			</div>
 		</header>
 	);

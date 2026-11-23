@@ -1,6 +1,6 @@
 # Outgoing webhooks
 
-Creators can point Litesubs at their own service and receive a signed HTTP
+Creators can point liteSubs at their own service and receive a signed HTTP
 request when a customer buys a pack or a credit balance changes. This document
 is the contract a receiver implements against.
 
@@ -8,7 +8,7 @@ is the contract a receiver implements against.
 
 Configuring webhooks requires the `webhooks:manage` scope. It is separate from
 `plans:write` on purpose: registering an endpoint causes customer ids, plan ids,
-and balances to leave Litesubs for a URL the caller names, so an OAuth client
+and balances to leave liteSubs for a URL the caller names, so an OAuth client
 must be granted that egress explicitly.
 
 - A **dashboard session** holds `webhooks:manage` and can use the page at

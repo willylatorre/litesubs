@@ -50,7 +50,7 @@ export function codexCommand(resource: string): string {
 export function claudeConnectorLink(resource: string): string {
 	const params = new URLSearchParams({
 		modal: "add-custom-connector",
-		connectorName: "Litesubs",
+		connectorName: "liteSubs",
 		connectorUrl: resource,
 	});
 	return `https://claude.ai/customize/connectors?${params.toString()}`;

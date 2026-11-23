@@ -14,17 +14,12 @@ import {
 	transactions,
 	user,
 } from "@/app/db/schema";
-import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
 import { type ActionResponse, authenticatedAction } from "@/lib/safe-action";
 import {
 	SAMPLE_CUSTOMER_NAME,
 	SAMPLE_PLAN,
 	sampleIds,
 } from "@/lib/sample-data";
-import {
-	removeSampleSchedule,
-	seedSampleSchedule,
-} from "@/lib/sample-schedule";
 
 export type SampleWorkspaceState = {
 	loaded: boolean;
@@ -37,7 +32,6 @@ const SAMPLE_PATHS = [
 	"/dashboard/creator",
 	"/dashboard/plans",
 	"/dashboard/customers",
-	"/dashboard/bookings",
 ];
 
 function revalidateSamplePaths() {
@@ -215,7 +209,8 @@ export async function createSampleWorkspace(): Promise<
 					credits: SAMPLE_PLAN.credits,
 					amountTotal: SAMPLE_PLAN.price,
 					currency: SAMPLE_PLAN.currency,
-					applicationFee: Math.round(SAMPLE_PLAN.price * PLATFORM_FEE_PERCENT),
+					// No commission, so the sample receipt shows the whole sale kept.
+					applicationFee: 0,
 					amountPaid: SAMPLE_PLAN.price,
 					fulfilledAt: new Date(),
 				})
@@ -233,11 +228,6 @@ export async function createSampleWorkspace(): Promise<
 					status: "pending",
 				})
 				.onConflictDoNothing({ target: invites.id });
-
-			// The demo bookings screen needs a schedule to look at. It is not
-			// attached to the sample plan (that link belongs to a later slice) and
-			// carries no credits, so loading the demo can never spend anything.
-			await seedSampleSchedule(tx, creatorId);
 
 			return {
 				loaded: true,
@@ -292,9 +282,6 @@ export async function removeSampleWorkspace(): Promise<
 				.where(
 					and(eq(invites.creatorId, creatorId), eq(invites.id, ids.invite)),
 				);
-			// Availability and the schedule cascade, but delete the window rows
-			// explicitly so a schedule that was somehow kept is still emptied.
-			await removeSampleSchedule(tx, creatorId);
 			await tx
 				.delete(planVersions)
 				.where(

@@ -9,7 +9,7 @@ import {
  * Server-only adapter for the catalog objects a published plan sells.
  *
  * Every object is created **on the creator's connected account** (the
- * `Stripe-Account` request option), never on the Litesubs platform account.
+ * `Stripe-Account` request option), never on the liteSubs platform account.
  * That matches the direct-charge model: the creator owns the offer, the
  * customer pays the creator, and a published version records exactly which
  * Product/Price it committed to.

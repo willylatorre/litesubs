@@ -1,108 +1,47 @@
-import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { notFound, redirect } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card";
-import { auth } from "@/lib/auth";
-import { bookingPath } from "@/lib/public-links";
-import { listOpenSlots } from "@/lib/services/bookings";
-import { BookingSlotPicker } from "./slot-picker";
-
-export const dynamic = "force-dynamic";
+import { redirect } from "next/navigation";
+import { appUrl } from "@/lib/app-url";
 
 /**
- * Public booking page.
+ * Bookings moved to Plannerie.
  *
- * Slots are computed on read from the creator's availability, so there is no
- * cache to go stale and no job to fall behind. A signed-out visitor can see the
- * open times; the booking action is what requires sign-in, because it must know
- * whose credits to spend.
+ * Scheduling was never the subscription business: it is the teacher's lesson
+ * workspace, and it now lives beside the lesson it belongs to. liteSubs keeps
+ * the price, the credit grant, and the ledger; see `docs/REFOCUS.md`.
+ *
+ * This route stays so a link a customer already has — printed on a lesson
+ * handout, pasted into a chat — does not turn into a 404. It forwards to the
+ * Plannerie schedule when `PLANNERIE_URL` is configured, and otherwise renders
+ * a short explanation people can act on.
  */
-export async function generateMetadata({
-	params,
-}: {
-	params: Promise<{ creator: string; slug: string }>;
-}): Promise<Metadata> {
-	const { creator, slug } = await params;
-	const { schedule } = await listOpenSlots(creator, slug);
-	if (!schedule) return { title: "Booking not available" };
-	return {
-		title: `${schedule.name} — book a time`,
-		description:
-			schedule.description ??
-			`Book ${schedule.durationMinutes} minutes on ${schedule.name}.`,
-	};
-}
+export const dynamic = "force-dynamic";
 
-export default async function BookPage({
+export default async function MovedBookingPage({
 	params,
 }: {
 	params: Promise<{ creator: string; slug: string }>;
 }) {
 	const { creator, slug } = await params;
-	const { schedule, slots } = await listOpenSlots(creator, slug);
-	if (!schedule) notFound();
-	if (schedule.creatorUsername && creator !== schedule.creatorUsername) {
-		redirect(bookingPath(schedule.creatorUsername, slug));
+	const destination = process.env.PLANNERIE_URL;
+
+	if (destination) {
+		const target = new URL(
+			`/book/${encodeURIComponent(creator)}/${encodeURIComponent(slug)}`,
+			destination,
+		);
+		redirect(target.toString());
 	}
 
-	const session = await auth.api.getSession({ headers: await headers() });
-
 	return (
-		<div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-10">
-			<div className="flex flex-col gap-2">
-				<div className="flex items-center gap-2">
-					<h1 className="text-2xl font-bold tracking-tight">{schedule.name}</h1>
-					<Badge variant="outline">{schedule.durationMinutes} min</Badge>
-				</div>
-				{schedule.description && (
-					<p className="text-sm text-muted-foreground">
-						{schedule.description}
-					</p>
-				)}
-			</div>
-
-			<div className="grid gap-4 md:grid-cols-2">
-				<BookingSlotPicker
-					scheduleId={schedule.id}
-					slots={slots}
-					creatorTimeZone={schedule.timezone}
-					creditsPerBooking={schedule.creditsPerBooking}
-					isSignedIn={Boolean(session?.user)}
-				/>
-
-				<Card>
-					<CardHeader>
-						<CardTitle className="text-base">What you are booking</CardTitle>
-						<CardDescription>
-							{schedule.creditsPerBooking
-								? `${schedule.creditsPerBooking} credit${schedule.creditsPerBooking === 1 ? "" : "s"} are taken from your balance when you confirm. Cancelling returns them if they are still unspent.`
-								: "This booking does not spend credits."}
-						</CardDescription>
-					</CardHeader>
-					<CardContent className="flex flex-col gap-2 text-sm text-muted-foreground">
-						{schedule.plan && (
-							<p>
-								Plan:{" "}
-								<span className="text-foreground">{schedule.plan.name}</span>
-							</p>
-						)}
-						<p>
-							Times are shown in your own time zone; the creator&apos;s schedule
-							is kept in {schedule.timezone}.
-						</p>
-						{!session?.user && (
-							<p>You need an account to book, because the credits are yours.</p>
-						)}
-					</CardContent>
-				</Card>
-			</div>
-		</div>
+		<main className="mx-auto flex min-h-svh max-w-xl flex-col justify-center gap-4 p-6">
+			<h1 className="text-2xl font-bold tracking-tight">Bookings have moved</h1>
+			<p className="text-muted-foreground">
+				Scheduling now lives in Plannerie, where your lesson plans are. Your
+				credits and payment history stay right here — ask the person who shared
+				this link for their new booking address.
+			</p>
+			<a className="text-sm font-medium underline" href={appUrl("/")}>
+				Go to liteSubs
+			</a>
+		</main>
 	);
 }

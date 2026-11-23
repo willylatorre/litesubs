@@ -23,8 +23,8 @@ export type Principal = {
 	 * The signed-in user behind this principal, when there is one.
 	 *
 	 * `creatorId` is who the principal acts *for*; this is who they *are*. They
-	 * differ for a customer session, which is how a booking knows whose credits to
-	 * spend without pretending the customer is a creator.
+	 * differ when a customer session acts inside a creator's workspace without
+	 * pretending the customer is a creator.
 	 */
 	userId?: string;
 	scopes: readonly string[];
@@ -41,14 +41,26 @@ export class ServiceError extends Error {
 	}
 }
 
+/**
+ * Authorize one action for one principal.
+ *
+ * The rule is **the principal's scopes**, whatever transport produced them. A
+ * key granted `plans:write` may manage plans; a key granted only
+ * `credits:consume` may only spend. There is deliberately no blanket "machine
+ * keys can only consume" rule: that forced every non-consumption integration
+ * into an OAuth app, which is a whole CIMD client, a consent screen and a public
+ * metadata URL — for a job a scoped key does exactly as well.
+ *
+ * What keeps that safe is that **scopes come from the stored key**, never from
+ * the request. `apiKeyPrincipal` reads them off the key; nothing a caller sends
+ * can widen them.
+ *
+ * `credits:consume` stays API-key-*preferred* only in the sense that OAuth is
+ * refused it: consumption is the operation that spends money, and it should
+ * belong to a credential a teacher can name and revoke in isolation rather than
+ * to a broad management grant.
+ */
 export function requireScope(principal: Principal, scope: Scope) {
-	if (principal.kind === "apiKey" && scope !== "credits:consume") {
-		throw new ServiceError(
-			"FORBIDDEN",
-			"Machine keys can only consume credits",
-			403,
-		);
-	}
 	if (scope === "credits:consume" && principal.kind === "oauth") {
 		throw new ServiceError("FORBIDDEN", "Consumption requires an API key", 403);
 	}
@@ -67,24 +79,6 @@ export function sessionPrincipal(creatorId: string): Principal {
 		kind: "session",
 		creatorId,
 		userId: creatorId,
-		scopes: [...CREATOR_SCOPES, "credits:consume"],
-	};
-}
-
-/**
- * The principal an internal, already-validated system action acts as.
- *
- * `credits:consume` is deliberately API-key-only for *callers*, so a customer
- * session cannot spend credits through the public API. A booking still has to
- * debit, but only after the booking service has proven the customer's enrollment
- * and the slot. This builds that internal authority explicitly, scoped to the
- * creator whose plan is being spent, instead of loosening the `requireScope`
- * gate for everyone. Never derive this from user input.
- */
-export function systemPrincipal(creatorId: string): Principal {
-	return {
-		kind: "session",
-		creatorId,
 		scopes: [...CREATOR_SCOPES, "credits:consume"],
 	};
 }

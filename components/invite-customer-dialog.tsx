@@ -162,7 +162,7 @@ export function InviteCustomerDialog({
 						</div>
 						<ShareLinkActions
 							url={invite.url}
-							title="You're invited to LiteSubs"
+							title="You're invited to liteSubs"
 							text={
 								invite.email
 									? `Your invite for ${invite.email} is ready.`

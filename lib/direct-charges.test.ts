@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { isValidApplicationFee } from "@/lib/stripe-direct-charges";
 
 /**
- * Litesubs sells with **direct charges**: the session is created as the
- * connected account, and only an application fee is attached. Adding
- * `transfer_data` silently converts it into a destination charge, moving the
- * charge (and the fee/liability/statement) onto the platform.
+ * liteSubs sells with **direct charges**: the session is created as the
+ * connected account. Adding `transfer_data` silently converts it into a
+ * destination charge, moving the charge onto the platform and away from the
+ * creator's balance.
  *
  * This guards the source because the difference is invisible at runtime until
  * real money lands on the wrong balance.
@@ -36,15 +35,32 @@ test("checkout code never turns a direct charge into a destination charge", asyn
 
 	const direct = await readFile("lib/stripe-direct-charges.ts", "utf8");
 	assert.match(direct, /stripeAccount:\s*input\.stripeAccountId/);
-	assert.match(direct, /application_fee_amount/);
 });
 
-test("application fees must be positive and below the charge amount", () => {
-	assert.equal(isValidApplicationFee(2, 100), true);
-	assert.equal(isValidApplicationFee(0, 100), false);
-	assert.equal(isValidApplicationFee(100, 100), false);
-	assert.equal(isValidApplicationFee(-1, 100), false);
-	assert.equal(isValidApplicationFee(1.5, 100), false);
+/**
+ * No commission is taken from a sale. The creator keeps it, and liteSubs is
+ * paid for by a creator subscription instead. This is a revenue-model change,
+ * so it is pinned: reintroducing an application fee in the charge path without
+ * changing the pricing would silently tax every sale again.
+ */
+test("neither checkout path attaches a platform fee", async () => {
+	const direct = await readFile("lib/stripe-direct-charges.ts", "utf8");
+	const code = direct
+		.split("\n")
+		.filter((line) => !line.trim().startsWith("*"))
+		.filter((line) => !line.trim().startsWith("//"))
+		.join("\n");
+	assert.doesNotMatch(code, /application_fee_amount/);
+	assert.doesNotMatch(code, /application_fee_percent/);
+
+	const purchase = await readFile("lib/services/purchase.ts", "utf8");
+	const purchaseCode = purchase
+		.split("\n")
+		.filter((line) => !line.trim().startsWith("*"))
+		.filter((line) => !line.trim().startsWith("//"))
+		.join("\n");
+	assert.doesNotMatch(purchaseCode, /applicationFeeAmount/);
+	assert.doesNotMatch(purchaseCode, /applicationFeePercent/);
 });
 
 /**

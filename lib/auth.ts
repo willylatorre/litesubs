@@ -3,11 +3,14 @@ import { apiKey } from "@better-auth/api-key";
 import { cimd } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { mcp } from "@better-auth/mcp";
+import { stripe } from "@better-auth/stripe";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { jwt, username } from "better-auth/plugins";
+import Stripe from "stripe";
 import { db } from "@/app/db"; // your drizzle instance
+import { requirePremiumForApiKeys } from "@/lib/auth/premium-api-key-gate";
 import { mcpResource } from "@/lib/mcp-config";
 import { CREATOR_SCOPES } from "@/lib/services/principal";
 
@@ -39,6 +42,49 @@ if (
 	console.warn(
 		"[better-auth] BETTER_AUTH_SECRET is not set. Using a temporary random secret for this process.",
 	);
+}
+
+/**
+ * Platform billing: the creator paying liteSubs, not a creator's customer paying
+ * the creator. Those are separate domains with separate Stripe accounts — see
+ * `docs/PLATFORM-BILLING.md`.
+ *
+ * The plugin is registered **only when a price and webhook secret exist**. A
+ * plan with no `priceId` throws at checkout with a generic Stripe message; not
+ * registering the plugin fails visibly at config time instead, and leaves the
+ * rest of the app working on the free tier.
+ *
+ * `createCustomerOnSignUp` is deliberately off. Every buyer here is also a user,
+ * so enabling it would mint a platform Stripe Customer for people who will never
+ * pay liteSubs. The checkout path creates one lazily, which is the only moment
+ * it is actually needed.
+ */
+const premiumPriceId = process.env.STRIPE_PREMIUM_PRICE_ID?.trim();
+const billingWebhookSecret = process.env.STRIPE_WEBHOOK_BILLING?.trim();
+
+function platformBilling() {
+	if (
+		!premiumPriceId ||
+		!billingWebhookSecret ||
+		!process.env.STRIPE_SECRET_KEY
+	)
+		return null;
+	const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY, {
+		apiVersion: "2026-10-28.endive",
+		typescript: true,
+	});
+	return stripe({
+		stripeClient,
+		stripeWebhookSecret: billingWebhookSecret,
+		createCustomerOnSignUp: false,
+		subscription: {
+			enabled: true,
+			plans: [{ name: "premium", priceId: premiumPriceId }],
+			// No balance or tier is written from these hooks. Entitlement is derived
+			// from the subscription row by `lib/services/entitlements.ts`, so there
+			// is exactly one interpretation of what a creator is entitled to.
+		},
+	});
 }
 
 /**
@@ -85,6 +131,11 @@ export const auth = betterAuth({
 			clientId: process.env.GOOGLE_CLIENT_ID as string,
 			clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
 		},
+	},
+	hooks: {
+		// Tier gates live in front of Better Auth's own endpoints, so a rule cannot
+		// be bypassed by calling the plugin API directly instead of the dashboard.
+		before: requirePremiumForApiKeys,
 	},
 	// Development-only origins must never be trusted in production: a wildcard
 	// in a Server Action origin list lets any Codespaces host call actions.
@@ -138,8 +189,13 @@ export const auth = betterAuth({
 			},
 		}),
 
-		// No Stripe customer plugin: billing belongs to each creator's connected
-		// account, so the platform never creates or manages a Stripe Customer.
+		// Platform billing (creator -> liteSubs). Creator sales are a different
+		// domain: direct charges on each creator's connected account, handled by
+		// `/api/webhooks/stripe`, never here.
+		...(() => {
+			const billing = platformBilling();
+			return billing ? [billing] : [];
+		})(),
 		nextCookies(),
 	], // make sure this is the last plugin in the array
 });

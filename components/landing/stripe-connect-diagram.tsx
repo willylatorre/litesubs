@@ -1,15 +1,14 @@
 "use client";
 
 import { Building2, Landmark, User, Wallet } from "lucide-react";
-import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
 
 /**
- * Where money actually goes on a sale.
+ * Where money actually goes.
  *
  * The geometry is the argument: the customer's payment lands on the creator's
- * own Stripe account, and LiteSubs' fee branches off that same path as a thin
- * slice leaving for the platform. Nothing is routed through a platform balance
- * first — that is the whole reason a creator keeps the full Stripe Dashboard.
+ * own Stripe account and **stays there**. Nothing branches off for liteSubs —
+ * the platform is paid for by a separate monthly subscription, drawn as its own
+ * path so the two flows can never be mistaken for each other.
  *
  * Built from flat isometric planes rather than a perspective projection: every
  * face is a parallelogram on a 2:1 grid, so the shapes stay crisp at any size
@@ -17,8 +16,6 @@ import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
  * the drawing is static on purpose — the section owns the reveal, so a missed
  * scroll observer can never leave essential content invisible.
  */
-
-const FEE_PERCENT_LABEL = `${PLATFORM_FEE_PERCENT * 100}%`;
 
 /**
  * One isometric tile on a 2:1 grid. `x`/`y` is the top of the diamond, so the
@@ -120,10 +117,10 @@ export function StripeConnectDiagram() {
 				How a sale is split under Stripe Connect
 			</title>
 			<desc id="connect-diagram-desc">
-				A customer pays on the creator&apos;s own connected Stripe account. The
-				creator keeps the sale minus a {FEE_PERCENT_LABEL} application fee,
-				which LiteSubs collects, and Stripe pays the creator out on their own
-				schedule.
+				A customer pays on the creator&apos;s own connected Stripe account and
+				the creator keeps the whole sale, with no commission. liteSubs is paid
+				for separately by a monthly subscription, and Stripe pays the creator
+				out on their own schedule.
 			</desc>
 
 			{/* The money path: customer straight to the creator's own account. */}
@@ -135,22 +132,22 @@ export function StripeConnectDiagram() {
 				strokeLinecap="round"
 			/>
 
-			{/* The fee leaves that same payment for LiteSubs, which sits above the
-			    path. Drawn over the money line so the junction reads as a split. */}
+			{/* liteSubs is paid by its own subscription, not from the sale. The
+			    dashed path deliberately does not touch the money line: no commission
+			    leaves the creator's payment. */}
 			<path
-				d={`M ${litesubs.cx} ${moneyY} L ${litesubs.cx} ${litesubs.cy + D / 2 + H}`}
+				d={`M ${litesubs.cx} ${litesubs.cy + D / 2 + H} L ${litesubs.cx} ${moneyY - 26}`}
 				fill="none"
-				className="stroke-primary/50"
+				className="stroke-muted-foreground/50"
 				strokeWidth="2"
-				strokeDasharray="4 5"
+				strokeDasharray="3 4"
 			/>
-			<circle cx={litesubs.cx} cy={moneyY} r={4.5} className="fill-primary" />
 			<text
 				x={litesubs.cx + 16}
-				y={moneyY - 14}
+				y={moneyY - 12}
 				className="fill-muted-foreground text-[13px]"
 			>
-				{FEE_PERCENT_LABEL} application fee
+				separate $5/month plan
 			</text>
 
 			{/* Payout leaves the creator's account on the creator's own schedule. */}
@@ -188,7 +185,7 @@ export function StripeConnectDiagram() {
 			<Slab
 				x={litesubs.cx - W / 2}
 				y={litesubs.cy - D / 2}
-				label="LiteSubs"
+				label="liteSubs"
 				Icon={Building2}
 				labelAbove
 			/>

@@ -35,7 +35,7 @@ export const accountOnboardingModeEnum = pgEnum("account_onboarding_mode", [
 // Tables
 
 /**
- * A creator's own Stripe account. Litesubs acts on it as a Connect platform:
+ * A creator's own Stripe account. liteSubs acts on it as a Connect platform:
  * the account owns its Dashboard, pays Stripe's processing fees, and is
  * responsible for its own negative balances. Those responsibilities are stored
  * explicitly because they are an agreement, not a guess from an account type.
@@ -54,7 +54,7 @@ export const connectedAccounts = pgTable(
 		onboardingMode: accountOnboardingModeEnum("onboarding_mode").notNull(),
 		/**
 		 * True when the account was authorized through Connect OAuth rather than
-		 * created by Litesubs. Only an OAuth authorization can be revoked through
+		 * created by liteSubs. Only an OAuth authorization can be revoked through
 		 * Stripe's deauthorize endpoint.
 		 */
 		authorizedViaOauth: boolean("authorized_via_oauth")

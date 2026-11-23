@@ -173,7 +173,7 @@ export function UserProfile({ className }: UserProfileProps) {
                     {isUsername && (
                       <p className="text-xs text-muted-foreground">
                         {isPermanentUsername
-                          ? "Used in your public booking and plan links. Usernames are permanent so those links keep working."
+                          ? "Used in your public plan and invite links. Usernames are permanent so those links keep working."
                           : "Choose carefully: this becomes the permanent creator segment in your public links."}
                       </p>
                     )}

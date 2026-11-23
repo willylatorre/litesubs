@@ -19,7 +19,7 @@ interface ShareLinkActionsProps {
 /**
  * Copy and share a link in one place.
  *
- * Every link LiteSubs generates is meant to be forwarded by the creator, so the
+ * Every link liteSubs generates is meant to be forwarded by the creator, so the
  * share sheet (mobile) and the clipboard (desktop) belong side by side on each
  * one rather than being reinvented per dialog.
  */

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 const points = [
 	{
 		title: "Your account, your customers",
-		body: "Payments are direct charges on the Stripe account you connect. Customers, invoices and refunds live there, not inside LiteSubs.",
+		body: "Payments are direct charges on the Stripe account you connect. Customers, invoices and refunds live there, not inside liteSubs.",
 	},
 	{
 		title: "Your full Dashboard",
@@ -39,8 +39,8 @@ export function StripeConnect() {
 				</h2>
 				<p className="max-w-xl text-balance text-muted-foreground">
 					Connect lets you attach your own Stripe business, or start a new one,
-					and get paid directly. LiteSubs collects a small application fee and
-					steps out of the flow.
+					and get paid directly. liteSubs takes no cut of the sale and steps out
+					of the flow.
 				</p>
 			</div>
 

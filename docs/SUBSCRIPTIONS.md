@@ -2,6 +2,13 @@
 
 Status: agreed architecture and implementation scope.
 
+> **Superseded in part.** The 1% application fee described throughout the
+> historical slice records (S05, S07, and the acceptance lists below) has been
+> removed. The current rule is: direct charges with **no commission**, and the
+> platform is paid for by a free/Premium tier split. See `docs/REFOCUS.md`.
+> The slice records are left as written because they describe what was built at
+> the time; they are not the current contract.
+
 Implemented slices:
 
 - S01 — draft plans with immutable version records; `plans`, `plan_versions`,
@@ -67,7 +74,7 @@ Implemented slices:
   currency with gross/refunded/net, while counts, subscriptions, and usable
   credits stay separate concepts.
 - S15 — disconnecting a Stripe account is subscription-aware: live
-  subscriptions are enumerated from Litesubs' own records, a disconnect refuses
+  subscriptions are enumerated from liteSubs' own records, a disconnect refuses
   to proceed silently, the explicit choice schedules each renewal to stop at its
   paid period with `creator_disconnect` recorded as the cause, and a Stripe
   failure leaves a visible retryable state. Access and granted credits still run
@@ -77,10 +84,11 @@ Implemented slices:
 
 ## Purpose
 
-Litesubs supplies software for creators to sell credit packs and monthly plans.
+liteSubs supplies software for creators to sell credit packs and monthly plans.
 The creator supplies the service and owns the customer payment relationship.
 Products, Prices, Customers, payments, and subscriptions live on the creator's
-connected Stripe account. Litesubs collects a 1% application fee.
+connected Stripe account. liteSubs takes no commission; it is paid for by an
+optional Premium subscription on the platform account (`docs/REFOCUS.md`).
 
 Use Stripe's normal subscription lifecycle, retries, invoices, and billing portal.
 Do not build a competing billing engine or a configurable policy framework in v1.
@@ -89,19 +97,20 @@ Do not build a competing billing engine or a configurable policy framework in v1
 
 - Direct charges for both one-time packs and subscriptions; no platform-charge
   fallback. A direct charge means the Checkout Session is created **as** the
-  connected account (`Stripe-Account` request option) with only an application fee
-  attached. Adding `transfer_data` would silently make it a destination charge,
+  connected account (`Stripe-Account` request option) with no application fee and
+  no `transfer_data`. Adding `transfer_data` would silently make it a destination charge,
   moving the charge, Stripe fees, refunds, and chargebacks onto the platform, so
   the direct-charge adapter is the single place that creates these sessions.
 - The `card_payments` capability is what direct charges require; the aggregate
   `charges_enabled` flag alone is not sufficient readiness.
-- Full Stripe Dashboard for creators, with summaries and a Dashboard link in Litesubs.
+- Full Stripe Dashboard for creators, with summaries and a Dashboard link in liteSubs.
 - Stripe bills creators for processing fees and manages connected-account negative
   balance liability under the selected account configuration. Direct charges alone
   do not establish these responsibilities or eliminate all platform obligations.
 - Support existing-account connection and new-account onboarding. Verify the current
   supported connection flow and account eligibility before implementing it.
-- Platform fee: 1%; persist the agreed subscription fee rate and actual payment fees.
+- Platform fee: none. `application_fee_percent` defaults to `0` and the column is
+  retained only so historical subscriptions keep the rate they were charged at.
 - Monthly subscriptions only. Store the interval explicitly; yearly UI is deferred.
 - Monthly credits do not roll over, and recurring plans have no paid top-ups.
 - Cancel at period end; allow resume before cancellation takes effect.
@@ -183,7 +192,7 @@ Separate Stripe's reported billing period from the period actually paid and gran
 - Mirror subscription changes without assuming event delivery order. Recover
   current Stripe state where necessary, using the owning account's context.
 - Reconcile refunds against the source payment's grants. Stripe handles financial
-  refunds; Litesubs synchronizes payment state and the agreed credit effects.
+  refunds; liteSubs synchronizes payment state and the agreed credit effects.
 - Recheck current merchant payment capability before sales. Disconnection or
   restricted capability stops new sales and produces a visible operational warning.
 
@@ -235,7 +244,7 @@ paste the key itself — Stripe's permission message includes a key fragment.
 
 ### 3. The webhook endpoint must be a *Connect* endpoint
 
-Litesubs sells with direct charges, so a purchase happens **on the creator's
+liteSubs sells with direct charges, so a purchase happens **on the creator's
 connected account**. Stripe raises those events against that account, not the
 platform, and only delivers them to a webhook endpoint marked as a Connect
 endpoint (`connect: true`) with the relevant `*.connect` events enabled.
@@ -290,7 +299,7 @@ should not be recreated.
 ### 4. Connect OAuth client id, for "Connect with Stripe"
 
 `STRIPE_CONNECT_CLIENT_ID` enables the OAuth path (`/api/connect/oauth/start`).
-The creator authorizes Litesubs on Stripe's own page, which also lets someone
+The creator authorizes liteSubs on Stripe's own page, which also lets someone
 with no account create one there, so it covers both cases. Without this variable
 the button falls back to creating the account for the creator, so payments still
 work — but the OAuth option stays hidden.
@@ -380,33 +389,27 @@ by full refund, tenant/account isolation, and recoverable provisioning failures.
 Yearly offers, upgrades/downgrades and proration, rollover/top-up options,
 creator-configurable fee/expiry/refund rules, automatic import of arbitrary Stripe
 catalogs, and custom billing/retry/payout engines. Stripe already owns the standard
-billing and payment operations; do not rebuild them in Litesubs.
+billing and payment operations; do not rebuild them in liteSubs.
 
-### Fee shape: percentage, or percentage with a cap
+### Fee shape: removed in favour of a creator subscription
 
-The rate is a single constant (`PLATFORM_FEE_PERCENT`) and both charge paths read
-it: one-time purchases round it into a fixed `application_fee_amount`, and
-subscriptions send it as `application_fee_percent`. Changing the number is a
-one-line change plus the copy and the arithmetic assertions in the tests.
+The 1% application fee is gone. The platform is now paid for by a free/Premium
+split: the free tier allows two one-time plans, and $5/month unlocks unlimited
+plans, monthly plans, and developer features. See `docs/REFOCUS.md`.
 
-Stripe supports a **cap** as well, and it applies to the two paths differently:
+This removes a whole class of problems the percentage model carried: no rounding
+floor (the old `isValidApplicationFee` refused any fee that rounded to zero, so
+the cheapest sellable amount depended on the rate), no fee cap to reason about
+per billing mode, and no divergence between the one-time and recurring paths.
 
-- **Subscriptions** accept `application_fee_percent` only. A cap is not available
-  on the recurring fee, so a percentage-plus-cap model cannot be expressed for
-  monthly plans through this field.
-- **One-time charges** could compute the fee as `min(rate * amount, cap)` in
-  `applicationFeeFor` and pass the result as `application_fee_amount`. This needs
-  no schema change, because the fee is already stored per payment as minor units.
+What is deliberately kept:
 
-So a cap is a plausible later improvement for packs, but it is not a single
-constant: it would make the one-time and recurring rates diverge, and the
-reporting queries derive recurring fees from the stored percentage rather than
-from a per-invoice amount. Decide that as a product question, not as a tweak.
-
-One floor to keep in mind when choosing a rate: `isValidApplicationFee` requires a
-**strictly positive** fee, so the cheapest sellable amount is `ceil(1 / rate)`
-cents before rounding yields zero. At 1% that is $0.50; at 2% it was $0.25. A
-fractional rate would move that floor again.
+- `payments.application_fee` and `subscriptions.application_fee_percent` remain,
+  defaulting to `0`. Historical receipts keep the fee they actually paid, and the
+  reporting query still derives platform fees from the stored rate. Zeroing old
+  rows would erase money that genuinely left a creator's account.
+- `PLATFORM_FEE_PERCENT` remains as an explicit `0`, so leftover arithmetic reads
+  as "no commission" rather than a missing constant.
 
 ## Draft issue breakdown
 
@@ -557,7 +560,7 @@ Retire the old platform payout experience as part of this user journey.
       a local account row exists. Requirement changes are surfaced with a remedial
       action using supported hosted/embedded Stripe components.
 - [x] Full Dashboard access is available once applicable. Displayed responsibility
-      wording does not promise that Litesubs has no legal obligations.
+      wording does not promise that liteSubs has no legal obligations.
 - [x] Platform payout requests, payout preferences, earnings-wallet UI, and outbound
       payment handlers are removed with their dead models/services/tests/docs.
 - [x] No sales action falls back to platform charges when readiness is missing.
@@ -755,7 +758,7 @@ Stripe API calls must use the installed SDK's actual parameter shapes.
 Buy a sandbox pack, wait for fulfillment, and show the receipt and grant. Buy
 again without creating another Stripe Customer. Exercise async payment, invalid
 signatures, concurrent webhook deliveries, and a wrong-account event. Confirm
-the charge belongs to the creator and the application fee belongs to Litesubs.
+the charge belongs to the creator and the application fee belongs to liteSubs.
 
 **Implemented:** yes — see `lib/services/purchase.ts`,
 `lib/stripe-direct-charges.ts`, `drizzle/0005_s05_purchase.sql`, and
@@ -1005,13 +1008,13 @@ subscription adapter and lifecycle webhook handlers, and
 **Type:** AFK
 
 **User story:** As a customer, I can replace a card and view/pay invoices for the
-specific creator I subscribe to without Litesubs collecting payment details.
+specific creator I subscribe to without liteSubs collecting payment details.
 
 #### What to build
 
 Add Manage billing on each subscription, creating a Stripe-hosted billing portal
 session on the owning creator account for the matching mapped Customer. Keep
-Cancel / Resume in Litesubs and do not offer a platform-wide portal pretending
+Cancel / Resume in liteSubs and do not offer a platform-wide portal pretending
 all creator subscriptions belong to one Stripe Customer.
 
 Per Stripe's Connect guidance, portal **configuration** is created for the
@@ -1031,7 +1034,7 @@ on per-account portal settings.
       referenced explicitly by each session, because Stripe documents that portal
       configuration is not configured per connected account. Provisioning is
       idempotent and does not assume a Dashboard-created configuration applies.
-- [x] The return URL is trusted and points back to the appropriate Litesubs view.
+- [x] The return URL is trusted and points back to the appropriate liteSubs view.
       Missing mappings/unavailable accounts produce actionable errors.
 - [x] UI distinguishes the customer billing portal from the creator's full Dashboard;
       no card data or sensitive portal URLs are logged or stored unnecessarily.
@@ -1127,7 +1130,7 @@ superseded version. Migration: `drizzle/0010_s11_invites.sql`. Coverage lives in
 
 **Type:** AFK
 
-**User story:** As a creator, I refund through Stripe and Litesubs removes only the
+**User story:** As a creator, I refund through Stripe and liteSubs removes only the
 unspent units from the fully refunded purchase, preserving accurate history.
 
 #### What to build
@@ -1135,7 +1138,7 @@ unspent units from the fully refunded purchase, preserving accurate history.
 Reconcile successful connected-account refunds with the corresponding payment
 and source grants. Show partial/full refund status and resulting revocation in
 creator/customer history. Refund operations remain in the creator's Stripe
-Dashboard; Litesubs does not build a competing financial-refund UI in this slice.
+Dashboard; liteSubs does not build a competing financial-refund UI in this slice.
 
 #### Acceptance criteria
 
@@ -1196,7 +1199,7 @@ subscription state, and usable credits without conflating them.
 
 Finish the unified read experience across creator overview, plan/customer detail,
 customer dashboard, and enrollment history using the new payment and credit
-sources. Keep summaries in Litesubs and full financial operations in Stripe.
+sources. Keep summaries in liteSubs and full financial operations in Stripe.
 Include useful empty/setup states and preserve isolated sample/demo data.
 
 #### Acceptance criteria
@@ -1206,7 +1209,7 @@ Include useful empty/setup states and preserve isolated sample/demo data.
       and manual grants do not inflate sales.
 - [x] Mixed currencies are grouped or clearly separated; USD and EUR are never added
       into a single unlabeled monetary total. Fees and gross/net/refunded values
-      are labeled rather than presented as a fictional Litesubs payout balance.
+      are labeled rather than presented as a fictional liteSubs payout balance.
 - [x] Enrollment counts, active Stripe subscriptions, scheduled cancellations,
       payment failures, and usable credit totals remain separate concepts.
 - [x] History distinguishes payment receipts from credit grants, usage, expiry,
@@ -1256,12 +1259,12 @@ can no longer serve me, and I can see what happens to my remaining credits.
 #### What to build
 
 Make disconnection subscription-aware. Stripe does not cancel subscriptions when a
-platform disconnects, so Litesubs must decide and enforce what happens to live
+platform disconnects, so liteSubs must decide and enforce what happens to live
 subscriptions on that account instead of silently keeping them billing.
 
 #### Acceptance criteria
 
-- [x] Disconnect enumerates the creator's **live** subscriptions from Litesubs'
+- [x] Disconnect enumerates the creator's **live** subscriptions from liteSubs'
       own records (not by scanning Stripe) and refuses to complete silently while
       any remain unhandled.
 - [x] The creator is told exactly how many subscriptions are live and given a

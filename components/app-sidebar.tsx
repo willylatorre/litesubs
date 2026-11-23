@@ -2,13 +2,12 @@
 
 import {
 	IconBook,
-	IconCalendarEvent,
 	IconChecklist,
 	IconDashboard,
 	IconHelpCircle,
 	IconKey,
+	IconCreditCard,
 	IconPackage,
-	IconPlug,
 	IconUsers,
 	IconWallet,
 	IconWebhook,
@@ -72,19 +71,14 @@ const data = {
 			icon: IconUsers,
 		},
 		{
-			title: "Bookings",
-			url: "/dashboard/bookings",
-			icon: IconCalendarEvent,
-		},
-		{
 			title: "Payments",
 			url: "/dashboard/payments",
 			icon: IconWallet,
 		},
 		{
-			title: "Integrations",
-			url: "/dashboard/integrations",
-			icon: IconPlug,
+			title: "Billing",
+			url: "/dashboard/billing",
+			icon: IconCreditCard,
 		},
 	],
 	navDeveloper: [
@@ -135,6 +129,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 						>
 							<Link href="/" className="flex items-center gap-0">
 								<AnimatedLogo
+									subtitle
 									iconClassName="size-6 md:size-6"
 									textClassName="text-base font-semibold md:text-base tracking-normal"
 								/>

@@ -3,9 +3,9 @@ import type { LegalSection } from "@/components/legal/legal-document";
 import { LegalDocument } from "@/components/legal/legal-document";
 
 export const metadata: Metadata = {
-	title: "Privacy policy | Litesubs",
+	title: "Privacy policy | liteSubs",
 	description:
-		"What data Litesubs collects, why, who it is shared with, and how creators and customers can exercise their privacy rights.",
+		"What data liteSubs collects, why, who it is shared with, and how creators and customers can exercise their privacy rights.",
 	alternates: {
 		canonical: "/privacy",
 	},
@@ -18,11 +18,11 @@ const sections: LegalSection[] = [
 		blocks: [
 			{
 				type: "paragraph",
-				text: "This Privacy Policy explains how Litesubs collects, uses, and shares personal data when you visit our website, use the dashboard, buy or sell credits, call our API, or connect an AI assistant through our MCP server.",
+				text: "This Privacy Policy explains how liteSubs collects, uses, and shares personal data when you visit our website, use the dashboard, buy or sell credits, call our API, or connect an AI assistant through our MCP server.",
 			},
 			{
 				type: "paragraph",
-				text: "Two relationships exist on the platform, and they matter for your rights. Litesubs is the controller of account and platform data. For the customer lists, credit ledgers, and booking details that a creator manages, the creator is the controller and Litesubs acts as a processor on the creator\u2019s instructions. Requests about data a creator holds about you should normally go to that creator.",
+				text: "Two relationships exist on the platform, and they matter for your rights. liteSubs is the controller of account and platform data. For the customer lists, credit ledgers, and booking details that a creator manages, the creator is the controller and liteSubs acts as a processor on the creator\u2019s instructions. Requests about data a creator holds about you should normally go to that creator.",
 			},
 		],
 	},
@@ -46,7 +46,7 @@ const sections: LegalSection[] = [
 					"Plans, plan versions, and published commercial terms you create.",
 					"Enrollments, credit balances, credit grants, consumption receipts, and their idempotency keys.",
 					"Transaction and receipt records, including amounts, currency, refunds, and the Stripe identifiers needed to reconcile them.",
-					"Stripe connected account identifiers and onboarding status. Litesubs never receives or stores full payment card numbers.",
+					"Stripe connected account identifiers and onboarding status. liteSubs never receives or stores full payment card numbers.",
 				],
 			},
 			{ type: "subheading", text: "Developer and integration data" },
@@ -87,8 +87,8 @@ const sections: LegalSection[] = [
 				items: [
 					"To create and authenticate accounts, and to enforce permissions and scopes on dashboard, API, and MCP actions.",
 					"To record credit grants and consumption accurately, including idempotent retries and receipts.",
-					"To publish offers on a creator\u2019s Stripe account, calculate our 1% application fee, and reconcile refunds.",
-					"To operate bookings and calendar synchronization when a creator enables them.",
+					"To publish offers on a creator\u2019s Stripe account and reconcile refunds.",
+					"To bill a creator\u2019s optional Premium subscription and determine which features their tier includes.",
 					"To detect abuse, fraud, and security incidents, and to rate-limit automated traffic.",
 					"To send transactional email, security alerts, and product notices about material changes.",
 					"To comply with tax, accounting, and lawful requests from authorities.",
@@ -194,7 +194,7 @@ const sections: LegalSection[] = [
 		blocks: [
 			{
 				type: "paragraph",
-				text: "Litesubs and its providers may process data in countries other than yours, including the United States. Where data leaves the EEA or UK, we rely on appropriate safeguards such as standard contractual clauses or an adequacy decision for the receiving country.",
+				text: "liteSubs and its providers may process data in countries other than yours, including the United States. Where data leaves the EEA or UK, we rely on appropriate safeguards such as standard contractual clauses or an adequacy decision for the receiving country.",
 			},
 		],
 	},
@@ -235,7 +235,7 @@ export default function PrivacyPage() {
 		<LegalDocument
 			eyebrow="Legal"
 			title="Privacy policy"
-			summary="The data Litesubs collects to run credit plans, why we need it, and the choices you have over it."
+			summary="The data liteSubs collects to run credit plans, why we need it, and the choices you have over it."
 			lastUpdated="November 16, 2026"
 			sections={sections}
 		/>

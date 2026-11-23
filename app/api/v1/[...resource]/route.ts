@@ -2,6 +2,11 @@ import { errorResponse } from "@/lib/api-response";
 import { withPrincipal } from "@/lib/principal";
 import { changeCredits } from "@/lib/services/credits";
 import {
+	listIntegrationKeys,
+	mintIntegrationKey,
+	revokeIntegrationKey,
+} from "@/lib/services/integration";
+import {
 	getCustomer,
 	listCustomers,
 	listTransactions,
@@ -11,6 +16,11 @@ import {
 	enrollCustomer,
 	listInvites,
 } from "@/lib/services/enroll";
+import { assertHasCreator, getIdentity } from "@/lib/services/identity";
+import {
+	getProvisionedCustomer,
+	provisionCustomer,
+} from "@/lib/services/provisioning";
 import {
 	createPlan,
 	getPlan,
@@ -96,6 +106,13 @@ async function handle(
 					if (!id) break;
 					result = await updatePlan(principal, id, await req.json());
 					break;
+				case "POST customers":
+					if (id) break;
+					// Teacher-initiated provisioning: unlike `enrollments`, this
+					// creates an unclaimed account rather than only an invite.
+					result = await provisionCustomer(principal, await req.json());
+					status = 201;
+					break;
 				case "GET customers":
 					result = id
 						? await getCustomer(principal, id)
@@ -116,6 +133,28 @@ async function handle(
 				case "POST invites":
 					if (id) break;
 					result = await createInvite(principal, await req.json());
+					break;
+				case "GET me":
+					// Who is this credential acting as? Needed by any integration
+					// that must label a connection with its own tenant.
+					assertHasCreator(principal);
+					result = await getIdentity(principal);
+					break;
+				case "GET integrationkeys":
+					// The consume credentials this connection minted (metadata only).
+					result = await listIntegrationKeys(principal);
+					break;
+				case "POST integrationkeys":
+					if (id) break;
+					result = await mintIntegrationKey(
+						principal,
+						await req.json().catch(() => ({})),
+					);
+					status = 201;
+					break;
+				case "DELETE integrationkeys":
+					if (!id) break;
+					result = await revokeIntegrationKey(principal, id);
 					break;
 				case "POST credits":
 					if (id !== "consume" && id !== "grant") break;

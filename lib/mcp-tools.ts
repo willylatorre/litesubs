@@ -45,7 +45,7 @@ import { WEBHOOK_EVENT_TYPES } from "@/lib/webhook-events";
  * description cannot: the order of operations and the units trap.
  * Keep the first paragraph self-contained; some clients truncate.
  */
-const instructions = `Litesubs manages credit plans. A plan is a service with commercial terms: credits at a price, either one-time or monthly. An enrollment ties one customer to one plan and holds that customer's balance for it. Typical order: create_plan, enroll_customer, then grant_credits if needed.
+const instructions = `liteSubs manages credit plans. A plan is a service with commercial terms: credits at a price, either one-time or monthly. An enrollment ties one customer to one plan and holds that customer's balance for it. Typical order: create_plan, enroll_customer, then grant_credits if needed.
 
 Rules worth repeating: a new plan starts as a draft with no published terms, and a draft cannot be enrolled or purchased. Publishing requires a payment-ready connected Stripe account; use publish_plan (or the dashboard) and it provisions the Product/Price on the creator's account. Publishing new terms supersedes the previous version while existing customers keep theirs; unpublish_plan stops new sales and needs confirm: true. Plan prices in create_plan/update_plan are major units (10 means $10), while responses return minor units (cents). Published terms are immutable: editing terms replaces the draft only, and already-sold credits do not change. Monthly plans are subscriptions, not top-ups: the customer authorizes the monthly price and each confirmed paid invoice grants a non-rolling allowance. consume_credits requires an idempotency_key built from the business event, not a timestamp, and is unavailable to OAuth connections (it needs an API key). enroll_customer defaults to invoice mode and returns a payment link; credits arrive only after payment, and no email is sent, so forward the link yourself. Comp enrollment requires a reason and cannot be repeated for an existing enrollment. Complimentary or manually added credits on a monthly plan inherit the current paid period and need expires_at when no period is paid; one-time credits do not expire. create_invite produces a claimable link for someone without an account; its email is optional and only makes the invite appear in that person's dashboard, so it does not restrict who may accept. Outgoing webhooks (create_webhook and friends) need an https receiver and return their signing secret once; use send_test_webhook before relying on them. No payout, refund, or billing-charge tools exist.`;
 
@@ -104,7 +104,11 @@ export function createServer(principal: Principal) {
 			},
 		);
 	}
-	if (principal.kind === "apiKey") {
+	// `consume_credits` is offered to any credential that holds the scope, not
+	// only to machine keys. OAuth is still refused it at the service layer,
+	// because the credential that spends money should be one a teacher can name
+	// and revoke on its own.
+	if (principal.scopes.includes("credits:consume")) {
 		register(
 			"consume_credits",
 			"Deduct credits for a service. Requires a stable idempotency_key unique per logical event; reuse it on retries. A different payload with the same key is rejected. reason appears in the customer ledger. dry_run previews without writing. No refunds through this API.",
@@ -112,8 +116,14 @@ export function createServer(principal: Principal) {
 			false,
 			(input) => changeCredits(principal, input, "usage"),
 		);
-		return server;
 	}
+
+	// Without a creator scope there is nothing else to expose; the service layer
+	// would refuse every remaining tool anyway.
+	const creatorScopes = principal.scopes.filter(
+		(scope) => scope !== "credits:consume",
+	);
+	if (creatorScopes.length === 0) return server;
 	register(
 		"list_plans",
 		"List your plans with their draft or published terms. Prices are in minor units (cents). Drafts cannot be purchased. Paginate with limit/offset.",

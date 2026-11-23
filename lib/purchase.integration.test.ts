@@ -23,6 +23,7 @@ import {
 } from "@/app/db/schema";
 import { connectedAccounts } from "@/app/db/stripe-connect-schema";
 import { createPlan, updatePlan } from "@/lib/services/plans";
+import { grantTestPremium } from "@/lib/test-premium";
 import { sessionPrincipal } from "@/lib/services/principal";
 import { publishPlan } from "@/lib/services/publish";
 import {
@@ -87,6 +88,10 @@ test("purchase charges the creator's account once and grants only after payment"
 		{ id: otherId, name: "Other", email: `${otherId}@example.test` },
 		{ id: buyerId, name: "Buyer", email: `${buyerId}@example.test` },
 	]);
+	// Recurring plans are Premium-only; this fixture says so explicitly.
+	await grantTestPremium(creatorId);
+	await grantTestPremium(otherId);
+
 	await db.insert(connectedAccounts).values({
 		userId: creatorId,
 		stripeAccountId: "acct_seller",
@@ -149,8 +154,8 @@ test("purchase charges the creator's account once and grants only after payment"
 			assert.ok(payment);
 			assert.equal(payment.status, "pending");
 			assert.equal(payment.amountTotal, 1000);
-			// 1% of $10, from PLATFORM_FEE_PERCENT rather than a literal.
-			assert.equal(payment.applicationFee, 10);
+			// No commission: a $10 sale records no platform fee at all.
+			assert.equal(payment.applicationFee, 0);
 			assert.equal(payment.stripeAccountId, "acct_seller");
 			// The receipt is bound to the immutable version that was sold.
 			const version = await db.query.planVersions.findFirst({

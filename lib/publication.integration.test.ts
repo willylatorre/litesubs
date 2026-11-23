@@ -18,6 +18,7 @@ import {
 	resolvePublishedPlan,
 	updatePlan,
 } from "@/lib/services/plans";
+import { grantTestPremium } from "@/lib/test-premium";
 import { sessionPrincipal } from "@/lib/services/principal";
 import { publishPlan, unpublishPlan } from "@/lib/services/publish";
 import type { PlanOfferAdapter } from "@/lib/stripe-offers";
@@ -70,6 +71,10 @@ test("publication provisions once, freezes terms, and stops sales safely", {
 		{ id: otherId, name: "Other", email: `${otherId}@example.test` },
 		{ id: studentId, name: "Student", email: `${studentId}@example.test` },
 	]);
+	// Recurring plans are Premium-only; this fixture says so explicitly.
+	await grantTestPremium(creatorId);
+	await grantTestPremium(otherId);
+
 	// A payment-ready connected account is a precondition, not something
 	// publishing may assume.
 	await db.insert(connectedAccounts).values({

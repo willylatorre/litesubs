@@ -10,9 +10,9 @@ import { mcpResource } from "@/lib/mcp-config";
 export function buildLlmsTxt(): string {
 	const base = getAppUrl();
 
-	return `# Litesubs
+	return `# liteSubs
 
-> Litesubs is a platform for selling credit plans instead of recurring
+> liteSubs is a platform for selling credit plans instead of recurring
 > subscriptions. Creators define plans (a number of credits at a price), enroll
 > customers, and consume credits from their own apps through a remote MCP server
 > or a REST API. Credits belong to one customer and one plan; their balance cannot
@@ -53,7 +53,7 @@ export function buildLlmsTxt(): string {
   secret is returned once at creation. Webhook tools need webhooks:manage and a
   machine key can never hold it.
 - No payout or refund tools are exposed. Refunds are issued in the creator's
-  Stripe Dashboard; Litesubs then revokes only the refunded purchase's unspent
+  Stripe Dashboard; liteSubs then revokes only the refunded purchase's unspent
   credits.
 - Mutation tools request client confirmation, but that is not a security
   boundary; every operation is re-checked server-side.
@@ -76,15 +76,17 @@ Full per-client instructions: ${base}/docs#mcp
 - Codex CLI: codex mcp add litesubs --url ${mcpResource} then codex mcp login.
 - Cursor: OAuth is not possible yet (it does not support CIMD and this server
   does not run open dynamic client registration). Configure the URL with an
-  x-api-key header instead; that connection can only consume credits.
+  x-api-key header instead. A key may carry management scopes as well as
+  consumption, but Cursor will not see the OAuth-only tools.
 - Other clients: remote streamable HTTP over HTTPS plus CIMD support for OAuth,
-  or an API key for consumption only.
+  or an API key, whose reach is whatever scopes it was created with.
 
 ## REST API
 
 Machine keys and OAuth tokens both work. Send JSON with
 Content-Type: application/json. Lists accept limit (1-100, default 50) and offset.
 
+- GET /api/v1/me - the credential's creator, tier and own scopes
 - GET, POST /api/v1/plans - list or create plans
 - GET, PATCH /api/v1/plans/:id - read or update a plan
 - POST /api/v1/plans/:id/publish - publish the draft offer
@@ -123,7 +125,7 @@ Errors return code, error, and optional details or fieldErrors. Status codes:
   USD and EUR are never added together. Pending Checkouts, manual grants, and
   complimentary credits are not sales.
 - consume_credits requires an idempotency_key derived from the business event
-  (booking ID, message ID), not a timestamp. Retrying with the same key returns
+  (order ID, message ID), not a timestamp. Retrying with the same key returns
   the original receipt; a different payload under the same key is rejected.
   Consumption spends expiring credits first (soonest expiry), then older
   non-expiring ones; a debit is all-or-nothing and never partially applies.
@@ -149,7 +151,7 @@ Errors return code, error, and optional details or fieldErrors. Status codes:
 - [Landing page](${base}): product overview and demo.
 - [API tokens](${base}/dashboard/developers/api-keys): generate or revoke machine
   keys (requires sign-in).
-- [Terms](${base}/terms): the agreement between users and Litesubs.
-- [Privacy](${base}/privacy): what data Litesubs collects and why.
+- [Terms](${base}/terms): the agreement between users and liteSubs.
+- [Privacy](${base}/privacy): what data liteSubs collects and why.
 `;
 }
