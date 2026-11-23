@@ -1,6 +1,8 @@
 # Refocus: subscriptions and credits only
 
-Status: agreed direction, being implemented.
+Status: **R1–R3 implemented; R4 implemented as `@better-auth/stripe`.** The
+remaining work is operator configuration in Stripe, plus I3 in Plannerie
+(`docs/INTEGRATION.md`). Nothing in this document is unbuilt.
 
 Two changes, decided together because they both remove surface area:
 
@@ -78,18 +80,20 @@ Constraints that keep this honest:
 
 ## Slices
 
-- **R1 — Remove bookings and calendar.** Delete the scheduler, the Google
-  integration, the notifications that existed only for bookings, and the
-  tables. Redirect `/book/*`.
-- **R2 — Remove the commission.** Stop sending `application_fee_amount` /
-  `application_fee_percent`; relax the stored fee constraint; rewrite the
-  pricing, terms, privacy, and FAQ copy.
-- **R3 — Entitlements.** Add the creator tier, the free pack cap, and premium
-  gates on recurring plans and developer features.
-- **R4 — Premium billing.** Platform-account checkout, portal, webhook
-  handling, and a billing screen. *Revised:* this is now built on
-  `@better-auth/stripe` rather than a hand-rolled service. See
-  `docs/PLATFORM-BILLING.md`, which replaces the `premium.ts` approach.
+- **R1 — Remove bookings and calendar.** **Done** (`0018`). Scheduler, Google
+  integration, booking-only notifications and their tables deleted; `/book/*`
+  redirects to PLANNERIE_URL.
+- **R2 — Remove the commission.** **Done** (`0019`). No fee is attached to
+  either checkout path; the `> 0` constraint is relaxed; pricing, terms,
+  privacy, FAQ and the landing diagram rewritten.
+- **R3 — Entitlements.** **Done** (`0020`, `0021`). Tier derived from the
+  platform subscription; free cap of two plans; Premium gates on recurring
+  plans and developer features, enforced in services *and* in front of
+  `/api-key/create` and `integrationkeys`.
+- **R4 — Premium billing.** **Done on `@better-auth/stripe`** instead of a
+  hand-rolled service; `creator_entitlements` was dropped so entitlement has one
+  source. See `docs/PLATFORM-BILLING.md`. Remaining: operator configuration in
+  Stripe (endpoint, secret, price) — listed there as a checklist.
 
 ## Related
 

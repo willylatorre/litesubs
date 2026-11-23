@@ -134,9 +134,13 @@ who it is only for. The product still has to work for any platform.
   per `(creator, email)`, creates an unclaimed account, links a
   `creator_customers` row, and emails nothing. Proven: the customer is granted
   and debited while `emailVerified` is still false.
-- **I3 — the enable flow in Plannerie.** Two buttons, one connection per teacher,
-  Stripe onboarding surfaced only when it blocks selling.
-- **I4 — brand subtitle.** Chrome + landing + consent + org metadata.
+- **I3 — the enable flow in Plannerie.** Not started (Plannerie side). Two
+  buttons, one connection per teacher, Stripe onboarding surfaced only when it
+  blocks selling. Depends on I1 and I2, both done.
+- **I4 — brand subtitle.** **Done.** `AnimatedLogo subtitle`, metadata title
+  template + OpenGraph siteName, and Organization JSON-LD with
+  `parentOrganization`. Prose casing normalised in 59 files; wire headers and
+  URLs deliberately untouched.
 
 ## STOP conditions
 
