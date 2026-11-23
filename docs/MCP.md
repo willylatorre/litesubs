@@ -4,8 +4,8 @@
 
 Implemented: tenant-scoped services, REST v1, remote MCP, Better Auth OAuth and
 API keys, consent page, public discovery routing, complimentary enrollment and
-invite claims, atomic credit adjustments, invite and outgoing-webhook tools,
-native booking schedules, and a clean migration baseline.
+invite claims, atomic credit adjustments, invite and outgoing-webhook tools, and
+a clean migration baseline.
 
 The remote endpoint is **`https://litesubs.com/api/mcp`**, once this code is
 deployed. It is not a local stdio server. No deployment or production database
@@ -19,12 +19,13 @@ renames `products`/`lite_subscriptions` to `plans`/`enrollments`, moves
 commercial terms into `plan_versions`, and removes the platform
 `user.stripe_customer_id`. `drizzle/0002_connected_accounts.sql` replaces the
 Express/account-type model with `connected_accounts` and drops the platform
-payout tables. `0003`–`0017` then add, in order: Connect OAuth for existing
+payout tables. `0003`–`0020` then add, in order: Connect OAuth for existing
 accounts, immutable published plan versions, creator-owned direct-charge
 purchases, credit grants, subscriptions and renewals, period-end cancellation,
 expiring invites, refunds, subscription-aware disconnection, native bookings,
 outgoing webhooks, split Google calendar roles, removal of the Cal.com tables,
-and Better Auth usernames.
+Better Auth usernames, removal of the booking tables (scheduling moved to
+Plannerie), removal of the commission, and creator tiers.
 
 **An existing database upgrades in place.** `npm run db:migrate` applies every
 unrecorded migration and preserves accounts, enrollments, and ledger rows. Every
@@ -79,17 +80,11 @@ STRIPE_CONNECT_CLIENT_ID=<Connect client id, not a secret>
 GOOGLE_CLIENT_ID=<oauth client id>
 GOOGLE_CLIENT_SECRET=<oauth client secret>
 
-# Google Calendar sync. The four calendar values are required together, and the
-# encryption key must be 32 bytes (64 hex characters or base64) or the flow
-# refuses to store tokens rather than writing them in plaintext.
-GOOGLE_CALENDAR_CLIENT_ID=<oauth client id>
-GOOGLE_CALENDAR_CLIENT_SECRET=<oauth client secret>
-GOOGLE_CALENDAR_REDIRECT_URI=<https://litesubs.com/api/integrations/google/callback>
-GOOGLE_TOKEN_ENCRYPTION_KEY=<32-byte key>
-
-# Set to "false" to turn the in-app notification bell off. Bookings and debits
-# are unaffected; this is a kill switch, not a requirement.
-NOTIFICATIONS_ENABLED=true
+# Platform billing (creator -> Litesubs, $5/mo). Created on the platform's own
+# account. Without BOTH values the @better-auth/stripe plugin is not registered,
+# so checkout is simply not offered and the rest of the app runs on the free tier.
+STRIPE_PREMIUM_PRICE_ID=<price id for $5/month>
+STRIPE_WEBHOOK_BILLING=<signing secret for the platform endpoint>
 ```
 
 **The Stripe webhook endpoint must be a Connect endpoint** (`connect: true`).
@@ -100,7 +95,13 @@ because that field decides whose credits to grant. Credits are granted **only**
 by the webhook — the success page never grants and there is no cron — so a
 missing subscription means a paid customer receives nothing.
 
-Subscribe it to all eleven handled events: `checkout.session.completed`,
+> **There are two endpoints, one per billing domain.** The table
+> `litesub_subscription` is Litesubs being paid; `subscriptions` is a creator's
+> customer paying the creator. They use different Stripe accounts, so they need
+> different endpoints and **different signing secrets**. See
+> `docs/PLATFORM-BILLING.md`.
+
+Subscribe the **Connect** endpoint to all eleven handled events: `checkout.session.completed`,
 `checkout.session.async_payment_succeeded`, `checkout.session.expired`,
 `invoice.paid`, `invoice.payment_failed`, `invoice.payment_action_required`,
 `customer.subscription.updated`, `customer.subscription.deleted`,
@@ -109,6 +110,25 @@ Subscribe it to all eleven handled events: `checkout.session.completed`,
 not merely redundant: it delivers its own subset to the same handler, so keep
 exactly one Connect endpoint per host. The old `STRIPE_WEBHOOK_PURCHASES`
 variable is unused.
+
+Subscribe the **platform** endpoint — `/api/auth/stripe/webhook`, owned by
+`@better-auth/stripe`, verified with `STRIPE_WEBHOOK_BILLING` — to
+`checkout.session.completed`, `customer.subscription.created`,
+`customer.subscription.updated`, `customer.subscription.deleted`, and
+`invoice.paid` / `invoice.payment_failed`. Do **not** add these to the Connect
+endpoint: platform events carry no `event.account`, and the Connect handler
+correctly refuses them.
+
+**Observed on the live test endpoint (2026-11-22):** the Connect endpoint was
+subscribed to only five events (`account.updated`, `charge.refunded`,
+`checkout.session.completed`, `checkout.session.expired`,
+`radar.early_fraud_warning.created`). It was missing `invoice.paid`,
+`invoice.payment_failed`, `invoice.payment_action_required`,
+`customer.subscription.updated`, `customer.subscription.deleted`, and
+`checkout.session.async_payment_succeeded` — which means **subscription renewals
+would never have granted credits**, and a delayed payment method would have been
+paid for and never fulfilled. Fixing the dashboard is an operator step; the code
+is ready for all eleven.
 
 Monthly Checkout is no longer gated to test mode. One-time and monthly Checkout
 both work in either Stripe mode; what is still enforced is that an event's mode
@@ -120,9 +140,11 @@ Keep the MCP resource URL stable: it is the token audience. Development may use
 `http://localhost:3000/api/mcp`; non-loopback resources require HTTPS. Never derive
 the audience from an untrusted Host header.
 
-Payments use direct charges on each creator's connected account, so the platform
-key only signs API calls; no platform Customer is created. The Stripe webhook
-endpoint is `/api/webhooks/stripe`, verified with `STRIPE_WEBHOOK_SECRET`.
+Creator sales use direct charges on each creator's connected account. The
+**only** platform Customer is the creator's own, created lazily at Premium
+checkout for platform billing — never at signup. The Connect endpoint is
+`/api/webhooks/stripe`, verified with `STRIPE_WEBHOOK_SECRET`; the platform
+endpoint is `/api/auth/stripe/webhook`, verified with `STRIPE_WEBHOOK_BILLING`.
 Credits arrive from confirmed payment, not the return page. Email delivery is not
 implemented: creators must forward returned links.
 
@@ -267,8 +289,7 @@ credits they bought. An **enrollment** is the unique customer/plan row in
 `enrollments` holding the credit balance projection. A monthly plan also has a
 separate Stripe subscription record; the enrollment is still the customer's
 credit balance, not the billing identity. Booking is the reverse of that
-reference: a `booking_schedules` row points at a plan, so a plan does not carry a
-booking URL of its own.
+
 Customer read APIs return usable grant balances alongside subscription status
 and paid-through dates; an overdue status never extends the last paid period.
 
@@ -314,32 +335,19 @@ and debit once. Reusing a key with a different customer/plan/amount/type/reason
 returns `IDEMPOTENCY_CONFLICT`. Dry runs do not reserve keys or write data.
 
 Purchases are direct charges on the creator's own connected Stripe account with
-a 1% application fee. There is no platform-charge fallback: a creator without a
-payment-ready account cannot sell.
+**no application fee**: the creator keeps the whole sale. There is no
+platform-charge fallback: a creator without a payment-ready account cannot sell.
+The only subscription Litesubs bills itself is the optional Premium tier, which
+is collected on the platform account and therefore carries no `event.account`.
 
 System paths (Stripe fulfillment and comp enrollment/claim) retain their own
 transactional ledger writes.
 
-**Native bookings** are a third system path, and they go through the same credit
-service. A creator owns a `booking_schedules` row (slug, duration, buffers,
-horizon, IANA timezone, optional `plan_id`, `credits_per_booking`), weekly
-`booking_availability` windows, and one-off `booking_exceptions`. The public page
-lives at `/book/<username>/<slug>`; slugs are unique per creator, so the username
-segment is required. Booking a slot inserts the `bookings` row and debits
-`credits_per_booking` in one transaction, and cancellation restores exactly the
-units that booking took, to the same grants — expired or re-spent units are never
-resurrected, so a book/cancel loop cannot mint a balance.
-
-Double-booking is prevented in the database by a `btree_gist` exclusion
-constraint on `(creator_id, tstzrange(starts_at, ends_at))` for confirmed rows,
-not by a read-then-write check, so a lost race returns a clear "slot taken"
-result instead of a partial debit. A booking requires sign-in and an enrollment
-in the linked plan, and rejects a monthly plan: a booking is a single session,
-not a billing period. Availability, expiry, and "starting soon" are computed on
-read — there is no cron. See `docs/BOOKINGS.md`. Google Calendar sync is optional
-and best-effort: busy time subtracts slots and a booked slot is mirrored to a
-chosen calendar, but a Google failure never blocks a booking or rolls back a
-debit.
+**Scheduling is not a Litesubs feature.** Litesubs exposes the credit-consuming
+API; an external scheduler (Plannerie) calls `POST /api/v1/credits/consume` with
+a stable `idempotency_key` derived from its own booking id and stores the
+returned transaction id as its reference. It never keeps a local balance. See
+`docs/REFOCUS.md`.
 
 ## Connected accounts and readiness
 
@@ -400,7 +408,7 @@ Example machine request (substitute your IDs and keep the event key stable):
 ```sh
 curl https://litesubs.com/api/v1/credits/consume \
   -H 'x-api-key: <key>' -H 'Content-Type: application/json' \
-  -d '{"customer":"student@example.com","plan":"Algebra","amount":1,"reason":"Lesson completed","idempotency_key":"booking_8812"}'
+  -d '{"customer":"student@example.com","plan":"Algebra","amount":1,"reason":"Lesson completed","idempotency_key":"delivery_8812"}'
 ```
 
 ## Validation
@@ -440,7 +448,7 @@ restricted MCP discovery, REST scope denial, public OAuth metadata, and that the
 0001 migration preserves rows and backfills picked terms. Further integration
 suites cover direct-charge purchases and application fees, subscription
 renewal/cancellation/disconnection, refunds revoking only the refunded units,
-signed outgoing webhooks and their retry/idempotency rules, native bookings
+signed outgoing webhooks and their retry/idempotency rules, creator tiers
 (including the exclusion constraint under concurrency), Google token encryption,
 and Better Auth usernames. An HTTP integration test also covers signed consent
 (including tampering rejection), PKCE code exchange, rotating refresh tokens, and

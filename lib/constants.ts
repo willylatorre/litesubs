@@ -30,5 +30,12 @@ export const TRANSACTION_STATUSES = [
 	"declined",
 ] as const;
 
-/** Litesubs' share of each direct charge, charged via Stripe application fee. */
-export const PLATFORM_FEE_PERCENT = 0.01; // 1%
+/**
+ * Litesubs takes no share of a sale.
+ *
+ * The old 1% application fee was replaced by a flat creator subscription
+ * (`docs/REFOCUS.md`), so nothing in the charge path attaches a fee. This is
+ * kept as an explicit zero rather than deleted so any leftover arithmetic reads
+ * as "no commission" instead of a missing constant.
+ */
+export const PLATFORM_FEE_PERCENT = 0;

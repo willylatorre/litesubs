@@ -27,6 +27,7 @@ import {
 import { connectedAccounts } from "@/app/db/stripe-connect-schema";
 import { changeCredits, usableBalance } from "@/lib/services/credits";
 import { createPlan } from "@/lib/services/plans";
+import { grantTestPremium } from "@/lib/test-premium";
 import { sessionPrincipal } from "@/lib/services/principal";
 import { publishPlan } from "@/lib/services/publish";
 import {
@@ -70,6 +71,9 @@ test("refunds revoke only the refunded purchase's unspent units", {
 		{ id: creatorId, name: "Creator", email: `${creatorId}@example.test` },
 		{ id: buyerId, name: "Buyer", email: `${buyerId}@example.test` },
 	]);
+	// Recurring plans are Premium-only; this fixture says so explicitly.
+	await grantTestPremium(creatorId);
+
 	await db.insert(connectedAccounts).values({
 		userId: creatorId,
 		stripeAccountId: accountId,

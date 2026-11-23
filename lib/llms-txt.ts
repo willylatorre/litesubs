@@ -123,7 +123,7 @@ Errors return code, error, and optional details or fieldErrors. Status codes:
   USD and EUR are never added together. Pending Checkouts, manual grants, and
   complimentary credits are not sales.
 - consume_credits requires an idempotency_key derived from the business event
-  (booking ID, message ID), not a timestamp. Retrying with the same key returns
+  (order ID, message ID), not a timestamp. Retrying with the same key returns
   the original receipt; a different payload under the same key is rejected.
   Consumption spends expiring credits first (soonest expiry), then older
   non-expiring ones; a debit is all-or-nothing and never partially applies.

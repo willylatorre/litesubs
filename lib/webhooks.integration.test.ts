@@ -46,6 +46,7 @@ import {
 	updateEndpoint,
 	verifySignature,
 } from "@/lib/services/webhooks";
+import { grantTestPremium } from "@/lib/test-premium";
 
 type Received = {
 	body: string;
@@ -122,6 +123,9 @@ test("outgoing webhooks sign, deliver, and stay tenant-scoped", {
 		},
 		{ id: buyerId, name: "Buyer", email: `${buyerId}@example.test` },
 	]);
+	// Outgoing webhooks are Premium-only; this fixture says so explicitly.
+	await grantTestPremium(creatorId);
+	await grantTestPremium(otherCreatorId);
 	const [plan] = await db
 		.insert(plans)
 		.values({ creatorId, name: "Lessons" })

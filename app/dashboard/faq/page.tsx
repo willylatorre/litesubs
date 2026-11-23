@@ -56,7 +56,7 @@ const generalFaqItems = [
 	{
 		id: "general-payments",
 		q: "How does payment work?",
-		a: "Each creator connects their own Stripe account, so customers pay the creator directly with a 1% Litesubs fee. Litesubs never stores credit card details.",
+		a: "Each creator connects their own Stripe account, so customers pay the creator directly and the creator keeps the whole sale. Litesubs takes no commission and never stores credit card details.",
 	},
 	{
 		id: "general-free",
@@ -84,7 +84,7 @@ const paymentFaqItems = [
 	{
 		id: "payments-fees",
 		q: "Who pays Stripe fees?",
-		a: "You do, on your own Stripe account. Litesubs charges a 1% application fee per sale, shown separately in your Stripe Dashboard.",
+		a: "You do, on your own Stripe account, at Stripe's standard rates. Litesubs takes no commission on your sales; it is paid for by an optional Premium subscription.",
 	},
 	{
 		id: "payments-dashboard",

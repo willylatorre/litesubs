@@ -49,7 +49,7 @@ const sections: LegalSection[] = [
 			},
 			{
 				type: "paragraph",
-				text: "Litesubs retains a 1% application fee on each sale made through the platform, charged through Stripe and shown separately in the creator\u2019s Stripe dashboard. Current pricing is described on the site and may change with notice under \u201cChanges to these Terms\u201d.",
+				text: "Litesubs takes no commission on sales made through the platform. A creator keeps the full amount paid by their customers on their own Stripe account, less Stripe\u2019s own processing fees, which Stripe charges to the creator directly. Litesubs charges a subscription for its own features: a free tier and a paid Premium tier, as described on the site and in the creator\u2019s Billing settings.",
 			},
 		],
 	},
@@ -159,7 +159,7 @@ const sections: LegalSection[] = [
 		blocks: [
 			{
 				type: "paragraph",
-				text: "Litesubs is free to use during early access in the sense described on the site: no subscription fee is charged to creators to access the dashboard. The 1% application fee on completed sales still applies. We may introduce or change fees with advance notice.",
+				text: "Litesubs offers a free tier that includes two plans and one-time packs, and a paid Premium tier that includes unlimited plans, monthly plans, and developer features. Prices are shown on the site and in the creator\u2019s Billing settings. Paid subscriptions renew monthly until canceled, and canceling stops future renewals while access continues to the end of the period already paid for. We may change prices with advance notice under \u201cChanges to these Terms\u201d.",
 			},
 			{
 				type: "paragraph",

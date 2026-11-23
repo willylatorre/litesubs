@@ -14,12 +14,10 @@ import {
 } from "@/app/db/schema";
 import { connectedAccounts } from "@/app/db/stripe-connect-schema";
 import { appUrl } from "@/lib/app-url";
-import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
 import {
 	createConnectedCustomer,
 	createDirectCheckoutSession,
 	createDirectSubscriptionCheckoutSession,
-	isValidApplicationFee,
 } from "@/lib/stripe-direct-charges";
 import { getPaymentReadiness } from "./connect";
 import { grantCredits, usableBalance } from "./credits";
@@ -72,17 +70,6 @@ export type PurchaseResult = {
 	paymentId?: string;
 	url?: string;
 };
-
-function applicationFeeFor(amount: number): number {
-	const fee = Math.round(amount * PLATFORM_FEE_PERCENT);
-	if (!isValidApplicationFee(fee, amount))
-		throw new ServiceError(
-			"CHECKOUT_UNAVAILABLE",
-			"This plan's fee cannot be collected on Stripe",
-			409,
-		);
-	return fee;
-}
 
 /**
  * Resolve (or claim) the buyer's Stripe Customer on this creator's account.
@@ -255,7 +242,6 @@ export async function startPurchase(
 	if (!user)
 		throw new ServiceError("NOT_FOUND", "Customer account not found", 404);
 
-	const fee = applicationFeeFor(terms.price);
 	const customer = await ensureCreatorCustomer(
 		{
 			creatorId: principal.creatorId,
@@ -280,7 +266,7 @@ export async function startPurchase(
 			credits: terms.credits,
 			amountTotal: terms.price,
 			currency: terms.currency,
-			applicationFee: fee,
+			applicationFee: 0,
 		})
 		.returning();
 
@@ -295,7 +281,6 @@ export async function startPurchase(
 				currency: terms.currency,
 				stripePriceId: terms.stripePriceId,
 			},
-			applicationFeeAmount: fee,
 			stripeCustomerId: customer?.stripeCustomerId ?? null,
 			customerEmail: user.email,
 			successUrl: appUrl(`/dashboard?success=true&planId=${plan.id}`),
@@ -309,7 +294,6 @@ export async function startPurchase(
 				credits: String(terms.credits),
 				type: "credit_purchase",
 				stripeConnectAccountId: terms.stripeAccountId,
-				applicationFeeAmount: String(fee),
 			},
 			// A retried request for the same receipt returns the original session.
 			idempotencyKey: `litesubs:checkout:${payment.id}`,
@@ -467,7 +451,6 @@ export async function startSubscription(
 			planVersionId: terms.id,
 			stripeAccountId,
 			stripeCustomerId: customer.stripeCustomerId as string,
-			applicationFeePercent: PLATFORM_FEE_PERCENT * 100,
 			status: "pending" as const,
 		} satisfies typeof subscriptions.$inferInsert;
 		const [created] = await tx
@@ -500,7 +483,6 @@ export async function startSubscription(
 				currency: terms.currency,
 				stripePriceId,
 			},
-			applicationFeePercent: PLATFORM_FEE_PERCENT * 100,
 			stripeCustomerId: customer.stripeCustomerId,
 			customerEmail: user.email,
 			successUrl: appUrl(
@@ -964,7 +946,6 @@ export async function fulfillPayment(input: {
 				stripeCheckoutId: input.checkoutSessionId,
 				status: "completed",
 				usesStripeConnect: true,
-				stripeApplicationFee: claimed.applicationFee,
 				stripeConnectAccountId: claimed.stripeAccountId,
 				balanceBefore: enrollment.credits,
 				balanceAfter: enrollment.credits + claimed.credits,

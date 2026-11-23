@@ -24,7 +24,7 @@ export function MoneySummary({
 	includesSample?: boolean;
 	/**
 	 * Customers owe the creator, not the platform, so a buyer's view never shows
-	 * the creator's application fee.
+	 * the creator's application fee (always zero now that there is no commission).
 	 */
 	showFees?: boolean;
 }) {

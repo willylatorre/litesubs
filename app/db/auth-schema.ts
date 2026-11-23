@@ -9,6 +9,13 @@ export const user = pgTable("user", {
 	email: text("email").notNull().unique(),
 	emailVerified: boolean("email_verified").default(false).notNull(),
 	image: text("image"),
+	/**
+	 * The creator's **platform** Stripe Customer, created lazily at Premium
+	 * checkout (never at signup). Distinct from `creator_customers.stripe_customer_id`,
+	 * which is a customer *on a creator's connected account* — two billing
+	 * domains, two ids, same column name.
+	 */
+	stripeCustomerId: text("stripe_customer_id"),
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()

@@ -330,7 +330,7 @@ curl -X POST '${base}/api/v1/plans/<plan id>/unpublish' \\
 						code={`curl -X POST '${base}/api/v1/credits/consume' \\
   -H 'x-api-key: <your token>' \\
   -H 'Content-Type: application/json' \\
-  -d '{"customer":"ana@example.com","plan":"Algebra","amount":1,"reason":"Lesson completed","idempotency_key":"booking_8812"}'`}
+  -d '{"customer":"ana@example.com","plan":"Algebra","amount":1,"reason":"Lesson completed","idempotency_key":"delivery_8812"}'`}
 					/>
 					<p>
 						A stable <code>idempotency_key</code> is required for consumption.
@@ -356,7 +356,7 @@ curl -X POST '${base}/api/v1/plans/<plan id>/unpublish' \\
 }`}
 					/>
 					<Callout type="warning" title="Retry safety">
-						Generate the key from the event that caused the debit (a booking ID,
+						Generate the key from the event that caused the debit (an order ID,
 						a message ID), not from a timestamp. A new key for the same event
 						charges the customer twice.
 					</Callout>

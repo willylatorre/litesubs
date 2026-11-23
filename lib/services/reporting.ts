@@ -27,7 +27,10 @@ export type MoneyByCurrency = {
 	refunded: number;
 	/** Gross minus refunded, in minor units. */
 	net: number;
-	/** Platform application fees actually attached to these receipts. */
+	/**
+	 * Platform fees attached to these receipts. Always zero since the commission
+	 * was removed; kept so a report shape does not change under consumers.
+	 */
 	platformFees: number;
 };
 
@@ -118,7 +121,8 @@ async function invoiceMoney(party: Party): Promise<MoneyByCurrency[]> {
 			currency: subscriptionInvoices.currency,
 			gross: sql<number>`coalesce(sum(${subscriptionInvoices.amountPaid}), 0)::int`,
 			refunded: sql<number>`coalesce(sum(${subscriptionInvoices.amountRefunded}), 0)::int`,
-			// The fee rate is stored as a percent of each invoice.
+			// No platform fee is taken from recurring invoices either; the column is
+			// retained for historical receipts that were charged under the old rate.
 			fees: sql<number>`coalesce(sum(round(${subscriptionInvoices.amountPaid} * ${subscriptions.applicationFeePercent} / 100.0)), 0)::int`,
 		})
 		.from(subscriptionInvoices)

@@ -3,6 +3,11 @@ import { z } from "zod";
 import { db } from "@/app/db";
 import { enrollments, plans, planVersions } from "@/app/db/schema";
 import { createPlanSchema, updatePlanSchema } from "@/lib/schemas";
+import {
+	assertCanCreatePlan,
+	assertCanUseRecurring,
+	getEntitlement,
+} from "./entitlements";
 import { type Principal, requireScope, ServiceError } from "./principal";
 
 export const pageInput = z.object({
@@ -187,6 +192,12 @@ export async function getPlan(principal: Principal, identifier: string) {
 export async function createPlan(principal: Principal, input: unknown) {
 	requireScope(principal, "plans:write");
 	const data = createPlanSchema.parse(input);
+	// The tier decides how many plans may exist and whether monthly billing is
+	// available. Checked before the insert, so a refusal writes nothing.
+	const entitlement = await getEntitlement(principal.creatorId);
+	assertCanCreatePlan(entitlement);
+	if (data.terms.billingMode === "recurring")
+		assertCanUseRecurring(entitlement);
 	// Draft creation is local-only: no Stripe call and no platform Customer.
 	return db.transaction(async (tx) => {
 		const [plan] = await tx
@@ -247,6 +258,10 @@ export async function updatePlan(
 					"INVALID_TERMS",
 					"Provide billing mode, currency, price, and credits together",
 				);
+			// Switching an existing plan to monthly is the same paid feature as
+			// creating one that way; otherwise the gate is a one-time formality.
+			if (data.terms.billingMode === "recurring")
+				assertCanUseRecurring(await getEntitlement(principal.creatorId));
 			await upsertDraftTerms(tx, principal, plan.id, data.terms);
 		}
 		const [updated] = await tx

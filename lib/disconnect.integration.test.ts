@@ -35,6 +35,7 @@ import {
 import { usableBalance } from "@/lib/services/credits";
 import { getCustomer } from "@/lib/services/customers";
 import { createPlan } from "@/lib/services/plans";
+import { grantTestPremium } from "@/lib/test-premium";
 import { sessionPrincipal } from "@/lib/services/principal";
 import { publishPlan } from "@/lib/services/publish";
 import {
@@ -86,6 +87,9 @@ test("disconnecting a creator with live subscriptions stops renewals without gra
 		{ id: creatorId, name: "Creator", email: `${creatorId}@example.test` },
 		{ id: buyerId, name: "Buyer", email: `${buyerId}@example.test` },
 	]);
+	// Recurring plans are Premium-only; this fixture says so explicitly.
+	await grantTestPremium(creatorId);
+
 	await db.insert(connectedAccounts).values({
 		userId: creatorId,
 		stripeAccountId: `acct_${creatorId}`,
@@ -128,7 +132,7 @@ test("disconnecting a creator with live subscriptions stops renewals without gra
 		createDirectSubscriptionCheckoutSession: async (input) =>
 			({
 				id: `cs_${creatorId}`,
-				url: `https://checkout.stripe.test/${input.applicationFeePercent}`,
+				url: `https://checkout.stripe.test/${input.lineItem.unitAmount}`,
 			}) as never,
 	};
 	const started = await startSubscription(

@@ -2,13 +2,12 @@
 
 import {
 	IconBook,
-	IconCalendarEvent,
 	IconChecklist,
 	IconDashboard,
 	IconHelpCircle,
 	IconKey,
+	IconCreditCard,
 	IconPackage,
-	IconPlug,
 	IconUsers,
 	IconWallet,
 	IconWebhook,
@@ -72,19 +71,14 @@ const data = {
 			icon: IconUsers,
 		},
 		{
-			title: "Bookings",
-			url: "/dashboard/bookings",
-			icon: IconCalendarEvent,
-		},
-		{
 			title: "Payments",
 			url: "/dashboard/payments",
 			icon: IconWallet,
 		},
 		{
-			title: "Integrations",
-			url: "/dashboard/integrations",
-			icon: IconPlug,
+			title: "Billing",
+			url: "/dashboard/billing",
+			icon: IconCreditCard,
 		},
 	],
 	navDeveloper: [

@@ -3,8 +3,8 @@
 A platform for creators to sell credit plans. A plan is either a one-time pack
 or a monthly allowance. Creators prepare a plan as a draft, publish immutable
 terms on their own Stripe account, and customers spend credits over time —
-through the API, through native booking schedules, or from an AI assistant over
-MCP.
+through the API, or from an AI assistant over MCP. Scheduling lives in Plannerie;
+Litesubs owns the price, the credit grant, and the ledger.
 
 # Getting Started
 
@@ -49,7 +49,7 @@ npm test
 ### Integration tests
 
 About half the suite (purchase, subscriptions, refunds, webhooks, OAuth,
-publication, credits, bookings, MCP) runs against a real PostgreSQL database and
+publication, credits, MCP) runs against a real PostgreSQL database and
 **silently skips** unless `MCP_TEST_DATABASE_URL` is set. Only the Stripe adapter
 is stubbed. The tests assert `DATABASE_URL === MCP_TEST_DATABASE_URL`, so a green
 run without it means those paths were never exercised.
@@ -108,7 +108,7 @@ with a `page.tsx` under `app/`.
 
 | Path | What lives there |
 | --- | --- |
-| `app/<route>/page.tsx` | A page. Public pages: `/book`, `/invite`, `/pay`, `/docs`. |
+| `app/<route>/page.tsx` | A page. Public pages: `/invite`, `/pay`, `/docs`. |
 | `app/dashboard/` | The authenticated creator and customer surfaces. |
 | `app/api/v1/[...resource]/route.ts` | The REST v1 router. One catch-all, one `switch` on method + group. |
 | `app/api/mcp/route.ts` | The remote MCP endpoint (stateless POST). |
@@ -117,7 +117,7 @@ with a `page.tsx` under `app/`.
 | `app/db/` | Drizzle schema and client. |
 | `lib/services/` | Business logic. Every transport (REST, MCP, Server Action, UI) calls these. |
 | `lib/*.test.ts` | Tests, including `*.integration.test.ts` against a real database. |
-| `docs/` | Deeper contracts: `MCP.md`, `SUBSCRIPTIONS.md`, `WEBHOOKS.md`, `BOOKINGS.md`. |
+| `docs/` | Deeper contracts: `MCP.md`, `SUBSCRIPTIONS.md`, `WEBHOOKS.md`, `REFOCUS.md`. |
 | `drizzle/` | Migrations. `0000` is the squashed baseline; later files are applied in order. |
 
 Adding a page means creating a directory with a `page.tsx`, not registering a
@@ -138,7 +138,8 @@ route in a config file. Use `next/link` for navigation.
 - **Money is integer minor units** with an explicit currency. Periods are UTC
   instants plus an explicit IANA timezone.
 - **Payments are direct charges** on each creator's own connected Stripe account
-  with a 1% application fee. There is no platform-charge fallback.
+  with no commission. There is no platform-charge fallback; Litesubs is paid for
+  by a free/ Premium tier split instead.
 
 Before changing a money path, read the matching document in `docs/`. Those files
 record the invariants and the reasoning, including what was deliberately not

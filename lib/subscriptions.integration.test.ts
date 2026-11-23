@@ -28,6 +28,7 @@ import {
 import { usableBalance } from "@/lib/services/credits";
 import { getCustomer, listCustomers } from "@/lib/services/customers";
 import { createPlan, updatePlan } from "@/lib/services/plans";
+import { grantTestPremium } from "@/lib/test-premium";
 import { sessionPrincipal } from "@/lib/services/principal";
 import { publishPlan } from "@/lib/services/publish";
 import {
@@ -64,6 +65,10 @@ test("monthly renewals grant paid periods once and failed/late invoices do not e
 		{ id: buyerId, name: "Buyer", email: `${buyerId}@example.test` },
 		{ id: strangerId, name: "Stranger", email: `${strangerId}@example.test` },
 	]);
+	// Recurring plans are Premium-only; this fixture says so explicitly.
+	await grantTestPremium(creatorId);
+	await grantTestPremium(secondCreatorId);
+
 	await db.insert(connectedAccounts).values({
 		userId: creatorId,
 		stripeAccountId: `acct_${creatorId}`,
@@ -183,7 +188,8 @@ test("monthly renewals grant paid periods once and failed/late invoices do not e
 		1,
 		"Stripe idempotency reuses one Checkout",
 	);
-	assert.equal(checkoutInputs[0].applicationFeePercent, 1);
+	// No fee is attached to a creator's own subscription checkout any more.
+	assert.equal("applicationFeePercent" in checkoutInputs[0], false);
 	assert.equal(
 		checkoutInputs[0].lineItem.stripePriceId,
 		`price_${firstVersionId}`,
@@ -193,7 +199,7 @@ test("monthly renewals grant paid periods once and failed/late invoices do not e
 		where: eq(subscriptions.id, subscriptionId),
 	});
 	assert.equal(localSubscription?.status, "pending");
-	assert.equal(localSubscription?.applicationFeePercent, 1);
+	assert.equal(localSubscription?.applicationFeePercent, 0);
 	assert.ok(localSubscription?.stripeCheckoutId);
 	const enrollmentBeforePayment = await db.query.enrollments.findFirst({
 		where: and(

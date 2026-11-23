@@ -39,8 +39,8 @@ export function StripeConnect() {
 				</h2>
 				<p className="max-w-xl text-balance text-muted-foreground">
 					Connect lets you attach your own Stripe business, or start a new one,
-					and get paid directly. LiteSubs collects a small application fee and
-					steps out of the flow.
+					and get paid directly. LiteSubs takes no cut of the sale and steps out
+					of the flow.
 				</p>
 			</div>
 

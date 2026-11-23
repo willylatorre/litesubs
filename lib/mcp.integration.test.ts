@@ -24,6 +24,7 @@ import {
 	resolvePublishedPlan,
 	updatePlan,
 } from "@/lib/services/plans";
+import { grantTestPremium } from "@/lib/test-premium";
 import { type Principal, sessionPrincipal } from "@/lib/services/principal";
 
 // Run only against an explicitly provisioned test database; never use .env's DB.
@@ -51,6 +52,9 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 		{ id: otherId, name: "Other creator", email: `${otherId}@example.test` },
 		{ id: studentId, name: "Student", email: studentEmail },
 	]);
+	// Recurring plans are Premium-only; this fixture says so explicitly.
+	await grantTestPremium(creatorId);
+
 	try {
 		const plan = await createPlan(principal, {
 			name: "Algebra",

@@ -127,6 +127,34 @@
       "when": 1794951000000,
       "tag": "0017_usernames",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795232097360,
+      "tag": "0018_drop_bookings",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795233097360,
+      "tag": "0019_drop_commission",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795234097360,
+      "tag": "0020_creator_entitlements",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795320497360,
+      "tag": "0021_platform_billing",
+      "breakpoints": true
     }
   ]
 }

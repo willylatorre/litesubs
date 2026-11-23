@@ -16,28 +16,6 @@ export const SAMPLE_PLAN = {
 
 export const SAMPLE_CUSTOMER_NAME = "Ana Rivera";
 
-/**
- * A filled-in schedule for the demo bookings screen. It uses the same
- * deterministic-ID convention as the sample plan, so a real edit can be refused
- * instead of rewriting the demo underneath the creator.
- */
-export const SAMPLE_SCHEDULE = {
-	name: "Weekly office hours",
-	slug: "sample-office-hours",
-	description:
-		"A sample schedule: 30-minute slots on weekday mornings. Sample data — create your own schedule whenever you like.",
-	durationMinutes: 30,
-	bufferBeforeMinutes: 0,
-	bufferAfterMinutes: 10,
-	horizonDays: 60,
-	timezone: "UTC",
-	active: true,
-	/** Monday–Friday, 09:00–12:00 in the schedule's timezone. */
-	weekdays: [1, 2, 3, 4, 5],
-	startMinute: 9 * 60,
-	endMinute: 12 * 60,
-} as const;
-
 /** Auth IDs are opaque; keep the sample email address syntactically valid. */
 function emailSafe(id: string) {
 	return id.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -58,9 +36,6 @@ export function sampleIds(creatorId: string) {
 		usageTransaction: `sample-tx-usage-${creatorId}`,
 		grant: `sample-grant-${creatorId}`,
 		usageAllocation: `sample-allocation-${creatorId}`,
-		schedule: `sample-schedule-${creatorId}`,
-		/** Prefix; each weekday row appends its weekday. */
-		scheduleAvailability: `sample-schedule-availability-${creatorId}`,
 	};
 }
 
@@ -78,8 +53,4 @@ export function isSampleCustomerId(id: string | null | undefined) {
 
 export function isSampleInviteId(id: string | null | undefined) {
 	return Boolean(id?.startsWith("sample-invite-"));
-}
-
-export function isSampleScheduleId(id: string | null | undefined) {
-	return Boolean(id?.startsWith("sample-schedule-"));
 }

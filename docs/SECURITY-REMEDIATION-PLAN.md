@@ -73,7 +73,8 @@ deferred and the route kept as a fail-closed placeholder. It has since been
 deleted outright along with its tables, OAuth routes, inbound webhook, and
 event-type pickers: native booking schedules replaced it, so no vendor route
 exists to defer. `/api/webhooks/cal` is gone and signature verification is no
-longer a requirement. See `docs/BOOKINGS.md`.
+longer a requirement. Native scheduling was subsequently moved to Plannerie as
+well, so Litesubs has no calendar surface at all; see `docs/REFOCUS.md`.
 
 ### 8. Production trusts development origins — DONE
 `lib/auth.ts` `trustedOrigins` ships a Codespaces URL and a Cloud Workstations

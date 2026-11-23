@@ -23,8 +23,8 @@ export type Principal = {
 	 * The signed-in user behind this principal, when there is one.
 	 *
 	 * `creatorId` is who the principal acts *for*; this is who they *are*. They
-	 * differ for a customer session, which is how a booking knows whose credits to
-	 * spend without pretending the customer is a creator.
+	 * differ when a customer session acts inside a creator's workspace without
+	 * pretending the customer is a creator.
 	 */
 	userId?: string;
 	scopes: readonly string[];
@@ -67,24 +67,6 @@ export function sessionPrincipal(creatorId: string): Principal {
 		kind: "session",
 		creatorId,
 		userId: creatorId,
-		scopes: [...CREATOR_SCOPES, "credits:consume"],
-	};
-}
-
-/**
- * The principal an internal, already-validated system action acts as.
- *
- * `credits:consume` is deliberately API-key-only for *callers*, so a customer
- * session cannot spend credits through the public API. A booking still has to
- * debit, but only after the booking service has proven the customer's enrollment
- * and the slot. This builds that internal authority explicitly, scoped to the
- * creator whose plan is being spent, instead of loosening the `requireScope`
- * gate for everyone. Never derive this from user input.
- */
-export function systemPrincipal(creatorId: string): Principal {
-	return {
-		kind: "session",
-		creatorId,
 		scopes: [...CREATOR_SCOPES, "credits:consume"],
 	};
 }
