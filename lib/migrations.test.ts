@@ -35,6 +35,7 @@ const MIGRATIONS = [
 	"drizzle/0019_drop_commission.sql",
 	"drizzle/0020_creator_entitlements.sql",
 	"drizzle/0021_platform_billing.sql",
+	"drizzle/0022_platform_paid_through.sql",
 ];
 
 /** Drizzle skips entries whose timestamp is not newer than the last applied. */
@@ -1038,6 +1039,62 @@ test("0021 adds platform billing and leaves Connect sales untouched", {
 			where table_name='user' and column_name='stripe_customer_id'
 		`);
 		assert.equal(col.length, 1);
+	});
+});
+
+/**
+ * 0022 adds the paid-through boundary. The backfill must only trust
+ * `period_end` where Stripe currently reports the row as fully paid: a
+ * `past_due` or `canceled` row's `period_end` may point at a period nobody paid
+ * for, and copying it would grant exactly the free month this column exists to
+ * prevent.
+ */
+test("0022 backfills paid-through only for fully paid subscriptions", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, 23));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES
+				('active_u','Active','a@example.test',true),
+				('pastdue_u','Past Due','p@example.test',true),
+				('canceled_u','Cancelled','x@example.test',true);
+			INSERT INTO litesub_subscription(id,plan,reference_id,status,period_end) VALUES
+				('ls_active','premium','active_u','active','2027-01-01T00:00:00Z'),
+				('ls_pastdue','premium','pastdue_u','past_due','2027-02-01T00:00:00Z'),
+				('ls_canceled','premium','canceled_u','canceled','2027-03-01T00:00:00Z');
+		`);
+
+		// Drop the value the earlier migration would have written, then replay the
+		// backfill exactly as `0022` states it, so the rule is asserted rather than
+		// the file being read twice.
+		await client.query(
+			"update litesub_subscription set paid_through_at = null",
+		);
+		await client.query(`
+			UPDATE "litesub_subscription"
+			SET "paid_through_at" = "period_end"
+			WHERE "paid_through_at" IS NULL
+			  AND "period_end" IS NOT NULL
+			  AND "status" = 'active';
+		`);
+
+		const { rows } = await client.query(
+			"select id, paid_through_at from litesub_subscription order by id",
+		);
+		assert.deepEqual(
+			rows.map((r) => ({
+				id: r.id,
+				paid: r.paid_through_at?.toISOString() ?? null,
+			})),
+			[
+				// Fully paid: the current period really was paid for.
+				{ id: "ls_active", paid: "2027-01-01T00:00:00.000Z" },
+				// Unpaid or ended: unknown, to be resolved from invoices.
+				{ id: "ls_canceled", paid: null },
+				{ id: "ls_pastdue", paid: null },
+			],
+		);
 	});
 });
 

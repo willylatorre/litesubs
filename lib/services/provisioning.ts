@@ -1,7 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/app/db";
-import { creatorCustomers, user } from "@/app/db/schema";
+import { creatorCustomers, enrollments, user } from "@/app/db/schema";
+import { resolvePublishedPlan } from "./plans";
 import { type Principal, requireScope, ServiceError } from "./principal";
 
 /**
@@ -25,6 +26,17 @@ import { type Principal, requireScope, ServiceError } from "./principal";
  * credential living in a mailbox, and the invite flow already proves the address
  * by requiring a claim.
  *
+ * ## The customer must be *visible* to the creator
+ *
+ * Writing only a `creator_customers` row is not enough. Every read path —
+ * `resolveCustomer`, `GET /customers`, and therefore `credits/grant`,
+ * `credits/consume` and `POST /enrollments` — resolves a customer through
+ * **enrollments**. A provisioned learner with no enrollment was therefore
+ * invisible: the caller got an ID it could not use, and the "provision them,
+ * then hand out credits" flow the docs promise failed with `NOT_FOUND` until a
+ * separate enrollment was created. `enrollments` is the creator's customer list,
+ * so provisioning writes one.
+ *
  * Idempotent per `(creator, email)`: calling twice returns the same customer, so
  * a retried enable or a double-click cannot fork one learner into two.
  */
@@ -32,6 +44,15 @@ import { type Principal, requireScope, ServiceError } from "./principal";
 const createCustomerSchema = z.object({
 	email: z.email().max(320),
 	name: z.string().trim().min(1).max(200).optional(),
+	/**
+	 * Optional plan to enroll the customer on immediately.
+	 *
+	 * Every credit operation is keyed by an enrollment, so naming a plan here is
+	 * what turns "I created a person" into "I can grant them credits right now".
+	 * Omitting it is still valid — the customer is then a known contact who can
+	 * be enrolled later — but `credits/grant` will refuse until they are.
+	 */
+	plan: z.string().trim().min(1).optional(),
 });
 
 export type ProvisionedCustomer = {
@@ -41,6 +62,15 @@ export type ProvisionedCustomer = {
 	created: boolean;
 	/** True when the account still needs the learner to claim it and set a password. */
 	unclaimed: boolean;
+	/**
+	 * The plan the customer was enrolled on, when the caller named one.
+	 *
+	 * A customer without an enrollment is a *person*, not yet a *buyer of a
+	 * plan*, and every credit operation targets an enrollment. Provisioning with
+	 * a `plan` therefore makes the customer immediately usable, which is the
+	 * documented promise ("grant credits before they log in").
+	 */
+	planId?: string;
 };
 
 /** A local part of the email, so a new account has a sensible display name. */
@@ -124,6 +154,28 @@ export async function provisionCustomer(
 		if (!link)
 			throw new ServiceError("INVALID_INPUT", "Could not link that customer");
 
+		// Enroll them when a plan is named. This is what makes the returned
+		// customer immediately usable: credits target an enrollment, and
+		// `resolveCustomer` reads the creator's customer list from enrollments.
+		// The row starts at zero credits; a comp or purchase is a separate,
+		// auditable ledger entry rather than a silent balance.
+		let planId: string | undefined;
+		if (data.plan) {
+			const { plan } = await resolvePublishedPlan(
+				principal.creatorId,
+				data.plan,
+			);
+			planId = plan.id;
+			await tx
+				.insert(enrollments)
+				.values({
+					creatorId: principal.creatorId,
+					userId: customerId,
+					planId: plan.id,
+				})
+				.onConflictDoNothing();
+		}
+
 		const account = await tx.query.user.findFirst({
 			where: eq(user.id, customerId),
 			columns: { emailVerified: true },
@@ -133,6 +185,7 @@ export async function provisionCustomer(
 			customerId,
 			email,
 			created,
+			planId,
 			// "Unclaimed" is not a column: an account with no verified email and no
 			// password cannot sign in yet, which is exactly what we mean.
 			unclaimed: !account?.emailVerified,
@@ -160,7 +213,6 @@ export async function getProvisionedCustomer(
 			),
 		)
 		.limit(1);
-	if (!row)
-		throw new ServiceError("NOT_FOUND", "Customer not found", 404);
+	if (!row) throw new ServiceError("NOT_FOUND", "Customer not found", 404);
 	return row;
 }

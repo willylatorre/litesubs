@@ -92,8 +92,12 @@ Constraints that keep this honest:
   `/api-key/create` and `integrationkeys`.
 - **R4 — Premium billing.** **Done on `@better-auth/stripe`** instead of a
   hand-rolled service; `creator_entitlements` was dropped so entitlement has one
-  source. See `docs/PLATFORM-BILLING.md`. Remaining: operator configuration in
-  Stripe (endpoint, secret, price) — listed there as a checklist.
+  source. See `docs/PLATFORM-BILLING.md`. **Verified end to end 2026-11-23**
+  against real test-mode Stripe through the real webhook route; the same run
+  found and fixed a defect where a failed renewal granted a month nobody paid for
+  (`0022`, `paid_through_at`). Remaining: live Stripe configuration (endpoint,
+  secret, live price) and one real live charge — listed as the operator
+  checklist.
 
 ## Related
 

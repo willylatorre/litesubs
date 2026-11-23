@@ -1,7 +1,17 @@
-import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import {
+	and,
+	desc,
+	eq,
+	exists,
+	inArray,
+	isNotNull,
+	or,
+	sql,
+} from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/app/db";
 import {
+	creatorCustomers,
 	enrollments,
 	subscriptions,
 	transactions,
@@ -20,10 +30,37 @@ export async function resolveCustomer(
 	const matches = await db
 		.selectDistinct({ id: user.id, name: user.name, email: user.email })
 		.from(user)
-		.innerJoin(enrollments, eq(enrollments.userId, user.id))
 		.where(
 			and(
-				eq(enrollments.creatorId, principal.creatorId),
+				// A customer is "this creator's" either through an enrollment (they
+				// bought or were enrolled) or through a provisioning link (a teacher
+				// created them before any purchase). Reading only enrollments made a
+				// freshly provisioned learner invisible: `POST /customers` returned an
+				// id that every follow-up call rejected with `NOT_FOUND`.
+				or(
+					exists(
+						db
+							.select({ one: sql`1` })
+							.from(enrollments)
+							.where(
+								and(
+									eq(enrollments.userId, user.id),
+									eq(enrollments.creatorId, principal.creatorId),
+								),
+							),
+					),
+					exists(
+						db
+							.select({ one: sql`1` })
+							.from(creatorCustomers)
+							.where(
+								and(
+									eq(creatorCustomers.userId, user.id),
+									eq(creatorCustomers.creatorId, principal.creatorId),
+								),
+							),
+					),
+				),
 				or(
 					eq(user.id, identifier),
 					sql`lower(${user.email}) = ${identifier.trim().toLowerCase()}`,
@@ -50,6 +87,9 @@ export async function resolveCustomer(
 export async function listCustomers(principal: Principal, input: unknown = {}) {
 	requireScope(principal, "customers:read");
 	const page = pageInput.parse(input);
+	// A customer is this creator's through an enrollment *or* a provisioning
+	// link. Reading enrollments alone hid every provisioned learner until their
+	// first purchase, so the caller that just created them could not see them.
 	const customers = await db
 		.selectDistinct({
 			id: user.id,
@@ -58,8 +98,32 @@ export async function listCustomers(principal: Principal, input: unknown = {}) {
 			image: user.image,
 		})
 		.from(user)
-		.innerJoin(enrollments, eq(enrollments.userId, user.id))
-		.where(eq(enrollments.creatorId, principal.creatorId))
+		.where(
+			or(
+				exists(
+					db
+						.select({ one: sql`1` })
+						.from(enrollments)
+						.where(
+							and(
+								eq(enrollments.userId, user.id),
+								eq(enrollments.creatorId, principal.creatorId),
+							),
+						),
+				),
+				exists(
+					db
+						.select({ one: sql`1` })
+						.from(creatorCustomers)
+						.where(
+							and(
+								eq(creatorCustomers.userId, user.id),
+								eq(creatorCustomers.creatorId, principal.creatorId),
+							),
+						),
+				),
+			),
+		)
 		.orderBy(user.id)
 		.limit(page.limit)
 		.offset(page.offset);
@@ -160,7 +224,9 @@ export async function listCustomers(principal: Principal, input: unknown = {}) {
 					billingSubscription: row.billingSubscription,
 				})),
 				updatedAt: new Date(
-					Math.max(...owned.map((row) => row.updatedAt.getTime())),
+					owned.length
+						? Math.max(...owned.map((row) => row.updatedAt.getTime()))
+						: Date.now(),
 				).toISOString(),
 			};
 		}),

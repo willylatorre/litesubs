@@ -247,7 +247,7 @@ work with an `x-api-key` as well as an OAuth connection:
 
 | Endpoint | Purpose |
 | --- | --- |
-| `POST /api/v1/customers` | Provision a customer by email (unclaimed account, idempotent) |
+| `POST /api/v1/customers` | Provision a customer by email (unclaimed account, idempotent); pass `plan` to enroll them so credits can be granted immediately |
 | `POST /api/v1/integrationkeys` | Mint the consume-scoped key for this connection |
 | `GET /api/v1/integrationkeys` | List minted keys as metadata, never secrets |
 | `DELETE /api/v1/integrationkeys/:id` | Revoke a key minted by this connection |
@@ -426,6 +426,17 @@ plain JSON. Errors include `code`, `error`, and optional `details`/`fieldErrors`
 supplies that confirmation itself, because an HTTP call is already an explicit
 act. The former `/api/products` compatibility adapter is gone: plans are the only
 contract, so no legacy path can bypass draft status. Dashboard hooks use v1.
+
+List routes return a **bare JSON array**, not an envelope. There is no
+`total`/`next`/`hasMore`: a client pages by requesting the next `offset` and
+treating a short page as the end. IDs are stable (`plans.id`, `customers.id`), and
+ordering is stable (`plans` by creation then id; `customers` by id), so pages do
+not overlap or skip while the underlying set is unchanged. If you need a count,
+request a page and continue until it is shorter than `limit`.
+
+`POST /api/v1/customers` with a `plan` also creates the enrollment; without one,
+the customer exists but `credits/grant` and `credits/consume` return `NOT_FOUND`
+until they are enrolled, because every credit operation targets an enrollment.
 
 Example machine request (substitute your IDs and keep the event key stable):
 

@@ -117,6 +117,7 @@ function sub(overrides: Record<string, unknown> = {}) {
 		plan: "premium",
 		status: "active",
 		periodEnd: future,
+		paidThroughAt: future,
 		cancelAtPeriodEnd: false,
 		...overrides,
 	};
@@ -153,10 +154,61 @@ test("cancelled but still inside the paid period stays premium", () => {
 });
 
 test("an expired period is free even if Stripe still says active", () => {
-	// The stale-status case: this is why entitlement follows periodEnd.
-	const e = deriveEntitlement(sub({ periodEnd: past }), 0, NOW);
+	// The stale-status case: this is why entitlement follows the paid boundary.
+	const e = deriveEntitlement(
+		sub({ periodEnd: past, paidThroughAt: past }),
+		0,
+		NOW,
+	);
 	assert.equal(e.tier, "free");
 	assert.equal(e.status, "ended");
+});
+
+/**
+ * The bug this column exists to prevent, verified against real test-mode
+ * Stripe: a failed renewal moves Stripe's `current_period_end` to the *next*
+ * period before the charge succeeds and leaves it there when it fails.
+ *
+ * A rule reading `periodEnd` therefore hands out a free month to every creator
+ * whose card expires. Reading the paid boundary refuses it while still keeping
+ * the period they really did pay for.
+ */
+test("a failed renewal does not grant the unpaid period", () => {
+	const row = sub({
+		status: "past_due",
+		// Stripe has advanced the period to one nobody has paid for yet.
+		periodEnd: new Date(NOW + 60 * 86_400_000),
+		// The last invoice that actually settled ended here.
+		paidThroughAt: past,
+	});
+	const e = deriveEntitlement(row, 0, NOW);
+	assert.equal(
+		e.tier,
+		"free",
+		"the unpaid renewal period must not confer premium",
+	);
+	assert.equal(e.paidThroughAt?.getTime(), past.getTime());
+});
+
+test("a failed renewal inside the paid period keeps premium", () => {
+	const row = sub({
+		status: "past_due",
+		periodEnd: new Date(NOW + 60 * 86_400_000),
+		paidThroughAt: future,
+	});
+	const e = deriveEntitlement(row, 0, NOW);
+	assert.equal(e.tier, "premium");
+	assert.equal(e.status, "past_due");
+});
+
+test("a row with no resolved paid boundary is not premium", () => {
+	// Pre-column rows and abandoned checkouts read as "unknown", never as paid.
+	const e = deriveEntitlement(
+		sub({ status: "active", periodEnd: future, paidThroughAt: null }),
+		0,
+		NOW,
+	);
+	assert.equal(e.tier, "free");
 });
 
 test("a non-premium plan is free regardless of status", () => {

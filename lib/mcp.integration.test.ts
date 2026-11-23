@@ -251,7 +251,11 @@ test("MCP services preserve tenant boundaries and credit invariants", {
 							credits: 1,
 						},
 					}),
-					{ code: "FORBIDDEN" },
+					// Scope-based refusal: a consume-only key holds no
+					// `plans:write`, and `requireScope` is the one rule for every
+					// transport. This used to assert FORBIDDEN from a blanket
+					// "machine keys can only consume" rule that no longer exists.
+					{ code: "INSUFFICIENT_SCOPE" },
 				);
 				await assert.rejects(
 					changeCredits(

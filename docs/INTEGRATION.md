@@ -64,9 +64,9 @@ That restriction is gone. A key stores `{ resource: [action] }`, and
 sign up and claim it. That is correct for self-serve, and wrong for a teacher
 setting up a class on Monday morning.
 
-**Plan:** teacher-initiated provisioning, as a distinct operation:
+**Built:** teacher-initiated provisioning, as a distinct operation:
 
-- `POST /api/v1/customers` (`customers:write`) with `{ email, name? }`:
+- `POST /api/v1/customers` (`customers:write`) with `{ email, name?, plan? }`:
   - if a liteSubs user with that email exists, link them as this creator's
     customer (no duplicate account);
   - if not, create the account **unclaimed**, and send the standard invite so the
@@ -74,9 +74,22 @@ setting up a class on Monday morning.
   - never email a temporary password. An emailed default password is a
     credential in a mailbox, and the invite flow already proves the address.
 - Idempotent per `(creator, email)`: calling twice returns the same customer.
+- **Naming a `plan` enrolls them at the same time**, which is what makes the
+  customer immediately grantable. Every credit operation targets an enrollment,
+  so without one `credits/grant` returns `NOT_FOUND`. The enrollment starts at
+  zero credits — a grant is a separate, auditable ledger entry.
 
 Then `enroll_customer` / `grant_credits` work against that customer immediately,
 so the teacher can hand out credits before the learner has ever logged in.
+
+> **Defect found and fixed (2026-11-23).** Provisioning originally wrote only a
+> `creator_customers` row, but every read path — `resolveCustomer`,
+> `GET /customers`, `POST /enrollments`, `credits/grant`, `credits/consume` —
+> resolves a customer through **enrollments**. The endpoint therefore returned a
+> `customerId` that every follow-up call rejected with `NOT_FOUND`, and the
+> customer did not appear in `GET /customers` at all. A consumer following this
+> document could provision a whole class and then grant nobody credits. The
+> original test passed because it inserted the enrollment by hand.
 
 ## Gap C — the learner still has to buy
 
@@ -122,13 +135,30 @@ who it is only for. The product still has to work for any platform.
   shown twice. The key it mints carries consumption **and** management scopes, so
   one key drives the integration. Proven by
   `lib/integration-contract.integration.test.ts`.
+
+  **Recovery when the secret is lost** (there is no re-read): `GET
+  /api/v1/integrationkeys` lists what the connection minted, `DELETE
+  /api/v1/integrationkeys/:id` revokes one, then `POST` mints a new secret. The
+  list is by ownership marker, not by display name, so a caller that chose a
+  custom name can still find and revoke its own key.
+
+  > **Defect found and fixed (2026-11-23).** Ownership was matched on the display
+  > name (`"Platform consumption"`). Two consequences: a creator who happened to
+  > name their own dashboard key the same way got `KEY_EXISTS` for a key the
+  > connection did not own; and a caller that passed a different `name` minted a
+  > credential that `GET` did not list and `DELETE` refused with `NOT_FOUND` — a
+  > key able to spend the creator's balance that the connection that created it
+  > could not revoke. Ownership is now a metadata marker,
+  > `litesubsIntegrationKey`, which requires `apiKey.enableMetadata: true`.
 - **I0 — keys carry creator scopes.** **Done.** `apiKeyPrincipal` derives scopes
   from the stored key, so a pasted key authorizes management without an OAuth app.
   `GET /api/v1/me` exists so a client can learn whose account a key acts for.
 - **I2 — customer provisioning.** **Done.** `POST /api/v1/customers`, idempotent
   per `(creator, email)`, creates an unclaimed account, links a
-  `creator_customers` row, and emails nothing. Proven: the customer is granted
-  and debited while `emailVerified` is still false.
+  `creator_customers` row, and emails nothing. Passing an optional `plan` also
+  enrolls the customer, which is what makes them immediately grantable. Proven:
+  the customer is granted and debited while `emailVerified` is still false, using
+  the endpoint rather than a hand-inserted enrollment.
 - **I3 — the enable flow in Plannerie.** Not started (Plannerie side). Two
   buttons, one connection per teacher, Stripe onboarding surfaced only when it
   blocks selling. Depends on I1 and I2, both done.

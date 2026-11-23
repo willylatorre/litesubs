@@ -12,6 +12,10 @@ import Stripe from "stripe";
 import { db } from "@/app/db"; // your drizzle instance
 import { requirePremiumForApiKeys } from "@/lib/auth/premium-api-key-gate";
 import { mcpResource } from "@/lib/mcp-config";
+import {
+	creatorForStripeSubscription,
+	refreshPaidThrough,
+} from "@/lib/services/platform-billing";
 import { CREATOR_SCOPES } from "@/lib/services/principal";
 
 const buildPhases = new Set(["phase-production-build", "phase-export"]);
@@ -77,6 +81,36 @@ function platformBilling() {
 		stripeClient,
 		stripeWebhookSecret: billingWebhookSecret,
 		createCustomerOnSignUp: false,
+		/**
+		 * Runs **after** the plugin has written its own row for every event type.
+		 *
+		 * It exists for one reason: the plugin copies `current_period_end` into
+		 * `periodEnd`, and Stripe advances that at period *start*, before payment.
+		 * A renewal that then fails leaves `periodEnd` pointing at a month nobody
+		 * paid for. We therefore resolve the real paid boundary from invoice
+		 * history here and store it separately; `entitlements.ts` reads that.
+		 *
+		 * Errors are logged, not thrown: failing the webhook would make Stripe
+		 * retry an event whose subscription write already succeeded, and the next
+		 * lifecycle event repairs the boundary anyway.
+		 */
+		onEvent: async (event) => {
+			const stripeSubscriptionId = subscriptionIdFromEvent(event);
+			if (!stripeSubscriptionId) return;
+			try {
+				const creatorId =
+					await creatorForStripeSubscription(stripeSubscriptionId);
+				if (!creatorId) return;
+				await refreshPaidThrough(creatorId);
+			} catch (error) {
+				console.error("Platform billing: paid-through refresh failed", {
+					eventId: event.id,
+					type: event.type,
+					stripeSubscriptionId,
+					error: error instanceof Error ? error.message : "UnknownError",
+				});
+			}
+		},
 		subscription: {
 			enabled: true,
 			plans: [{ name: "premium", priceId: premiumPriceId }],
@@ -85,6 +119,36 @@ function platformBilling() {
 			// is exactly one interpretation of what a creator is entitled to.
 		},
 	});
+}
+
+/** The platform subscription an event is about, or `null` for other events. */
+function subscriptionIdFromEvent(event: Stripe.Event): string | null {
+	const object = event.data.object as {
+		object?: string;
+		id?: string;
+		subscription?: string | { id: string } | null;
+		parent?: {
+			subscription_details?: {
+				subscription?: string | { id: string } | null;
+			} | null;
+		} | null;
+	};
+	if (object.object === "subscription") return object.id ?? null;
+	if (object.object === "invoice") {
+		const fromParent = object.parent?.subscription_details?.subscription;
+		if (fromParent)
+			return typeof fromParent === "string" ? fromParent : fromParent.id;
+		const legacy = object.subscription;
+		return legacy ? (typeof legacy === "string" ? legacy : legacy.id) : null;
+	}
+	if (
+		object.object === "checkout.session" &&
+		event.type.startsWith("checkout.session.")
+	) {
+		const legacy = object.subscription;
+		return legacy ? (typeof legacy === "string" ? legacy : legacy.id) : null;
+	}
+	return null;
 }
 
 /**
@@ -182,6 +246,18 @@ export const auth = betterAuth({
 			// collapsing the scope model. Keep false and keep this comment.
 			enableSessionForAPIKeys: false,
 			defaultPrefix: "ls_",
+			/**
+			 * Metadata is where a key records **who minted it**. The integration
+			 * path stores an ownership marker there so a key can be listed and
+			 * revoked regardless of the display name its caller chose. Names are
+			 * labels, not identity: matching on them both refused a legitimate mint
+			 * when a creator had a same-named dashboard key, and hid a
+			 * caller-renamed key from the connection that owned it.
+			 *
+			 * Metadata is not a permission: it never widens a key's scopes, which
+			 * come from `permissions` and are read by `apiKeyPrincipal`.
+			 */
+			enableMetadata: true,
 			rateLimit: { enabled: true, timeWindow: 60000, maxRequests: 1000 },
 			permissions: {
 				// Machine keys start at the minimum: consume credits only.

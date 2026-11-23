@@ -18,6 +18,11 @@ Status: implemented. Supersedes the hand-rolled `lib/services/premium.ts` from
 >   subscribed to only 5 of its 11 required events (no `invoice.paid`, no
 >   `customer.subscription.*`), so renewals would never have granted credits.
 >   That is an operator dashboard fix, recorded in `docs/MCP.md`.
+> - **Entitlement reads `paid_through_at`, not `period_end`.** Measured on
+>   2026-11-23: Stripe advances `period_end` when a renewal *starts* and leaves it
+>   advanced when the payment fails, so `period_end` grants unpaid months. A new
+>   column records the last period actually paid for. See "Measured renewal
+>   behaviour".
 
 ## The distinction this plan is built on
 
@@ -69,10 +74,64 @@ What it does **not** do, and must not be assumed:
   Plannerie's T011 hit this: renewals granted nothing. We do not rely on that
   hook at all.
 - `onSubscriptionUpdated` writes `periodStart`/`periodEnd` from the Stripe
-  subscription item and fires `onSubscriptionUpdate`. **Unverified: whether
-  Stripe emits `customer.subscription.updated` on every renewal.** If it does not,
-  the paid-through date goes stale and entitlement silently expires a month
-  early. This is the one thing to prove before shipping.
+  subscription item and fires `onSubscriptionUpdate`. **Verified 2026-11-23:** it
+  does fire on every renewal with a fresh `period_end` (see "Measured renewal
+  behaviour" below). That removes the original "a month early" fear — but it
+  exposed a different bug: `period_end` advances *before* payment, so it cannot
+  be the entitlement signal. See the next section.
+
+## Measured renewal behaviour (2026-11-23)
+
+Everything below was measured against real Stripe **test mode** using a test
+clock, not inferred from the plugin's source. Two subscriptions were advanced
+through paid renewals, a failed renewal, and cancellation.
+
+**1. `customer.subscription.updated` does fire per renewal.** On each renewal it
+arrives with the *next* period's end:
+
+| Event | When | `item.current_period_end` |
+| --- | --- | --- |
+| `customer.subscription.created` | after first payment | 2026-12-23 |
+| `customer.subscription.updated` | at renewal start | 2027-01-23 |
+| `invoice.paid` (`subscription_cycle`) | seconds later | — |
+
+So `periodEnd` stays current. **The original open question is answered: yes.**
+
+**2. But `updated` arrives *before* the invoice is paid — and a failed renewal
+keeps the advanced `period_end`.** This is the important finding. On a renewal
+whose payment failed:
+
+```
+status:      past_due
+period_start: 2026-12-23   <- the renewal period that was NOT paid
+period_end:   2027-01-23   <- a month the creator never paid for
+last invoice paid through: 2026-12-23
+```
+
+`period_end` therefore does **not** answer "what has this creator paid for". A
+rule reading it grants a free month to anyone whose card stops working. That is
+what `deriveEntitlement` did before this change.
+
+**3. Dunning eventually deletes the subscription but leaves `period_end`
+advanced.** After retries were exhausted the subscription became `canceled` with
+`ended_at` set and `period_end` still pointing at the unpaid month. Dunning runs
+over days, so this is not a corner case — it is what most failed renewals end in.
+
+**The fix.** `litesub_subscription.paid_through_at` (migration `0022`) records
+the end of the latest invoice that was actually **paid**, resolved from Stripe's
+invoice history. `entitlements.ts` reads that column. It is monotonic (forward
+only), so a failed renewal, a retry, or an out-of-order delivery cannot revoke a
+period that was paid for. A `null` boundary means "unknown", never "paid
+forever"; the next platform webhook (or the first `getEntitlement` after the
+column was added) refreshes it from invoices.
+
+Proven end to end by `scripts/verify-platform-billing.mts`, which creates real
+Stripe objects on a test clock and feeds the **real emitted events** through the
+**real** `/api/auth/stripe/webhook` route, signed with that endpoint's secret.
+13/13 checks pass: paid creation → premium, renewal → `periodEnd` extended, failed
+renewal → the unpaid month refused while the paid month is kept, deleted →
+downgrade only after the period. The same harness fails check 3d if the old
+`periodEnd` rule is restored, so it is not a test that passes against broken code.
 
 ## Target model
 
@@ -80,10 +139,13 @@ What it does **not** do, and must not be assumed:
 user.stripe_customer_id          -- re-added; platform Customer id (not per-account)
 subscription                     -- NEW plugin model, physical name litesub_subscription
   id, plan, referenceId(=user.id), stripeCustomerId, stripeSubscriptionId,
-  status, periodStart, periodEnd, cancelAtPeriodEnd, cancelAt, endedAt,
-  seats, billingInterval, ...
+  status, periodStart, periodEnd, paidThroughAt, cancelAtPeriodEnd, cancelAt,
+  endedAt, seats, billingInterval, ...
 subscriptions                    -- UNCHANGED: creator→customer Connect sales
 ```
+
+`periodEnd` is Stripe's current period; `paidThroughAt` (migration `0022`) is the
+last period actually paid for, and is the only column entitlement trusts.
 
 ### What happens to `creator_entitlements`
 
@@ -91,15 +153,21 @@ It is deleted. It was a hand-rolled mirror of `subscription`, and keeping both
 guarantees drift. Entitlement becomes a **derivation**:
 
 ```
-tier = plan === 'premium' && status ∈ {active, trialing, past_due}
-       && periodEnd > now
+tier = plan === 'premium' && status ∉ {incomplete, incomplete_expired}
+       && paidThroughAt > now            -- the last period actually PAID for
          ? 'premium' : 'free'
 ```
 
-`paidThroughAt` becomes `subscription.periodEnd`. That preserves the rule the
+`paidThroughAt` is **not** `subscription.periodEnd`. Stripe advances
+`period_end` when a renewal period starts, before the invoice is paid, and leaves
+it advanced when that payment fails — measured, see "Measured renewal behaviour".
+`paid_through_at` only moves on a paid invoice. That preserves the rule the
 current code already implements — a failed renewal must not revoke a period the
-creator already paid for — and it was the reason `creator_entitlements` existed.
-`past_due` keeps access because Stripe is still retrying a period it owes.
+creator already paid for — and it also refuses the period they have not paid for,
+which reading `period_end` could not do.
+
+`past_due` keeps access because Stripe is still retrying a period it owes *only
+up to the paid boundary*; it does not extend it.
 
 `lib/services/entitlements.ts` keeps its public shape (`getEntitlement`,
 `assertCanCreatePlan`, `assertCanUseRecurring`, `assertCanUseDeveloperFeatures`,
@@ -171,27 +239,33 @@ exists, `subscriptions` still holds every Connect row, and dropping
 
 ### 5. Tests
 
-- Migration test for `0021` (money rows survive; `subscription` shape correct).
-- Entitlement derivation unit tests: active → premium; `past_due` with future
-  `periodEnd` → premium; `canceled` with future `periodEnd` → premium; missing
-  row → free; expired `periodEnd` → free.
+- Migration test for `0021` (money rows survive; `subscription` shape correct)
+  and `0022` (the paid-through backfill only trusts fully paid rows).
+- Entitlement derivation unit tests in `lib/entitlements.test.ts`: active → premium;
+  `past_due` whose `paidThroughAt` is in the future → premium; `canceled` with a
+  future `paidThroughAt` → premium; missing row → free; expired → free; and the
+  failed-renewal trap — `periodEnd` in the future but `paidThroughAt` in the past
+  → free.
+- `lib/platform-billing.integration.test.ts` exercises the same rules through
+  real services and a real database.
 - Replace `grantTestPremium` fixtures; re-run the full integration suite with the
   new premium fixture.
 
-## Open questions — decide before step 4
+## Open questions — decided
 
-1. **Renewal freshness.** Confirm `customer.subscription.updated` fires per
-   renewal with a new `periodEnd`. If it does not, add an `invoice.payment_succeeded`
-   handler via `onEvent` that extends `periodEnd` — the Plannerie pattern. This
-   decides whether entitlement expiry is correct, so it gates shipping.
-2. **`plan` name.** One plan, `premium`. Confirm no free-trial window and no
-   annual option for v1 (both are plugin features we would be buying into).
-3. **Downgrade path.** The plugin's `/cancel` sets cancel-at-period-end. Confirm
-   we never call it automatically when a creator hits the plan cap — a creator
-   over the free cap keeps their existing plans (already the rule in
-   `docs/REFOCUS.md`), so nothing should force a downgrade.
-4. **Test-mode.** Is a Stripe test-mode Price acceptable for the first
-   verification, or does the operator want live verification deferred as in R4?
+1. **Renewal freshness.** **Answered 2026-11-23: yes.** `customer.subscription.updated`
+   fires on every renewal with a fresh `period_end` (measured twice on a test
+   clock). The original expiry fear was unfounded, but the measurement exposed a
+   worse bug — `period_end` advances before payment — which is why entitlement
+   reads `paidThroughAt` instead. See "Measured renewal behaviour".
+2. **`plan` name.** One plan, `premium`. No free trial and no annual option for
+   v1.
+3. **Downgrade path.** The plugin's `/cancel` sets cancel-at-period-end. We never
+   call it automatically when a creator hits the plan cap — a creator over the
+   free cap keeps their existing plans (the rule in `docs/REFOCUS.md`), so nothing
+   forces a downgrade.
+4. **Test-mode.** Test-mode was sufficient to prove the logic end to end. A live
+   payment remains an operator step because it spends real money.
 
 ## Non-goals
 
@@ -207,8 +281,9 @@ exists, `subscriptions` still holds every Connect row, and dropping
   map it.
 - A single webhook secret would have to serve both endpoints. It cannot; stop
   and get the second secret configured.
-- `periodEnd` cannot be kept current from available events. Entitlement would
-  then expire wrongly; stop and use the invoice path before wiring the UI.
+- Entitlement is derived from `periodEnd` rather than `paidThroughAt`. Stripe
+  advances `periodEnd` before payment, so that rule grants unpaid periods; stop
+  and resolve the paid boundary from invoices instead.
 
 ## Operator checklist (not agent-doable)
 
@@ -242,15 +317,37 @@ verified as *missing* on 2026-11-22 unless noted.
    together: with either missing the plugin is not registered and checkout is not
    offered, which is the intended degrade rather than a half-configured plan.
 
-**Verification still owed**
+**What is now proven (no operator action needed)**
 
-5. A real payment through the platform endpoint. The local proof created a
-   `cs_test_` session but never completed it, so "paid invoice → premium, and
-   renewal extends `periodEnd`" is unproven end to end. Use
-   `stripe listen --forward-to localhost:3000/api/auth/stripe/webhook` with the
-   tunnel secret, then complete a test payment.
-6. Confirm the renewal path: whether `customer.subscription.updated` fires on
-   every renewal with a fresh `period_end`. If it does not, entitlement will
-   expire a month early and the invoice event must extend `periodEnd` (the
-   Plannerie T011 pattern). This is the one behavioural unknown left in the
-   platform-billing design.
+5. ~~A real payment through the platform endpoint.~~ **Proven 2026-11-23** against
+   real test-mode Stripe through the real webhook route: a paid creation grants
+   premium, and a renewal extends the paid period. Reproduce with
+   `scripts/verify-platform-billing.mts` (it creates its own test clock, customer,
+   and subscription, so it needs no browser and spends no real money).
+6. ~~Does `customer.subscription.updated` fire on every renewal?~~ **Proven: yes.**
+   Measured twice on a test clock. The open question is closed; the design was
+   nevertheless changed, because the measurement showed `period_end` advancing
+   before payment. Entitlement now reads `paid_through_at`.
+
+**Still owed — a real live payment**
+
+7. The `$5` live Price (item 1) and a live payment through the platform endpoint.
+   Test mode cannot prove a real card, a real webhook delivery over the public
+   internet, or the live signing secret. Everything about the *logic* is proven;
+   what remains is the live configuration and one real charge.
+8. Run `scripts/verify-platform-billing.mts` against a disposable database after
+   any change to the webhook path. It is the only place the emitted-event ordering
+   is exercised; the unit and integration tests assert the rules, not Stripe's
+   behaviour.
+
+**Known gap after this change**
+
+9. An existing creator whose `paid_through_at` is `null` reads as **free** until
+   the next platform webhook for that creator, or their first dashboard load
+   (`getEntitlement` refreshes lazily from Stripe invoices). This is deliberate —
+   guessing `period_end` is the bug being fixed — but an operator deploying this
+   should expect a one-time "premium creator appears free" window for anyone whose
+   next renewal is more than a moment away. Run
+   `creatorsWithUnresolvedPaidThrough()` (in `lib/services/platform-billing.ts`)
+   to find them, or simply let the next renewal fix each one. There were no real
+   paying creators at the time of this change, so the window is empty today.

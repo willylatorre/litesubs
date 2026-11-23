@@ -1,10 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/app/db";
 import { apikey } from "@/app/db/mcp-auth-schema";
-import {
-	assertCanUseDeveloperFeatures,
-	getEntitlement,
-} from "./entitlements";
+import { assertCanUseDeveloperFeatures, getEntitlement } from "./entitlements";
 import { type Principal, ServiceError } from "./principal";
 
 /**
@@ -44,6 +41,42 @@ export type MintedIntegrationKey = {
 const KEY_NAME = "Platform consumption";
 
 /**
+ * Marks a key as owned by this integration path.
+ *
+ * Ownership is decided by this marker, not by the key's name. Key names are
+ * user-facing labels: a creator can create a dashboard key called "Platform
+ * consumption" themselves, and matching on the name then either refuses a
+ * legitimate mint (`KEY_EXISTS` for a key this connection does not own) or, if
+ * the caller renames, hides a key the connection minted so it can neither list
+ * nor revoke its own credential.
+ */
+export const INTEGRATION_KEY_MARKER = "platform-billing";
+
+type KeyMetadata = Record<string, unknown>;
+
+function integrationMetadata(extra: KeyMetadata = {}): KeyMetadata {
+	return { ...extra, litesubsIntegrationKey: INTEGRATION_KEY_MARKER };
+}
+
+/** Whether a stored key was minted by this integration path. */
+export function isIntegrationKey(metadata: unknown): boolean {
+	if (!metadata) return false;
+	let parsed = metadata;
+	if (typeof parsed === "string") {
+		try {
+			parsed = JSON.parse(parsed);
+		} catch {
+			return false;
+		}
+	}
+	return (
+		typeof parsed === "object" &&
+		parsed !== null &&
+		(parsed as KeyMetadata).litesubsIntegrationKey === INTEGRATION_KEY_MARKER
+	);
+}
+
+/**
  * What an integration key may do, as the stored permission map.
  *
  * Consumption plus management: the booking loop needs `credits:consume`, and the
@@ -72,14 +105,17 @@ export async function mintIntegrationKey(
 
 	// Reuse an existing live key rather than piling up one per click. A retried
 	// enable should not leave the creator with five identical credentials.
-	const existing = await db.query.apikey.findFirst({
+	//
+	// Matched on the ownership marker, not the name — see `INTEGRATION_KEY_MARKER`.
+	const existingKeys = await db.query.apikey.findMany({
 		where: and(
 			eq(apikey.referenceId, principal.creatorId),
-			eq(apikey.name, input.name?.trim() || KEY_NAME),
 			eq(apikey.enabled, true),
 			isNull(apikey.expiresAt),
 		),
+		columns: { id: true, name: true, metadata: true },
 	});
+	const existing = existingKeys.find((key) => isIntegrationKey(key.metadata));
 	if (existing) {
 		// The secret was shown once and is not stored in the clear, so an existing
 		// key cannot be returned. The caller is told to reuse what it has or
@@ -110,6 +146,9 @@ export async function mintIntegrationKey(
 			// acts for, not to whoever happened to be on the request.
 			userId: principal.creatorId,
 			permissions: INTEGRATION_SCOPES as Record<string, string[]>,
+			// Ownership is recorded, not inferred from the name, so listing and
+			// revocation can find every key this connection minted.
+			metadata: integrationMetadata(),
 		},
 	});
 
@@ -132,12 +171,21 @@ export async function listIntegrationKeys(principal: Principal) {
 	const rows = await db.query.apikey.findMany({
 		where: and(
 			eq(apikey.referenceId, principal.creatorId),
-			eq(apikey.name, KEY_NAME),
 			eq(apikey.enabled, true),
 		),
-		columns: { id: true, name: true, start: true, createdAt: true },
+		columns: {
+			id: true,
+			name: true,
+			start: true,
+			createdAt: true,
+			metadata: true,
+		},
 	});
-	return rows;
+	// Filtered in code because ownership is a JSON marker, not a column. The set
+	// is one creator's own keys, so this is small.
+	return rows
+		.filter((row) => isIntegrationKey(row.metadata))
+		.map(({ metadata: _metadata, ...row }) => row);
 }
 
 /**
@@ -155,18 +203,18 @@ export async function revokeIntegrationKey(principal: Principal, id: string) {
 			"Only a connected integration can revoke consumption keys",
 			403,
 		);
-	const [revoked] = await db
+	const [candidate] = await db
+		.select({ id: apikey.id, metadata: apikey.metadata })
+		.from(apikey)
+		.where(and(eq(apikey.id, id), eq(apikey.referenceId, principal.creatorId)))
+		.limit(1);
+	// Matched on creator **and** the ownership marker, so a caller cannot delete
+	// a key it did not mint — including one it renamed to look like its own.
+	if (!candidate || !isIntegrationKey(candidate.metadata))
+		throw new ServiceError("NOT_FOUND", "No such consumption key", 404);
+	await db
 		.update(apikey)
 		.set({ enabled: false })
-		.where(
-			and(
-				eq(apikey.id, id),
-				eq(apikey.referenceId, principal.creatorId),
-				eq(apikey.name, KEY_NAME),
-			),
-		)
-		.returning({ id: apikey.id });
-	if (!revoked)
-		throw new ServiceError("NOT_FOUND", "No such consumption key", 404);
-	return { id: revoked.id, revoked: true };
+		.where(eq(apikey.id, candidate.id));
+	return { id: candidate.id, revoked: true };
 }

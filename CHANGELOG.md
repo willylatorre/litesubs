@@ -135,6 +135,11 @@ All notable changes to this project will be documented in this file.
 - **Google Calendar (optional)**: OAuth connection with AES-256-GCM encrypted
   tokens, free/busy slot filtering, and best-effort event sync that cannot roll
   back a booking or a debit. Unverified against a live Google client.
+  **Superseded:** bookings, the calendar client, and `calendar_connections` were
+  removed in `0018` when scheduling moved to Plannerie; nothing in this repo
+  reads a calendar any more. The "unverified" note is kept so the historical
+  entry is not silently rewritten, and it now refers to code that no longer
+  exists rather than an open risk.
 - **Outgoing webhooks**:
   - Creators register HTTPS endpoints for `purchase.completed` and
     `credits.changed`. Deliveries are signed with HMAC-SHA256 over the exact

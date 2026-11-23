@@ -56,7 +56,6 @@ const sections: LegalSection[] = [
 					"API key names, prefixes, scopes, and last-used timestamps. The secret value is shown once and stored only in a form we cannot read back.",
 					"Webhook endpoint URLs, subscribed events, and delivery attempts and responses.",
 					"OAuth grants and tokens issued to AI assistants or other MCP clients, including the scopes granted and the client identity.",
-					"Google Calendar connection metadata and encrypted OAuth tokens, if you connect a calendar for bookings.",
 				],
 			},
 			{ type: "subheading", text: "Usage and technical data" },
@@ -112,7 +111,7 @@ const sections: LegalSection[] = [
 				type: "list",
 				items: [
 					"Stripe, for payment processing, connected accounts, application fees, refunds, and payouts. Stripe acts under its own privacy policy.",
-					"Google, when you sign in with Google or connect Google Calendar, for authentication and calendar data.",
+					"Google, when you sign in with Google, for authentication.",
 					"Our hosting and managed database providers, which store the application data described above.",
 					"Email delivery providers, to send transactional and security messages.",
 					"AI assistants and MCP clients you explicitly authorize through OAuth, limited to the scopes you grant. You can revoke a grant at any time.",
@@ -152,7 +151,7 @@ const sections: LegalSection[] = [
 			},
 			{
 				type: "paragraph",
-				text: "Credit ledger entries are kept for as long as the creator\u2019s account and relevant billing records require, because they substantiate what was sold and consumed. Server logs are kept for a short operational window unless needed for a security investigation. Encrypted calendar tokens are deleted when you disconnect the integration.",
+				text: "Credit ledger entries are kept for as long as the creator\u2019s account and relevant billing records require, because they substantiate what was sold and consumed. Server logs are kept for a short operational window unless needed for a security investigation.",
 			},
 		],
 	},
@@ -180,7 +179,7 @@ const sections: LegalSection[] = [
 		blocks: [
 			{
 				type: "paragraph",
-				text: "Traffic is encrypted in transit, passwords are hashed, API key secrets are not retrievable after creation, and calendar tokens are encrypted at rest with a dedicated key. Access to production systems is limited to people who need it.",
+				text: "Traffic is encrypted in transit, passwords are hashed, and API key secrets are not retrievable after creation, because only a hash of each key is stored. Access to production systems is limited to people who need it.",
 			},
 			{
 				type: "paragraph",

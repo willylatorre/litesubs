@@ -125,22 +125,29 @@ test("a connection mints a consume key, and only a connection may", {
 	// fresh long-lived credential and make the scope split meaningless.
 	await assert.rejects(
 		() => mintIntegrationKey(machine(creatorId)),
-		(error) =>
-			error instanceof ServiceError && error.code === "FORBIDDEN",
+		(error) => error instanceof ServiceError && error.code === "FORBIDDEN",
 	);
 
 	const minted = await mintIntegrationKey(oauth(creatorId));
 	assert.ok(minted.key, "the raw key is returned once, at creation");
 	assert.ok(minted.key?.startsWith("ls_"), "uses the configured prefix");
 
-	// The minted key is bound to the creator and limited to consumption.
-	const [row] = await db
-		.select()
-		.from(apikey)
-		.where(eq(apikey.id, minted.id));
+	// The minted key is bound to the creator and carries exactly the documented
+	// management-plus-consumption scopes — including `webhooks:manage` being
+	// deliberately absent, because a delegated key must not choose where a
+	// tenant's data is sent.
+	const [row] = await db.select().from(apikey).where(eq(apikey.id, minted.id));
 	assert.equal(row.referenceId, creatorId);
 	// Stored as JSON text by the api-key plugin, not as a jsonb object.
-	assert.deepEqual(JSON.parse(row.permissions ?? "{}"), { credits: ["consume"] });
+	assert.deepEqual(JSON.parse(row.permissions ?? "{}"), {
+		credits: ["consume"],
+		customers: ["read", "write"],
+		plans: ["read", "write"],
+		billing: ["read"],
+	});
+	// Ownership is recorded so a key can be found again regardless of its name.
+	const metadata = JSON.parse(row.metadata ?? "{}");
+	assert.equal(metadata.litesubsIntegrationKey, "platform-billing");
 
 	// Minting twice refuses rather than piling up identical credentials, because
 	// the secret cannot be shown a second time.
@@ -169,6 +176,71 @@ test("a connection mints a consume key, and only a connection may", {
 
 	await db.delete(user).where(eq(user.id, creatorId));
 	await db.delete(user).where(eq(user.id, otherId));
+});
+
+/**
+ * Key ownership is the marker, not the label.
+ *
+ * Names are user-facing: a creator can call their own dashboard key "Platform
+ * consumption". Matching on the name then refuses a legitimate mint, and a
+ * caller that picks a different name mints a key it can never list or revoke —
+ * a credential that spends the creator's balance and cannot be taken away by
+ * the connection that created it.
+ */
+test("integration keys are owned by marker, not by their display name", {
+	skip: !process.env.MCP_TEST_DATABASE_URL,
+}, async () => {
+	assert.equal(process.env.DATABASE_URL, process.env.MCP_TEST_DATABASE_URL);
+	const creatorId = crypto.randomUUID();
+	await seedCreator(creatorId);
+	await grantTestPremium(creatorId);
+
+	// A dashboard key the creator made themselves, sharing the default label.
+	// Imported lazily: `@/lib/auth` initialises Better Auth and touches the
+	// database at module load, which a skipped test must not require.
+	const { auth } = await import("@/lib/auth");
+	const dashboardKey = await auth.api.createApiKey({
+		body: {
+			name: "Platform consumption",
+			userId: creatorId,
+			permissions: { credits: ["consume"] } as Record<string, string[]>,
+		},
+	});
+
+	// The label collision must not block the connection's own mint.
+	const minted = await mintIntegrationKey(oauth(creatorId));
+	assert.ok(minted.key);
+
+	// A caller-chosen label must still be listable and revocable.
+	const renamed = await mintIntegrationKey(oauth(creatorId), {
+		name: "renamed by the caller",
+	}).catch((error) => error);
+	assert.ok(
+		renamed instanceof ServiceError && renamed.code === "KEY_EXISTS",
+		"a second live integration key is still refused",
+	);
+
+	await revokeIntegrationKey(oauth(creatorId), minted.id);
+	const second = await mintIntegrationKey(oauth(creatorId), {
+		name: "renamed by the caller",
+	});
+	const listed = await listIntegrationKeys(oauth(creatorId));
+	assert.deepEqual(
+		listed.map((key) => key.id),
+		[second.id],
+		"a custom-named integration key must still be visible to its owner",
+	);
+	// Revoking it must work even though the name is not the default.
+	await revokeIntegrationKey(oauth(creatorId), second.id);
+	assert.equal((await listIntegrationKeys(oauth(creatorId))).length, 0);
+
+	// The creator's own key is untouched by any of this.
+	await assert.rejects(
+		() => revokeIntegrationKey(oauth(creatorId), dashboardKey.id),
+		(error) => error instanceof ServiceError && error.code === "NOT_FOUND",
+	);
+
+	await db.delete(user).where(eq(user.id, creatorId));
 });
 
 test("a teacher can provision a customer who never signs in, then debit them", {
@@ -208,18 +280,24 @@ test("a teacher can provision a customer who never signs in, then debit them", {
 	assert.equal(again.created, false);
 
 	// Enroll and grant, then consume — all before the learner has ever logged in.
-	await db.insert(enrollments).values({
-		userId: provisioned.customerId,
-		planId: plan.id,
-		creatorId,
+	// Provisioning with a plan must produce the enrollment itself: a test that
+	// inserts it by hand passes even when the endpoint leaves the customer
+	// unusable, which is exactly the defect this now guards against.
+	const withPlan = await provisionCustomer(oauth(creatorId), {
+		email,
+		plan: plan.id,
 	});
+	assert.equal(withPlan.customerId, provisioned.customerId);
+	assert.equal(withPlan.planId, plan.id);
+
 	const enrollment = await db.query.enrollments.findFirst({
 		where: and(
 			eq(enrollments.creatorId, creatorId),
 			eq(enrollments.userId, provisioned.customerId),
+			eq(enrollments.planId, plan.id),
 		),
 	});
-	assert.ok(enrollment);
+	assert.ok(enrollment, "provisioning a plan must create the enrollment");
 
 	await changeCredits(
 		oauth(creatorId),

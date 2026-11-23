@@ -532,6 +532,10 @@ test("outgoing webhooks sign, deliver, and stay tenant-scoped", {
 		);
 
 		await t.test("a machine key cannot configure webhooks", async () => {
+			// The refusal is scope-based, not credential-kind-based: `requireScope`
+			// is the one authorization rule for every transport, and a key holds
+			// exactly the scopes it was minted with. A consume-only key therefore
+			// fails on the missing scope rather than on being a machine key.
 			for (const attempt of [
 				() =>
 					createEndpoint(machine, {
@@ -545,7 +549,8 @@ test("outgoing webhooks sign, deliver, and stay tenant-scoped", {
 				await assert.rejects(
 					attempt,
 					(error: unknown) =>
-						error instanceof ServiceError && error.code === "FORBIDDEN",
+						error instanceof ServiceError &&
+						(error.code === "INSUFFICIENT_SCOPE" || error.code === "FORBIDDEN"),
 				);
 		});
 	} finally {

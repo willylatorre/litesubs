@@ -53,7 +53,23 @@ export const subscription = pgTable(
 		stripeSubscriptionId: text("stripe_subscription_id").unique(),
 		status: text("status").default("incomplete").notNull(),
 		periodStart: timestamp("period_start", { withTimezone: true }),
+		/**
+		 * Stripe's *current* billing period end. It is **not** what the creator has
+		 * paid for: Stripe advances it when a renewal period starts, before the
+		 * invoice is paid, and leaves it advanced when that invoice then fails.
+		 * Entitlement therefore reads `paidThroughAt`, never this column.
+		 */
 		periodEnd: timestamp("period_end", { withTimezone: true }),
+		/**
+		 * The end of the latest invoice that was actually paid. Monotonic: it only
+		 * moves forward, so a failed renewal, a retry, and an out-of-order
+		 * delivery all leave the last genuinely paid boundary intact.
+		 *
+		 * `null` means "not resolved yet", not "never paid". A row written by the
+		 * plugin before this column existed is refreshed from Stripe's invoice
+		 * history on the next platform webhook for that creator.
+		 */
+		paidThroughAt: timestamp("paid_through_at", { withTimezone: true }),
 		trialStart: timestamp("trial_start", { withTimezone: true }),
 		trialEnd: timestamp("trial_end", { withTimezone: true }),
 		cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false),

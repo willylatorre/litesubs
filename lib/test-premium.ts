@@ -23,9 +23,18 @@ export async function grantTestPremium(creatorId: string) {
 			status: "active",
 			periodStart: new Date(),
 			periodEnd,
+			// The fixture must state the paid boundary too. Entitlement reads this
+			// column, so a fixture that only set `periodEnd` would read as "nothing
+			// provably paid" and silently test the free tier.
+			paidThroughAt: periodEnd,
 		})
 		.onConflictDoUpdate({
 			target: subscription.referenceId,
-			set: { plan: "premium", status: "active", periodEnd },
+			set: {
+				plan: "premium",
+				status: "active",
+				periodEnd,
+				paidThroughAt: periodEnd,
+			},
 		});
 }

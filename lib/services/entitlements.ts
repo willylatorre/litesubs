@@ -6,6 +6,7 @@ import {
 	plans,
 	subscription,
 } from "@/app/db/schema";
+import { refreshPaidThrough } from "./platform-billing";
 import { ServiceError } from "./principal";
 
 type Tier = (typeof creatorTierEnum.enumValues)[number];
@@ -59,20 +60,29 @@ export type StoredSubscription = {
 	plan: string;
 	status: string;
 	periodEnd: Date | null;
+	/** The end of the latest PAID invoice; see `2022_platform_paid_through`. */
+	paidThroughAt: Date | null;
 	cancelAtPeriodEnd: boolean | null;
 };
 
 /**
- * Premium access follows the paid-through instant, not Stripe's status string.
+ * Premium access follows the paid-through instant, not Stripe's status string
+ * and not Stripe's `period_end`.
  *
  * A failed renewal must not revoke access the creator already paid for, and a
  * `canceled` subscription whose period has not ended is still paid up. This is
  * the same rule customer subscriptions use, so the two cannot disagree about
  * what "paid" means.
+ *
+ * The distinction between `periodEnd` and `paidThroughAt` is the whole point of
+ * this function. Stripe advances `period_end` to the *next* period when a
+ * renewal begins and leaves it advanced if the charge then fails, so a rule
+ * reading `period_end` grants the unpaid period. `paidThroughAt` only moves on
+ * a paid invoice.
  */
 /**
  * Statuses that can never imply a paid period. Everything else is judged by
- * `periodEnd` alone.
+ * `paidThroughAt` alone.
  *
  * This is a **blacklist on purpose.** Whitelisting `active`/`past_due` would
  * cancel a creator the moment Stripe reports a status we did not think of (a new
@@ -89,7 +99,11 @@ function isPremiumNow(
 	if (!row) return false;
 	if (row.plan !== PREMIUM_PLAN) return false;
 	if (NEVER_PAID.has(row.status)) return false;
-	return row.periodEnd === null || row.periodEnd.getTime() > now;
+	// No resolved boundary yet: the creator has not been charged, or the row
+	// predates the column and has not been refreshed. Either way nothing is
+	// demonstrably paid, so do not grant on `periodEnd`'s word.
+	if (row.paidThroughAt === null) return false;
+	return row.paidThroughAt.getTime() > now;
 }
 
 function statusFor(
@@ -127,7 +141,9 @@ export function deriveEntitlement(
 		canUseDeveloperFeatures: premium,
 		status: statusFor(row, premium),
 		cancelAtPeriodEnd: row?.cancelAtPeriodEnd ?? false,
-		paidThroughAt: row?.periodEnd ?? null,
+		// The date the dashboard shows as "paid through" must be the date that was
+		// actually paid, not Stripe's advanced `period_end`.
+		paidThroughAt: row?.paidThroughAt ?? null,
 	};
 }
 
@@ -144,6 +160,30 @@ export async function getEntitlement(creatorId: string): Promise<Entitlement> {
 			.from(plans)
 			.where(eq(plans.creatorId, creatorId)),
 	]);
+
+	// A row whose paid boundary was never resolved cannot be judged from
+	// `periodEnd`: that column advances before payment. Try to resolve it once
+	// from invoice history, then re-read so the caller gets the stored value.
+	//
+	// This is a read path used by every dashboard page, so a Stripe outage must
+	// degrade to "nothing provably paid" rather than failing the page. The next
+	// platform webhook retries; a creator who is actually paid is not lost, their
+	// row still exists and the boundary is filled on the next delivery.
+	if (row && row.paidThroughAt === null && row.stripeSubscriptionId) {
+		try {
+			await refreshPaidThrough(creatorId);
+		} catch (error) {
+			console.error("Platform billing: could not resolve paid-through", {
+				creatorId,
+				error: error instanceof Error ? error.message : "UnknownError",
+			});
+			return deriveEntitlement(row, planCount, Date.now());
+		}
+		const refreshed = await db.query.subscription.findFirst({
+			where: eq(subscription.referenceId, creatorId),
+		});
+		return deriveEntitlement(refreshed, planCount, Date.now());
+	}
 
 	return deriveEntitlement(row, planCount, Date.now());
 }
