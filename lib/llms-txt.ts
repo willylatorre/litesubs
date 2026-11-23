@@ -85,6 +85,7 @@ Full per-client instructions: ${base}/docs#mcp
 Machine keys and OAuth tokens both work. Send JSON with
 Content-Type: application/json. Lists accept limit (1-100, default 50) and offset.
 
+- GET /api/v1/me - the credential's creator, tier and own scopes
 - GET, POST /api/v1/plans - list or create plans
 - GET, PATCH /api/v1/plans/:id - read or update a plan
 - POST /api/v1/plans/:id/publish - publish the draft offer

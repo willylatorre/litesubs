@@ -16,6 +16,7 @@ import {
 	enrollCustomer,
 	listInvites,
 } from "@/lib/services/enroll";
+import { assertHasCreator, getIdentity } from "@/lib/services/identity";
 import {
 	getProvisionedCustomer,
 	provisionCustomer,
@@ -132,6 +133,12 @@ async function handle(
 				case "POST invites":
 					if (id) break;
 					result = await createInvite(principal, await req.json());
+					break;
+				case "GET me":
+					// Who is this credential acting as? Needed by any integration
+					// that must label a connection with its own tenant.
+					assertHasCreator(principal);
+					result = await getIdentity(principal);
 					break;
 				case "GET integrationkeys":
 					// The consume credentials this connection minted (metadata only).

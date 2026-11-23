@@ -236,7 +236,8 @@ session-oriented traffic is rejected.
 | `list_webhooks`, `create_webhook`, `update_webhook`, `delete_webhook`, `list_webhook_deliveries`, `retry_webhook_delivery`, `send_test_webhook` | `webhooks:manage` |
 | `consume_credits` | API key `credits:consume` only |
 
-**Integration endpoints** (OAuth only — a machine key is refused with `FORBIDDEN`):
+**Integration endpoints.** A key may hold any scope it was created with, so these
+work with an `x-api-key` as well as an OAuth connection:
 
 | Endpoint | Purpose |
 | --- | --- |
@@ -245,9 +246,10 @@ session-oriented traffic is rejected.
 | `GET /api/v1/integrationkeys` | List minted keys as metadata, never secrets |
 | `DELETE /api/v1/integrationkeys/:id` | Revoke a key minted by this connection |
 
-A connection needs two credentials by design: OAuth for management, and the
-minted machine key for consumption. `POST /integrationkeys` requires
-`customers:write`; the raw key is returned once and cannot be retrieved again.
+`POST /integrationkeys` requires `customers:write`; the raw key is returned once
+and cannot be retrieved again. It mints a key carrying consumption plus
+management scopes, which is what lets a client drive liteSubs with one credential
+instead of an OAuth app.
 
 Creator connections see twenty creator tools; machine keys see only
 `consume_credits`. Services enforce scopes again even if tool visibility changes;
@@ -381,6 +383,7 @@ method preferences. Stripe pays out on the creator's own account.
 
 | Method | Endpoint |
 | --- | --- |
+| GET | `/api/v1/me` — the credential's creator, tier and own scopes |
 | GET / POST | `/api/v1/plans` |
 | GET / PATCH | `/api/v1/plans/:id` |
 | POST | `/api/v1/plans/:id/publish` |

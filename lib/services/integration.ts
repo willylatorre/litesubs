@@ -28,8 +28,9 @@ import { type Principal, ServiceError } from "./principal";
  *   would make the scope split meaningless.
  * - The key is always bound to the caller's own `creatorId`. There is no
  *   parameter for whose key to create, so one tenant cannot mint for another.
- * - Permissions are fixed at `credits:consume`. Nothing here can grant
- *   `plans:write`.
+ * - Permissions are exactly the scopes the caller may delegate, expanded from
+ *   `{ resource: [action] }`. A key can never hold a scope its owner lacks,
+ *   because the map is derived from the same `CREATOR_SCOPES` guard.
  * - The raw key is returned **once**, at creation. Later reads return metadata.
  */
 
@@ -42,6 +43,21 @@ export type MintedIntegrationKey = {
 
 const KEY_NAME = "Platform consumption";
 
+/**
+ * What an integration key may do, as the stored permission map.
+ *
+ * Consumption plus management: the booking loop needs `credits:consume`, and the
+ * dashboard needs to create a learner and read plans. Excluding `webhooks:manage`
+ * on purpose — a delegated key must not be able to configure where a creator's
+ * data is sent.
+ */
+export const INTEGRATION_SCOPES: Readonly<Record<string, string[]>> = {
+	credits: ["consume"],
+	customers: ["read", "write"],
+	plans: ["read", "write"],
+	billing: ["read"],
+};
+
 export async function mintIntegrationKey(
 	principal: Principal,
 	input: { name?: string } = {},
@@ -49,7 +65,7 @@ export async function mintIntegrationKey(
 	if (principal.kind !== "oauth") {
 		throw new ServiceError(
 			"FORBIDDEN",
-			"Only a connected integration can mint a consumption key",
+			"Only a connected integration can mint an integration key",
 			403,
 		);
 	}
@@ -70,7 +86,7 @@ export async function mintIntegrationKey(
 		// rotate; silently crafting a second key would hide that.
 		throw new ServiceError(
 			"KEY_EXISTS",
-			"A consumption key already exists for this connection. Reuse it, or revoke it before minting another.",
+			"An integration key already exists for this connection. Reuse it, or revoke it before minting another.",
 			409,
 			{ id: existing.id },
 		);
@@ -93,7 +109,7 @@ export async function mintIntegrationKey(
 			// Server-only field: the key belongs to the creator the OAuth token
 			// acts for, not to whoever happened to be on the request.
 			userId: principal.creatorId,
-			permissions: { credits: ["consume"] },
+			permissions: INTEGRATION_SCOPES as Record<string, string[]>,
 		},
 	});
 
