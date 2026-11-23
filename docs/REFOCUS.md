@@ -91,6 +91,12 @@ Constraints that keep this honest:
   `@better-auth/stripe` rather than a hand-rolled service. See
   `docs/PLATFORM-BILLING.md`, which replaces the `premium.ts` approach.
 
+## Related
+
+- `docs/PLATFORM-BILLING.md` — the creator's own $5/mo tier.
+- `docs/INTEGRATION.md` — how any platform (Plannerie first) drives liteSubs:
+  the enable flow, credential split, and customer provisioning.
+
 ## Non-goals
 
 - Per-seat pricing, trials, proration policy, annual terms.
