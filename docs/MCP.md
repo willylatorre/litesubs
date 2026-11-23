@@ -251,11 +251,13 @@ and cannot be retrieved again. It mints a key carrying consumption plus
 management scopes, which is what lets a client drive liteSubs with one credential
 instead of an OAuth app.
 
-Creator connections see twenty creator tools; machine keys see only
-`consume_credits`. Services enforce scopes again even if tool visibility changes;
-a machine key is rejected at the service layer even where a scope check would
-otherwise pass. Scope failures return structured tool errors; payout/refund
-tools are absent. The earlier draft incorrectly claimed
+Tool visibility now follows the **credential's scopes**, whichever transport
+produced them. A connection holding creator scopes sees the twenty creator tools;
+a key minted with them sees the same tools, and `consume_credits` is offered to
+anyone holding `credits:consume`. A key minted consume-only still sees just that
+one. Services enforce every scope again even if tool visibility changes, so the
+list is a convenience and never the boundary. Scope failures return structured
+tool errors; payout/refund tools are absent. The earlier draft incorrectly claimed
 `createInsufficientScopeError` was missing: the settled installation exports it
 from `better-auth/oauth2`. Dynamic step-up is not implemented by this version of
 the application.

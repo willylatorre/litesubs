@@ -104,7 +104,11 @@ export function createServer(principal: Principal) {
 			},
 		);
 	}
-	if (principal.kind === "apiKey") {
+	// `consume_credits` is offered to any credential that holds the scope, not
+	// only to machine keys. OAuth is still refused it at the service layer,
+	// because the credential that spends money should be one a teacher can name
+	// and revoke on its own.
+	if (principal.scopes.includes("credits:consume")) {
 		register(
 			"consume_credits",
 			"Deduct credits for a service. Requires a stable idempotency_key unique per logical event; reuse it on retries. A different payload with the same key is rejected. reason appears in the customer ledger. dry_run previews without writing. No refunds through this API.",
@@ -112,8 +116,14 @@ export function createServer(principal: Principal) {
 			false,
 			(input) => changeCredits(principal, input, "usage"),
 		);
-		return server;
 	}
+
+	// Without a creator scope there is nothing else to expose; the service layer
+	// would refuse every remaining tool anyway.
+	const creatorScopes = principal.scopes.filter(
+		(scope) => scope !== "credits:consume",
+	);
+	if (creatorScopes.length === 0) return server;
 	register(
 		"list_plans",
 		"List your plans with their draft or published terms. Prices are in minor units (cents). Drafts cannot be purchased. Paginate with limit/offset.",

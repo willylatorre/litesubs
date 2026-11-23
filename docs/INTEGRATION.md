@@ -18,56 +18,45 @@ Consequence: nothing in liteSubs may assume Plannerie. No `plannerie` columns, n
 branching on the caller's product, no Plannerie-shaped response. The only shared
 thing is the API contract and the brand attribution.
 
-## The flow we want: "Enable liteSubs for my account"
+## The flow: "connect liteSubs" with one API key
 
-One button in Plannerie's **student subscriptions** section. The teacher should
-never see a key, a scope, a webhook, or a plan id.
+A liteSubs API key already carries the scopes it was minted for, so one pasted
+string authorizes exactly what a delegated grant would. There is no consent
+screen, no Client ID Metadata Document, and no PKCE.
 
-1. Teacher clicks **Enable liteSubs** in Plannerie.
-2. If they have no liteSubs account: Plannerie sends them to sign up (one page),
-   then straight back. No separate onboarding wizard.
-3. They land on the **liteSubs consent screen** (`/oauth/consent`, already built),
-   which asks for the scopes Plannerie needs and names Plannerie as the app.
-4. On approve, Plannerie stores the connection and receives:
-   - the OAuth grant, for managing plans and customers;
-   - a **consume-scoped machine key**, minted for Plannerie as part of the same
-     approval (see Gap A).
-5. Plannerie now shows the section as enabled, and a single **Connect Stripe**
-   button if the teacher cannot sell yet.
-6. From then on Plannerie provisions the learner and consumes credits with no
+1. The teacher creates a key in liteSubs (**Developers → API keys**) with the
+   scopes the platform needs, or a connected client mints one for them via
+   `POST /api/v1/integrationkeys`.
+2. They paste it into the platform's own settings screen.
+3. The platform verifies it against `GET /api/v1/me` — which returns the creator
+   id, name, tier and the credential's own scopes — and stores it encrypted.
+4. From then on the platform provisions learners and consumes credits with no
    further teacher action.
 
-The teacher-facing surfaces are exactly two buttons. Everything else is a call.
+**An earlier draft of this document specified OAuth + CIMD + PKCE.** It was
+dropped, and the reason is worth recording so nobody rebuilds it: liteSubs's CIMD
+validator refuses a `client_id` that resolves to a private address, and loopback
+is exempted only for `redirect_uris`. A local connect therefore returned
+`invalid_client` regardless of configuration, which made the whole flow
+untestable outside a public deployment. An API key has no such restriction.
 
-## Gap A — one credential cannot both manage and consume
+## Resolved — one credential can now both manage and consume
 
-Verified in `lib/services/principal.ts`:
+This used to be a blocker. `requireScope` refused every creator scope to a machine
+key ("Machine keys can only consume credits"), which forced any integration that
+did more than spend credits into an OAuth app.
 
-```
-apiKey  -> only `credits:consume`; every creator scope is FORBIDDEN
-oauth   -> every creator scope; `credits:consume` is FORBIDDEN
-```
+That restriction is gone. A key stores `{ resource: [action] }`, and
+`apiKeyPrincipal` derives the principal's scopes from the stored key — the same
+`requireScope` then authorizes either transport identically. What keeps it safe:
 
-So "Plannerie drives liteSubs" needs **two credentials per teacher**: an OAuth
-grant for management, and a machine key for consumption. That split is correct on
-the merits — a leaked OAuth token can rewrite plans, a leaked machine key can only
-spend credits — but it must not leak into the teacher's experience.
-
-**Plan:** during consent approval, the OAuth client may mint itself one
-consume-only key. This needs a new capability, because `auth.api.createApiKey`
-requires a browser session today, not an OAuth token:
-
-- New endpoint `POST /api/v1/integration/key` (or an MCP tool) available to an
-  **OAuth principal only**, which:
-  - creates a key bound to the same creator, permissions `credits:consume`;
-  - returns the raw key **once**, never again;
-  - records which OAuth client minted it, so revoking the connection revokes it;
-  - refuses if the caller is a machine key (no key-minting escalation).
-- The key is stored server-side by the client, never sent to a browser.
-
-Rejected alternative: widening machine keys to creator scopes. That would make a
-leaked key able to rewrite prices and publish plans, which is a far worse failure
-than a drained balance.
+- **Scopes come from the key, never from the request.** Nothing a caller sends can
+  widen its own access.
+- **`credits:consume` stays API-key-only.** The credential that spends money
+  should be one a teacher can name and revoke on its own, not folded into a broad
+  management grant.
+- `mintIntegrationKey` deliberately omits `webhooks:manage`: a delegated key must
+  not choose where a tenant's data is sent.
 
 ## Gap B — there is no "create my customer" endpoint
 
@@ -77,7 +66,7 @@ setting up a class on Monday morning.
 
 **Plan:** teacher-initiated provisioning, as a distinct operation:
 
-- `POST /api/v1/customers` (OAuth, `customers:write`) with `{ email, name? }`:
+- `POST /api/v1/customers` (`customers:write`) with `{ email, name? }`:
   - if a liteSubs user with that email exists, link them as this creator's
     customer (no duplicate account);
   - if not, create the account **unclaimed**, and send the standard invite so the
@@ -126,10 +115,16 @@ who it is only for. The product still has to work for any platform.
 
 ## Slices
 
-- **I1 — key minting on consent.** **Done.** `POST /api/v1/integrationkeys`
-  (OAuth only), `GET` to list metadata, `DELETE /:id` to revoke. Machine keys are
-  refused with `FORBIDDEN`; a second mint refuses with `KEY_EXISTS` because the
-  secret cannot be shown twice. Proven by `lib/integration-contract.integration.test.ts`.
+- **I1 — key minting.** **Done.** `POST /api/v1/integrationkeys` (OAuth
+  connection only — a key must not mint another key, or one leaked key escalates
+  to a fresh long-lived credential), `GET` to list metadata, `DELETE /:id` to
+  revoke. A second mint refuses with `KEY_EXISTS` because the secret cannot be
+  shown twice. The key it mints carries consumption **and** management scopes, so
+  one key drives the integration. Proven by
+  `lib/integration-contract.integration.test.ts`.
+- **I0 — keys carry creator scopes.** **Done.** `apiKeyPrincipal` derives scopes
+  from the stored key, so a pasted key authorizes management without an OAuth app.
+  `GET /api/v1/me` exists so a client can learn whose account a key acts for.
 - **I2 — customer provisioning.** **Done.** `POST /api/v1/customers`, idempotent
   per `(creator, email)`, creates an unclaimed account, links a
   `creator_customers` row, and emails nothing. Proven: the customer is granted
