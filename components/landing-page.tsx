@@ -152,7 +152,7 @@ export function LandingPage() {
 					Your credit plans, connected to your AI assistant
 				</h2>
 				<p className="mx-auto max-w-xl text-muted-foreground">
-					Create plans, enroll students, and grant credits through our remote
+					Create plans, enroll customers, and grant credits through our remote
 					MCP server. Use the REST API to consume credits from your own app.
 				</p>
 				<p className="text-sm">
