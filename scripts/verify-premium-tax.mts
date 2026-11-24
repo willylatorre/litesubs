@@ -8,6 +8,12 @@
  * `automatic_tax` present, tax ids accepted, and the amount still the $5 price.
  *
  * It makes no payment: it only creates an unpaid session and expires it.
+ *
+ * Requires a running dev server on `BETTER_AUTH_URL` with this branch's code, a
+ * migrated disposable database, and the sandbox Price/secret. The sandbox
+ * account also needs a `tax/settings` head office — without one, Stripe answers
+ * the upgrade with 400 "You must have a valid head office address to enable
+ * automatic tax calculation in test mode". See `docs/PLATFORM-BILLING.md`.
  */
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
