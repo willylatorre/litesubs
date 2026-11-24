@@ -125,6 +125,18 @@ period that was paid for. A `null` boundary means "unknown", never "paid
 forever"; the next platform webhook (or the first `getEntitlement` after the
 column was added) refreshes it from invoices.
 
+Two constraints keep that refresh cheap, because it is on a read path:
+
+- **One bounded request.** `for await` over `invoices.list()` auto-paginates the
+  *entire* history (`limit` is a page size, not a total cap), so a creator with
+  years of invoices made every refresh walk all of them. `resolvePaidThrough`
+  reads one page of 100 and stops — far more months than an entitlement needs.
+- **No repeat on every page load.** `paid_through_checked_at` (migration `0023`)
+  records that a look happened even when it found nothing. An abandoned checkout
+  has no paid invoice, so without it every dashboard load re-queried Stripe,
+  forever, and re-learned nothing. A null boundary is now retried at most once
+  per 6 hours, and the webhook remains the primary repair path.
+
 Proven end to end by `scripts/verify-platform-billing.mts`, which creates real
 Stripe objects on a test clock and feeds the **real emitted events** through the
 **real** `/api/auth/stripe/webhook` route, signed with that endpoint's secret.

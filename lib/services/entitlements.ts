@@ -6,7 +6,10 @@ import {
 	plans,
 	subscription,
 } from "@/app/db/schema";
-import { refreshPaidThrough } from "./platform-billing";
+import {
+	refreshPaidThrough,
+	shouldRefreshPaidThrough,
+} from "./platform-billing";
 import { ServiceError } from "./principal";
 
 type Tier = (typeof creatorTierEnum.enumValues)[number];
@@ -165,11 +168,19 @@ export async function getEntitlement(creatorId: string): Promise<Entitlement> {
 	// `periodEnd`: that column advances before payment. Try to resolve it once
 	// from invoice history, then re-read so the caller gets the stored value.
 	//
+	// `shouldRefreshPaidThrough` keeps this from becoming a Stripe call on every
+	// page load: `paidThroughCheckedAt` records that a look happened even when it
+	// found nothing, so an abandoned checkout is not re-queried forever, and the
+	// webhook remains the primary repair path in between.
+	//
 	// This is a read path used by every dashboard page, so a Stripe outage must
-	// degrade to "nothing provably paid" rather than failing the page. The next
-	// platform webhook retries; a creator who is actually paid is not lost, their
-	// row still exists and the boundary is filled on the next delivery.
-	if (row && row.paidThroughAt === null && row.stripeSubscriptionId) {
+	// degrade to "nothing provably paid" rather than failing the page.
+	if (
+		row &&
+		row.paidThroughAt === null &&
+		row.stripeSubscriptionId &&
+		shouldRefreshPaidThrough(row.paidThroughCheckedAt, Date.now())
+	) {
 		try {
 			await refreshPaidThrough(creatorId);
 		} catch (error) {

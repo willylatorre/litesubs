@@ -36,6 +36,7 @@ const MIGRATIONS = [
 	"drizzle/0020_creator_entitlements.sql",
 	"drizzle/0021_platform_billing.sql",
 	"drizzle/0022_platform_paid_through.sql",
+	"drizzle/0023_platform_paid_through_checked.sql",
 ];
 
 /** Drizzle skips entries whose timestamp is not newer than the last applied. */
@@ -1094,6 +1095,40 @@ test("0022 backfills paid-through only for fully paid subscriptions", {
 				{ id: "ls_canceled", paid: null },
 				{ id: "ls_pastdue", paid: null },
 			],
+		);
+	});
+});
+
+/**
+ * 0023 adds the "when did we last look" timestamp.
+ *
+ * It must not invent a check time for existing rows: a row whose boundary is
+ * null has never been resolved by this code and *should* be looked at once. A
+ * backfilled timestamp would mark it "already checked" and strand the creator on
+ * the free tier until a webhook happened to arrive.
+ */
+test("0023 adds the check timestamp without marking existing rows checked", {
+	skip: !process.env.MIGRATION_TEST_DATABASE_URL,
+}, async () => {
+	await withFreshDatabase(async (client) => {
+		await apply(client, ...MIGRATIONS.slice(0, 24));
+		await client.query(`
+			INSERT INTO "user"(id,name,email,email_verified) VALUES
+				('u1','Creator','c@example.test',true);
+			INSERT INTO litesub_subscription(id,plan,reference_id,status,period_end,paid_through_at)
+			VALUES ('ls1','premium','u1','past_due','2027-02-01T00:00:00Z',NULL);
+		`);
+
+		const {
+			rows: [row],
+		} = await client.query(
+			"select paid_through_at, paid_through_checked_at from litesub_subscription where id='ls1'",
+		);
+		assert.equal(row.paid_through_at, null);
+		assert.equal(
+			row.paid_through_checked_at,
+			null,
+			"an unresolved row must remain eligible for one resolving look",
 		);
 	});
 });

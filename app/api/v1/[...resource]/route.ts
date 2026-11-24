@@ -2,11 +2,6 @@ import { errorResponse } from "@/lib/api-response";
 import { withPrincipal } from "@/lib/principal";
 import { changeCredits } from "@/lib/services/credits";
 import {
-	listIntegrationKeys,
-	mintIntegrationKey,
-	revokeIntegrationKey,
-} from "@/lib/services/integration";
-import {
 	getCustomer,
 	listCustomers,
 	listTransactions,
@@ -18,9 +13,10 @@ import {
 } from "@/lib/services/enroll";
 import { assertHasCreator, getIdentity } from "@/lib/services/identity";
 import {
-	getProvisionedCustomer,
-	provisionCustomer,
-} from "@/lib/services/provisioning";
+	listIntegrationKeys,
+	mintIntegrationKey,
+	revokeIntegrationKey,
+} from "@/lib/services/integration";
 import {
 	createPlan,
 	getPlan,
@@ -28,6 +24,7 @@ import {
 	updatePlan,
 } from "@/lib/services/plans";
 import type { Principal } from "@/lib/services/principal";
+import { provisionCustomer } from "@/lib/services/provisioning";
 import { publishPlan, unpublishPlan } from "@/lib/services/publish";
 import {
 	createEndpoint,

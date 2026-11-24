@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/app/db";
 import { creatorCustomers, enrollments, user } from "@/app/db/schema";
@@ -191,28 +191,4 @@ export async function provisionCustomer(
 			unclaimed: !account?.emailVerified,
 		};
 	});
-}
-
-/** Read back one provisioned customer, scoped to the calling creator. */
-export async function getProvisionedCustomer(
-	principal: Principal,
-	customerId: string,
-) {
-	requireScope(principal, "customers:read");
-	const [row] = await db
-		.select({
-			customerId: creatorCustomers.userId,
-			email: creatorCustomers.email,
-			createdAt: creatorCustomers.createdAt,
-		})
-		.from(creatorCustomers)
-		.where(
-			and(
-				eq(creatorCustomers.creatorId, principal.creatorId),
-				eq(creatorCustomers.userId, customerId),
-			),
-		)
-		.limit(1);
-	if (!row) throw new ServiceError("NOT_FOUND", "Customer not found", 404);
-	return row;
 }

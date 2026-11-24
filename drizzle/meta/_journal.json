@@ -162,6 +162,13 @@
       "when": 1795324097360,
       "tag": "0022_platform_paid_through",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1795324098360,
+      "tag": "0023_platform_paid_through_checked",
+      "breakpoints": true
     }
   ]
 }

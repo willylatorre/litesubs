@@ -438,6 +438,14 @@ request a page and continue until it is shorter than `limit`.
 the customer exists but `credits/grant` and `credits/consume` return `NOT_FOUND`
 until they are enrolled, because every credit operation targets an enrollment.
 
+Transaction fields are a **closed set**: `id`, `userId`, `planId`,
+`planVersionId`, `amount`, `amountMoney`, `currency`, `type`, `status`,
+`description`, `balanceBefore`, `balanceAfter`, `idempotencyKey`, `createdAt`,
+plus a `plan` object of `{ id, name, description }`. The platform's own Stripe
+bookkeeping on that table — the Checkout session id, the creator's connected
+account id, and the application fee — is **not** exposed, because it is internal
+reconciliation data and belongs to a third party. Do not depend on it appearing.
+
 Example machine request (substitute your IDs and keep the event key stable):
 
 ```sh

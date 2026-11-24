@@ -24,20 +24,18 @@ import {
 	enrollments,
 	plans,
 	planVersions,
+	transactions,
 	user,
 } from "@/app/db/schema";
 import { connectedAccounts } from "@/app/db/stripe-connect-schema";
 import { changeCredits, usableBalance } from "@/lib/services/credits";
+import { listTransactions } from "@/lib/services/customers";
 import {
 	listIntegrationKeys,
 	mintIntegrationKey,
 	revokeIntegrationKey,
 } from "@/lib/services/integration";
-import {
-	type Principal,
-	ServiceError,
-	sessionPrincipal,
-} from "@/lib/services/principal";
+import { type Principal, ServiceError } from "@/lib/services/principal";
 import { provisionCustomer } from "@/lib/services/provisioning";
 import { grantTestPremium } from "@/lib/test-premium";
 
@@ -239,6 +237,65 @@ test("integration keys are owned by marker, not by their display name", {
 		() => revokeIntegrationKey(oauth(creatorId), dashboardKey.id),
 		(error) => error instanceof ServiceError && error.code === "NOT_FOUND",
 	);
+
+	await db.delete(user).where(eq(user.id, creatorId));
+});
+
+/**
+ * The ledger an integration reads must not include the platform's internal
+ * Stripe linkage.
+ *
+ * `transactions` carries the Checkout session id, the creator's connected
+ * account id, and the application fee for reconciliation. Spreading the row put
+ * all of it in `GET /transactions`, so any key with `billing:read` could read
+ * the creator's connected account id and the exact Checkout behind every sale.
+ * None of it helps a consumer, and all of it is a third party's identifier.
+ */
+test("the ledger a client reads exposes no internal Stripe identifiers", {
+	skip: !process.env.MCP_TEST_DATABASE_URL,
+}, async () => {
+	assert.equal(process.env.DATABASE_URL, process.env.MCP_TEST_DATABASE_URL);
+	const creatorId = crypto.randomUUID();
+	const plan = await seedCreator(creatorId);
+
+	await db.insert(transactions).values({
+		id: crypto.randomUUID(),
+		creatorId,
+		userId: creatorId,
+		planId: plan.id,
+		amount: 5,
+		amountMoney: 1_000,
+		currency: "usd",
+		type: "purchase",
+		status: "completed",
+		description: "Sold a pack",
+		stripeCheckoutId: `cs_test_internal_${creatorId.slice(0, 8)}`,
+		usesStripeConnect: true,
+		stripeConnectAccountId: `acct_internal_${creatorId.slice(0, 8)}`,
+		stripeApplicationFee: 0,
+	});
+
+	const rows = await listTransactions(oauth(creatorId), { limit: 10 });
+	assert.equal(rows.length, 1);
+	const row = rows[0] as Record<string, unknown>;
+	for (const internal of [
+		"stripeCheckoutId",
+		"stripeConnectAccountId",
+		"stripeApplicationFee",
+		"usesStripeConnect",
+		"subscriptionInvoiceId",
+		"creatorId",
+	]) {
+		assert.equal(
+			internal in row,
+			false,
+			`GET /transactions must not expose ${internal}`,
+		);
+	}
+	// The fields a consumer actually needs are still there.
+	assert.equal(row.amount, 5);
+	assert.equal(row.amountMoney, 1_000);
+	assert.equal(row.status, "completed");
 
 	await db.delete(user).where(eq(user.id, creatorId));
 });

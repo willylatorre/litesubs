@@ -310,6 +310,36 @@ export async function getCustomer(principal: Principal, identifier: string) {
 	};
 }
 
+/**
+ * The transaction fields a client may see.
+ *
+ * The table also holds the platform's internal Stripe linkage — the Checkout
+ * session id, the creator's connected account id, the application fee — which is
+ * bookkeeping for reconciliation, not part of the integration contract. Spreading
+ * the row published all of it to any key holding `billing:read`: a consumer could
+ * read the creator's connected account id and the exact Checkout session behind
+ * every sale, and had no use for either.
+ *
+ * Fields are listed explicitly rather than derived, so adding an internal column
+ * does not silently publish it.
+ */
+const TRANSACTION_COLUMNS = {
+	id: true,
+	userId: true,
+	planId: true,
+	planVersionId: true,
+	amount: true,
+	amountMoney: true,
+	currency: true,
+	type: true,
+	status: true,
+	description: true,
+	balanceBefore: true,
+	balanceAfter: true,
+	idempotencyKey: true,
+	createdAt: true,
+} as const;
+
 export async function listTransactions(
 	principal: Principal,
 	input: unknown = {},
@@ -330,11 +360,21 @@ export async function listTransactions(
 		conditions.push(
 			eq(transactions.planId, (await resolvePlan(principal, page.plan)).id),
 		);
-	return db.query.transactions.findMany({
+	const rows = await db.query.transactions.findMany({
 		where: and(...conditions),
 		orderBy: [desc(transactions.createdAt), desc(transactions.id)],
 		limit: page.limit,
 		offset: page.offset,
-		with: { plan: true },
+		columns: TRANSACTION_COLUMNS,
+		with: {
+			plan: {
+				columns: {
+					id: true,
+					name: true,
+					description: true,
+				},
+			},
+		},
 	});
+	return rows;
 }

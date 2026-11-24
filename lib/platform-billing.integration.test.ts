@@ -186,3 +186,90 @@ test("platform billing follows the paid period, not Stripe's advanced one", {
 	for (const id of [paid, failed, midPeriod, canceled, legacy])
 		await db.delete(user).where(eq(user.id, id));
 });
+
+/**
+ * A null boundary must not become a Stripe call on every page load.
+ *
+ * Two distinct situations share `paidThroughAt = null`: "not checked yet" and
+ * "checked, nothing was paid". An abandoned checkout is the second, and before
+ * `paidThroughCheckedAt` existed `getEntitlement` re-queried Stripe every time
+ * anyone opened the dashboard, forever, and always found nothing.
+ *
+ * The read path is gated on a 6h staleness floor. This asserts the gate itself
+ * with a controlled clock, because the cost being prevented is an external API
+ * call, not a wrong value.
+ */
+test("an unpaid creator is not re-queried on every read", {
+	skip: !process.env.MCP_TEST_DATABASE_URL,
+}, async () => {
+	assert.equal(process.env.DATABASE_URL, process.env.MCP_TEST_DATABASE_URL);
+	const { shouldRefreshPaidThrough } = await import(
+		"@/lib/services/platform-billing"
+	);
+
+	const now = Date.now();
+	const HOUR = 60 * 60 * 1000;
+
+	// Never checked: worth one look, so a legacy row heals on first read.
+	assert.equal(shouldRefreshPaidThrough(null, now), true);
+
+	// Checked and nothing was paid: not worth another call yet.
+	assert.equal(
+		shouldRefreshPaidThrough(new Date(now - 1 * HOUR), now),
+		false,
+		"an abandoned checkout must not be re-queried on every dashboard load",
+	);
+
+	// Checked long ago: worth retrying, so a missed webhook does not strand a
+	// creator who has since paid.
+	assert.equal(shouldRefreshPaidThrough(new Date(now - 7 * HOUR), now), true);
+});
+
+/**
+ * `for await` over `invoices.list()` auto-paginates the whole history; `limit`
+ * is a page size. This pins the resolver to exactly one request, because a
+ * creator with years of invoices would otherwise make every refresh walk all of
+ * them. The fake client makes the call count directly observable.
+ */
+test("paid-through resolution makes exactly one Stripe request", async () => {
+	const { resolvePaidThrough } = await import(
+		"@/lib/services/platform-billing"
+	);
+	let calls = 0;
+	const client = {
+		invoices: {
+			list: async () => {
+				calls += 1;
+				return {
+					object: "list" as const,
+					url: "/v1/invoices",
+					has_more: true,
+					data: [
+						{
+							id: "in_1",
+							status: "paid",
+							billing_reason: "subscription_cycle",
+							lines: {
+								data: [
+									{
+										parent: {
+											type: "subscription_item_details",
+											subscription_item_details: {
+												proration: false,
+											},
+										},
+										period: { end: 1_800_000_000 },
+									},
+								],
+							},
+						},
+					],
+				};
+			},
+		},
+	} as unknown as Parameters<typeof resolvePaidThrough>[1];
+
+	const resolved = await resolvePaidThrough("sub_test", client);
+	assert.equal(calls, 1, "must not page through invoice history");
+	assert.equal(resolved?.getTime(), 1_800_000_000_000);
+});

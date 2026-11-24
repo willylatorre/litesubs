@@ -65,11 +65,21 @@ export const subscription = pgTable(
 		 * moves forward, so a failed renewal, a retry, and an out-of-order
 		 * delivery all leave the last genuinely paid boundary intact.
 		 *
-		 * `null` means "not resolved yet", not "never paid". A row written by the
-		 * plugin before this column existed is refreshed from Stripe's invoice
-		 * history on the next platform webhook for that creator.
+		 * `null` means "no period is provably paid". `paidThroughCheckedAt` says
+		 * whether that was ever checked — see the comment there.
 		 */
 		paidThroughAt: timestamp("paid_through_at", { withTimezone: true }),
+		/**
+		 * When `paidThroughAt` was last resolved from Stripe's invoice history.
+		 *
+		 * A null boundary plus a null/old timestamp means "we have not looked";
+		 * a null boundary plus a recent timestamp means "we looked, nothing was
+		 * paid". Without this, a creator whose checkout was abandoned has a null
+		 * boundary forever and every dashboard load calls Stripe to re-learn that.
+		 */
+		paidThroughCheckedAt: timestamp("paid_through_checked_at", {
+			withTimezone: true,
+		}),
 		trialStart: timestamp("trial_start", { withTimezone: true }),
 		trialEnd: timestamp("trial_end", { withTimezone: true }),
 		cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false),
