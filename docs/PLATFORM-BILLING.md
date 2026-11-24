@@ -352,9 +352,26 @@ verified as *missing* on 2026-11-22 unless noted.
    is exercised; the unit and integration tests assert the rules, not Stripe's
    behaviour.
 
+**Card data never reaches this server (PCI scope)**
+
+9. Both charge paths use Stripe **hosted Checkout**: the server creates a Checkout
+   Session and returns its `url`; the card is entered on Stripe's page. There is
+   no Stripe.js/Elements bundle, no `paymentIntents.create` with
+   `payment_method_data`, and no card field anywhere in this repository. This is
+   what keeps the integration out of PCI-DSS scope for card data.
+
+   The one recorded exception was **not product code**: a test-mode probe that
+   tried a raw card number to force a declined renewal. Stripe refused it (HTTP
+   402, `request id req_aljqsVs1yeZ6gL`) and emailed a first-time warning. The
+   probe was rewritten to detach the payment method instead, which produces the
+   same `past_due` state without touching card data. If a future probe needs a
+   declining card, use a Stripe test **token** (`tok_…`) or a PaymentMethod
+   already created through Stripe's own tools — never a PAN. Do not "allow raw
+   card data" in the Stripe integration settings to make such a probe work.
+
 **Known gap after this change**
 
-9. An existing creator whose `paid_through_at` is `null` reads as **free** until
+10. An existing creator whose `paid_through_at` is `null` reads as **free** until
    the next platform webhook for that creator, or their first dashboard load
    (`getEntitlement` refreshes lazily from Stripe invoices). This is deliberate —
    guessing `period_end` is the bug being fixed — but an operator deploying this
