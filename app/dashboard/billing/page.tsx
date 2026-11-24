@@ -20,7 +20,7 @@ const FREE_INCLUDED = [
 const PREMIUM_INCLUDED = [
 	"Unlimited plans",
 	"Monthly and recurring plans",
-	"API keys, webhooks and MCP",
+	"API keys and webhooks",
 	"No commission on sales",
 ];
 

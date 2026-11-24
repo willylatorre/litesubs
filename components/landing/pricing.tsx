@@ -21,7 +21,7 @@ const FREE_FEATURES = [
 const PREMIUM_FEATURES = [
 	"Unlimited plans",
 	"Monthly and recurring plans",
-	"API keys, webhooks and MCP",
+	"API keys and webhooks",
 	"No commission on sales",
 ];
 

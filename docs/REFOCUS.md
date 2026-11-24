@@ -55,7 +55,8 @@ Plannerie so an already-sent link does not 404.
 | --- | --- | --- |
 | Published one-time packs | 2 | Unlimited |
 | Monthly / recurring plans | No | Yes |
-| API keys, webhooks, MCP | No | Yes |
+| API keys and webhooks | No | Yes |
+| MCP (the assistant transport) | Yes | Yes |
 | Stripe Connect onboarding | Yes | Yes |
 
 Rates: no application fee on either tier. The creator keeps the whole sale
@@ -63,11 +64,25 @@ minus Stripe's own processing fee, on their own connected account. This is a
 deliberate revenue-model change: the platform is paid for by a subscription,
 not by a cut of each sale.
 
+MCP is on both tiers on purpose. It is a transport over the same services the
+dashboard calls, so every capability behind it is gated exactly once, by the
+tier. Gating the transport instead would sell *access to an interface* rather
+than access to a feature, and a free creator could already do the same things in
+the browser. What Premium adds is the machine-facing capability itself:
+`credits:consume` requires an API key, and webhooks are a paid feature.
+
 Constraints that keep this honest:
 
 - **The tier is enforced server-side.** A cap that only hides a button is not a
-  cap. `createPlan`, `publishPlan`, API-key creation, and webhook creation all
-  consult the same entitlement service.
+  cap. `createPlan` and plan editing consult the entitlement service before the
+  insert, which is where the plan cap and the recurring switch are decided; API-key
+  creation and webhook creation consult the same service. `publishPlan`
+  deliberately does **not**, and that is the downgrade rule below: a creator who
+  already holds a draft may still publish it after their tier lapses, because the
+  cap governs how many plans you may *create*, not whether money already on offer
+  may be taken. MCP is also not in that list, because it is a transport rather
+  than a capability: it calls these same services, so it is gated by them instead
+  of beside them.
 - **Downgrading never deletes data.** Published packs beyond the free cap stay
   live and sellable, and existing monthly subscriptions keep renewing. Only
   **new** plan creation is refused, plus editing a plan *into* a recurring one.

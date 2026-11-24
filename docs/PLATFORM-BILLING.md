@@ -299,34 +299,59 @@ exists, `subscriptions` still holds every Connect row, and dropping
 
 ## Operator checklist (not agent-doable)
 
+### Configuration update — 2026-11-24
+
+Premium billing was configured through the Stripe and Coolify APIs, without
+making a payment:
+
+- **Live:** $5/month USD Price `price_1UfJwtRWjb7lNeYoVsaj7QhF`, platform
+  webhook `we_1UfJwtRWjb7lNeYodvWMTSc5` at
+  `https://litesubs.com/api/auth/stripe/webhook`, and default Premium portal
+  `bpc_1UfJwuRWjb7lNeYoy4ggbKa4`. The Price ID and signing secret were saved
+  directly to the production Coolify application's environment. Cancellation
+  is at period end; payment-method updates and invoice history are enabled;
+  plan switching is disabled.
+- **Live Connect:** the existing endpoint `we_1UcneaRWjb7lNeYoPJYSUV8Y`
+  already receives all eleven required connected-account events. It was left
+  unchanged. The five-event observation below was about the **sandbox**, not
+  the live account.
+- **Sandbox/local:** the existing Price `price_1UecmNDBzN1ABLUPcZMD2sch` is
+  reused, and default Premium portal `bpc_1UfJxNDBzN1ABLUPqceeSS9x` is configured.
+  Local `.env` contains the Price ID and Stripe CLI signing secret. Run the CLI
+  using the local sandbox key, forwarding platform events to
+  `localhost:3000/api/auth/stripe/webhook` and connected-account events to
+  `localhost:3000/api/webhooks/stripe`. Both local handlers use the CLI secret;
+  the two **live** destinations use distinct endpoint secrets. No new sandbox
+  destination was pointed at the live app.
+
+A live purchase and actual Stripe-to-public-endpoint delivery remain unproven
+until an explicitly approved payment is made. Tax registrations and automatic
+tax were not changed.
+
 Recording these because the code is ready and the dashboard is not. Each item was
 verified as *missing* on 2026-11-22 unless noted.
 
 **Stripe — test mode**
 
-1. Create the $5/month Price on the platform account. Done on 2026-11-22:
+1. ~~Create the $5/month Price on the platform account.~~ **Done.** Test-mode
    `price_1UecmNDBzN1ABLUPcZMD2sch` (product `prod_VfyjFTB1R7uZWS`, lookup key
-   `litesubs_premium_monthly_usd`). Repeat for live with `--allow-live`-style
-   deliberation; a live Price is a new id and a new env value.
-2. Add a **platform** webhook endpoint at
-   `https://litesubs.com/api/auth/stripe/webhook`, subscribed to
-   `checkout.session.completed`, `customer.subscription.created`,
-   `customer.subscription.updated`, `customer.subscription.deleted`,
-   `invoice.paid`, `invoice.payment_failed`. Copy its signing secret into
-   `STRIPE_WEBHOOK_BILLING`. It is a *different* secret from the Connect one.
-3. **Fix the Connect endpoint.** `https://litesubs.com/api/webhooks/stripe` is
-   subscribed to only five events. It is missing `invoice.paid`,
-   `invoice.payment_failed`, `invoice.payment_action_required`,
-   `customer.subscription.updated`, `customer.subscription.deleted`, and
-   `checkout.session.async_payment_succeeded`. Without the invoice and
-   subscription events, **monthly renewals never grant credits** and a delayed
-   payment method is paid for and never fulfilled. This is a live correctness
-   bug, not a nicety.
+   `litesubs_premium_monthly_usd`); live-mode price created 2026-11-24 (see the
+   configuration note above).
+2. ~~Add a **platform** webhook endpoint.~~ **Done** in both modes on
+   2026-11-24. Its signing secret is in `STRIPE_WEBHOOK_BILLING` and is a
+   *different* secret from the Connect one.
+3. ~~Fix the Connect endpoint.~~ **Not a live defect — strike this.** The live
+   endpoint was inspected on 2026-11-24 and already subscribes to all eleven
+   handled events. The "five events" observation was of the **test-mode**
+   endpoint in the shared sandbox, which is a different object; renewals were
+   never broken in production. The code is unchanged and needs no dashboard
+   work. Keep this item only as a caution for anyone rebuilding a sandbox
+   endpoint from scratch.
 
 **Environment**
 
-4. Set `STRIPE_PREMIUM_PRICE_ID` and `STRIPE_WEBHOOK_BILLING`. Both are required
-   together: with either missing the plugin is not registered and checkout is not
+4. ~~Set `STRIPE_PREMIUM_PRICE_ID` and `STRIPE_WEBHOOK_BILLING`.~~ **Done** for
+   both modes. Both are required
    offered, which is the intended degrade rather than a half-configured plan.
 
 **What is now proven (no operator action needed)**
@@ -343,14 +368,18 @@ verified as *missing* on 2026-11-22 unless noted.
 
 **Still owed — a real live payment**
 
-7. The `$5` live Price (item 1) and a live payment through the platform endpoint.
-   Test mode cannot prove a real card, a real webhook delivery over the public
-   internet, or the live signing secret. Everything about the *logic* is proven;
-   what remains is the live configuration and one real charge.
+7. A real payment through the live platform endpoint. The live Price and signing
+   secret now exist and are deployed (2026-11-24); what is still unproven is a
+   real card, a real webhook delivery over the public internet, and therefore the
+   live signing secret end to end. Everything about the *logic* is proven in test
+   mode; what remains is one real charge, which spends real money and so is an
+   operator decision rather than an agent one.
 8. Run `scripts/verify-platform-billing.mts` against a disposable database after
    any change to the webhook path. It is the only place the emitted-event ordering
    is exercised; the unit and integration tests assert the rules, not Stripe's
-   behaviour.
+   behaviour. Last run 2026-11-24 through the configured sandbox price and CLI
+   signing secret: 13/13. Run it with a disposable database and a dev server on
+   `BETTER_AUTH_URL`; it creates its own test clock and spends no money.
 
 **Card data never reaches this server (PCI scope)**
 
