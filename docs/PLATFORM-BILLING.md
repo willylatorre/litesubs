@@ -328,6 +328,48 @@ A live purchase and actual Stripe-to-public-endpoint delivery remain unproven
 until an explicitly approved payment is made. Tax registrations and automatic
 tax were not changed.
 
+### Sales tax on the Premium subscription — 2026-11-24
+
+Tax calculation is now requested on the platform subscription, in
+`lib/premium-checkout.ts`, and pinned there by `lib/premium-checkout.test.ts`:
+
+- `automatic_tax: { enabled: true }` — without it Checkout succeeds and computes
+  nothing, which is invisible in every log.
+- `tax_id_collection: { enabled: true }` — a business buyer can enter a VAT id
+  rather than pay tax it can reclaim.
+- `billing_address_collection: "auto"` — ask for an address only when tax needs
+  one.
+- `customer_update` is deliberately **absent**. Stripe rejects a session that
+  sends it without a Customer, and a first upgrade has only an email; the plugin
+  supplies `{address: "auto"}` when a Customer does exist. A session carrying a
+  Customer without it fails outright — measured, not assumed.
+- Both Prices now carry `tax_behavior: exclusive` and both Products the
+  `txcd_10000000` tax code, so nothing depends on the account default. **This is
+  permanent**: Stripe does not allow `exclusive` to be changed back.
+
+**Creator direct charges are deliberately untouched.** Their tax obligation is
+the creator's, on their own connected account; configuring it for them would be
+deciding how someone else's business collects tax.
+
+**Test mode needed a head office before any of it worked.** `POST
+/subscription/upgrade` returned `400 — "You must have a valid head office
+address to enable automatic tax calculation in test mode"` until
+`tax/settings` was given the live account's Massachusetts address. The sandbox's
+default tax behavior was also still `inferred_by_currency` and is now
+`exclusive`.
+
+Proven with `scripts/verify-premium-tax.mts`: a real signed-in creator, the real
+`/subscription/upgrade` endpoint, and the Session read back from Stripe —
+`automatic_tax.enabled = true`, `tax_id_collection.enabled = true`, still
+`$5.00`, status `requires_location_inputs` (Stripe will collect an address and
+then calculate). It creates an unpaid session and expires it; nothing is charged.
+
+**Still not collected: registrations.** `tax/registrations` is empty in both
+modes. Stripe Tax with no registration returns 0.00 and raises no error, so a
+buyer is charged $5.00 flat and no tax line appears — the configuration now asks
+for tax, but there is no jurisdiction in which it may collect. Add a
+Massachusetts registration (and any other nexus) before this is called done.
+
 Recording these because the code is ready and the dashboard is not. Each item was
 verified as *missing* on 2026-11-22 unless noted.
 

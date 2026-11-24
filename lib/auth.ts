@@ -12,6 +12,7 @@ import Stripe from "stripe";
 import { db } from "@/app/db"; // your drizzle instance
 import { requirePremiumForApiKeys } from "@/lib/auth/premium-api-key-gate";
 import { mcpResource } from "@/lib/mcp-config";
+import { premiumCheckoutParams } from "@/lib/premium-checkout";
 import {
 	creatorForStripeSubscription,
 	refreshPaidThrough,
@@ -117,6 +118,18 @@ function platformBilling() {
 			// No balance or tier is written from these hooks. Entitlement is derived
 			// from the subscription row by `lib/services/entitlements.ts`, so there
 			// is exactly one interpretation of what a creator is entitled to.
+			/**
+			 * Ask Stripe to calculate tax on the platform subscription.
+			 *
+			 * The parameters live in `lib/premium-checkout.ts` so the rules are
+			 * testable without booting the auth stack. That module also records why
+			 * `customer_update` is deliberately absent — it must stay absent.
+			 *
+			 * Stripe Tax only *collects* once a registration exists, so enabling this
+			 * without one silently totals 0.00 while the invoice still looks taxed.
+			 * The operator checklist owns that half.
+			 */
+			getCheckoutSessionParams: () => ({ params: premiumCheckoutParams() }),
 		},
 	});
 }
