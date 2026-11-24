@@ -13,9 +13,11 @@ export default function ApiTokensPage() {
 				</p>
 			</header>
 			<p className="text-sm">
-				Send a token in the <code>x-api-key</code> header. Each token can only
-				consume your customers’ credits. It cannot grant credits, change plans,
-				or read billing history.
+				Send a token in the <code>x-api-key</code> header. A token here starts
+				with credit consumption only, and its reach is the scopes it was created
+				with — nothing a request sends can widen it. Keys minted by a connected
+				integration may also manage plans and customers, so review a new key
+				before you rely on what it can do.
 			</p>
 			<ApiKeys />
 			<p className="text-sm text-muted-foreground">

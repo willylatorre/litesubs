@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - 2026-01-01
 
+> **Read this section with the refocus in mind.** Entries below were written as
+> the product was, and some describe surfaces that were deliberately removed:
+> bookings and the calendar integration moved to Plannerie (`0018`), and the 1%
+> commission became a flat $5/month Premium tier (`0019`, `0020`). Those entries
+> are kept rather than deleted because they record what shipped at the time; each
+> one that no longer holds says so inline. The live contract is
+> `docs/REFOCUS.md`.
+
 ### Changed
 - **Create-plan dialog**: the terms section had three unrelated vertical rhythms —
   a `py-4` wrapper, ad-hoc gaps, and a footer flush against the last field — so
@@ -18,18 +26,20 @@ All notable changes to this project will be documented in this file.
   singular/plural of the count; the form resets on close so a created draft no
   longer leaves stale values behind. The dialog also scrolls on short viewports,
   where the footer previously fell off-screen.
-- **Username-based public links**: schedules now live at
-  `/book/<username>/<slug>`, invites at `/invite/<username>/<token>`, and payment
-  requests at `/pay/<username>/<token>`. Better Auth manages unique, permanent
-  usernames; new email signups choose one, and existing or Google users can choose
-  one under Account instead of having one derived from their email. Legacy links
-  keep working and redirect to the canonical username URL once available. Invite
-  and payment tokens remain opaque and single-use. Migration `0017` adds a
-  nullable unique username without changing existing users or commercial data.
+- **Username-based public links**: invites live at
+  `/invite/<username>/<token>` and payment requests at
+  `/pay/<username>/<token>`. Better Auth manages unique, permanent usernames; new
+  email signups choose one, and existing or Google users can choose one under
+  Account instead of having one derived from their email. Legacy links keep
+  working and redirect to the canonical username URL once available. Invite and
+  payment tokens remain opaque and single-use. Migration `0017` adds a nullable
+  unique username without changing existing users or commercial data. The third
+  of these surfaces, `/book/<username>/<slug>`, now only forwards to Plannerie —
+  see the refocus entry below.
 - **Sidebar grouping**: reordered by the creator's loop rather than page type —
-  "My Account", then "Creator" (Dashboard, Plans, Customers, Bookings, Payments,
-  Integrations), then "Developer" (API Tokens, Webhooks). Customers now sits
-  directly under Plans, and Integrations moved below the money-related pages.
+  "My Account", then "Creator" (Dashboard, Plans, Customers, Payments, Billing),
+  then "Developer" (API Tokens, Webhooks, API & MCP docs). Customers now sits
+  directly under Plans, and Billing sits with the money-related pages.
 - **Active nav state**: nav items never passed `isActive`, so the sidebar could
   not show which page you were on. Every item now reflects the current route with
   exactly one active, including `aria-current="page"`. A container route like
@@ -54,8 +64,12 @@ All notable changes to this project will be documented in this file.
   that reason, and the buyer's "Total Spent" card builds its own markup, so a
   customer never sees the creator's platform fee.
 
-  This mattered more after the rate moved to 1%: the number a creator reads and
-  the number Stripe withheld had no visible relationship.
+  This mattered more when the rate moved to 1%: the number a creator read and the
+  number Stripe withheld had no visible relationship. **Superseded:** `0019`
+  removed the commission, so `PLATFORM_FEE_PERCENT` is now `0` and the row
+  renders only for receipts that actually carried a fee. The field stays because
+  zeroing historical rows would erase money that genuinely left a creator's
+  account.
 
 ### Removed
 - **Cal.com integration**: the vendor card, OAuth routes, inbound webhook, event-type
@@ -63,7 +77,9 @@ All notable changes to this project will be documented in this file.
   tables. Native booking schedules are the only booking path now, so the vendor
   tables were a parallel unusable route. Migration `0016` drops them; it does not
   touch plans, prices, enrollments, credits, bookings, or payments, which never
-  held a foreign key into them.
+  held a foreign key into them. **Superseded:** the native booking path it names
+  was itself removed in `0018` when scheduling moved to Plannerie, so liteSubs no
+  longer has a booking surface at all.
 
 ### Fixed
 - **`docs/MCP.md` described an older product.** It was skipped by the last two
@@ -114,10 +130,14 @@ All notable changes to this project will be documented in this file.
   only exist in the preview database.
 - The single-use Checkout link dialog uses the same copy/share control instead of
   its own clipboard-only button. Stripe URLs are shared exactly as issued.
-- **Native bookings**:
+- **Native bookings**: **Removed in `0018`** — scheduling, the slot engine,
+  Google Calendar, the booking dashboard and the booking-only notifications all
+  moved to Plannerie. `/book/<creator>/<slug>` is now a redirect. Kept for the
+  record, because it describes what this product was:
   - Creators define weekly availability, buffers, a horizon, a timezone, and
     one-off blocks; a schedule links to a one-time plan and a booked slot spends
-    that plan's credits. See `docs/BOOKINGS.md`.
+    that plan's credits. Its contract document, `docs/BOOKINGS.md`, was deleted
+    with the feature; `docs/REFOCUS.md` records where the responsibility went.
   - Public booking pages include the creator username: slugs are unique per
     creator, so addressing by slug alone would serve the wrong schedule.
   - Slot math is pure and timezone-tested: availability is wall-clock in the
@@ -131,7 +151,9 @@ All notable changes to this project will be documented in this file.
     protects.
 - **In-app notifications**: booking confirmations and cancellations notify both
   parties, deduped in the database, with "starting soon" derived on read so no
-  scheduler is needed. No email is sent.
+  scheduler is needed. No email is sent. **Removed with bookings in `0018`**:
+  every row it wrote came from the booking lifecycle, so the table went too. The
+  credit ledger never depended on it.
 - **Google Calendar (optional)**: OAuth connection with AES-256-GCM encrypted
   tokens, free/busy slot filtering, and best-effort event sync that cannot roll
   back a booking or a debit. Unverified against a live Google client.
@@ -149,8 +171,8 @@ All notable changes to this project will be documented in this file.
     roll back a paid grant or a debit, and a replayed ledger event does not emit
     twice.
   - Configuration requires a dedicated `webhooks:manage` scope: it is a
-    data-egress permission, so it is not folded into `plans:write` and can never
-    be held by a machine API key. Signing secrets are returned once and never by
+    data-egress permission, so it is not folded into `plans:write` and no mint
+    path grants it to an API key. Signing secrets are returned once and never by
     any read path.
   - Failures are visible and retryable from the dashboard or
     `POST /api/v1/deliveries/:id/retry`. No scheduler is involved.
@@ -215,18 +237,23 @@ All notable changes to this project will be documented in this file.
     credits; successful retries and out-of-order events remain idempotent.
   - Return usable grant balances and overdue billing state in customer summaries.
 - **Monthly subscriptions (S07 first-period slice)**:
-  - Added creator-account monthly Checkout with a persisted 2% recurring fee rate.
+  - Added creator-account monthly Checkout with a persisted recurring fee rate.
   - Fulfill the first monthly allowance only from the verified, account-scoped
     paid invoice; grants expire at the subscription line's paid-period end.
-  - Keep duplicate/concurrent starts and invoice delivery idempotent. Monthly
-    Checkout remains test-mode only until the live-release gate is complete.
+  - Keep duplicate/concurrent starts and invoice delivery idempotent. **Superseded
+    twice:** the per-sale fee this persisted was removed in `0019` (the column now
+    holds `0`), and Monthly Checkout is no longer test-mode only — one-time and
+    monthly Checkout both work in either Stripe mode, with the event's mode still
+    checked against the connected account's recorded mode.
 - **Landing Page & SEO**:
   - Improved the landing page with a minimalist 3-step "How it works" demo.
   - Added comprehensive metadata (OpenGraph/Twitter/Canonical) and JSON-LD structured data.
   - Added `app/robots.ts` and `app/sitemap.ts` for better indexing.
 - **Payment Links**:
   - Added Stripe payment link generation for a specific customer + pack from the Customer details subscription row.
-- **Payouts**:
+- **Payouts**: **Removed in S02** — creators connect their own Stripe account
+  instead, so payouts run on that account and liteSubs keeps no payout ledger,
+  no payout requests, and no payout method preferences.
   - Implemented the payouts flow with balance/earnings history and a dedicated `app/dashboard/payouts` page.
 - **Help & FAQ**:
   - Added a dedicated dashboard FAQ page at `app/dashboard/faq`.

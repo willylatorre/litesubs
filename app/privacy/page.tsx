@@ -22,7 +22,7 @@ const sections: LegalSection[] = [
 			},
 			{
 				type: "paragraph",
-				text: "Two relationships exist on the platform, and they matter for your rights. liteSubs is the controller of account and platform data. For the customer lists, credit ledgers, and booking details that a creator manages, the creator is the controller and liteSubs acts as a processor on the creator\u2019s instructions. Requests about data a creator holds about you should normally go to that creator.",
+				text: "Two relationships exist on the platform, and they matter for your rights. liteSubs is the controller of account and platform data. For the customer lists, credit ledgers, and plan terms that a creator manages, the creator is the controller and liteSubs acts as a processor on the creator\u2019s instructions. Requests about data a creator holds about you should normally go to that creator.",
 			},
 		],
 	},
@@ -110,7 +110,7 @@ const sections: LegalSection[] = [
 			{
 				type: "list",
 				items: [
-					"Stripe, for payment processing, connected accounts, application fees, refunds, and payouts. Stripe acts under its own privacy policy.",
+					"Stripe, for payment processing, connected accounts, subscription billing, refunds, and payouts. Stripe acts under its own privacy policy.",
 					"Google, when you sign in with Google, for authentication.",
 					"Our hosting and managed database providers, which store the application data described above.",
 					"Email delivery providers, to send transactional and security messages.",

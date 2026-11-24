@@ -183,8 +183,10 @@ export function IntegrationDocs({ embedded = false }: { embedded?: boolean }) {
 						<code>create_webhook</code>, <code>update_webhook</code>,{" "}
 						<code>delete_webhook</code>, <code>list_webhook_deliveries</code>,{" "}
 						<code>retry_webhook_delivery</code>, and{" "}
-						<code>send_test_webhook</code>. Machine keys get{" "}
-						<code>consume_credits</code> only. No refund, payout, or
+						<code>send_test_webhook</code>. An API key sees whatever its minted
+						scopes allow: a dashboard key starts at <code>credits:consume</code>{" "}
+						and sees <code>consume_credits</code> alone, while a key minted with
+						creator scopes sees those tools too. No refund, payout, or
 						billing-charge tools are exposed. Scope failures return structured
 						tool errors.
 					</p>
@@ -193,7 +195,8 @@ export function IntegrationDocs({ embedded = false }: { embedded?: boolean }) {
 						rules: an invite&apos;s email is optional and only decides whose
 						dashboard it appears in, and a signing secret is returned once at
 						creation. Webhook tools need the <code>webhooks:manage</code> scope,
-						which a machine key can never hold.
+						which no mint path grants to an API key — a delegated key must not
+						choose where a tenant&apos;s data is sent.
 					</p>
 				</Section>
 
@@ -208,10 +211,13 @@ export function IntegrationDocs({ embedded = false }: { embedded?: boolean }) {
 						.
 					</p>
 					<p>
-						<strong>Machine consumption:</strong> generate an API token and send
-						it in the <code>x-api-key</code> header. Tokens only consume
-						credits; they cannot edit plans, grant credits, or read billing
-						history. Keep them on your backend, never in public frontend code.
+						<strong>Machine callers:</strong> generate an API key and send it in
+						the <code>x-api-key</code> header. A key holds the scopes it was
+						minted with: dashboard keys start at consumption only, and a key
+						minted with creator scopes can manage plans and customers through
+						the same authorization every other transport uses. Nothing a caller
+						sends can widen its own reach. Keep keys on your backend, never in
+						public frontend code.
 					</p>
 					<Button asChild variant="outline" size="sm">
 						<Link href="/dashboard/developers/api-keys">
@@ -221,7 +227,7 @@ export function IntegrationDocs({ embedded = false }: { embedded?: boolean }) {
 					<CodeBlock
 						language="http"
 						code={`Authorization: Bearer <oauth token>   # creator operations
-x-api-key: <machine token>            # consumption only`}
+x-api-key: <api key>                  # scopes the key was minted with`}
 					/>
 					<p>
 						Tokens are shown once when generated. Save them securely; revoke and

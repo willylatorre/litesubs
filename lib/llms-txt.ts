@@ -29,7 +29,7 @@ export function buildLlmsTxt(): string {
 
 - [Quickstart](${base}/docs#quickstart): create a plan, enroll a customer, consume a credit.
 - [Connect an AI assistant](${base}/docs#mcp): remote MCP endpoint and client configuration.
-- [Authentication](${base}/docs#authentication): OAuth for creators, machine API keys for consumption.
+- [Authentication](${base}/docs#authentication): OAuth for creators, API keys for machine callers.
 - [REST API](${base}/docs#api): endpoints, request bodies, error shapes.
 - [Credits and retries](${base}/docs#credits): balances, idempotency, dry runs, receipts.
 - [Enrollment](${base}/docs#enrollment): invoice checkout links, complimentary grants, invites.
@@ -47,11 +47,15 @@ export function buildLlmsTxt(): string {
   create_invite, grant_credits, list_transactions, list_webhooks, create_webhook,
   update_webhook, delete_webhook, list_webhook_deliveries,
   retry_webhook_delivery, send_test_webhook.
-- Machine-key tools: consume_credits only (permission credits:consume).
+- API-key tools: whatever scopes the key was minted with, so a dashboard key
+  (starting at credits:consume) sees consume_credits only, while a key minted
+  with creator scopes sees those tools too. Scopes come from the stored key,
+  never from the request.
 - Invites and webhooks work over MCP and REST alike. An invite's email is
   optional and only decides whose dashboard it appears in. A webhook signing
-  secret is returned once at creation. Webhook tools need webhooks:manage and a
-  machine key can never hold it.
+  secret is returned once at creation. Webhook tools need webhooks:manage, which
+  no path mints onto a key: a delegated key must not choose where a tenant's
+  data is sent.
 - No payout or refund tools are exposed. Refunds are issued in the creator's
   Stripe Dashboard; liteSubs then revokes only the refunded purchase's unspent
   credits.

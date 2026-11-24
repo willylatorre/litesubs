@@ -18,7 +18,7 @@ const sections: LegalSection[] = [
 		blocks: [
 			{
 				type: "paragraph",
-				text: "These Terms and Conditions (the \u201cTerms\u201d) govern your access to and use of liteSubs, including the website, dashboard, booking pages, REST API, and remote MCP server (together, the \u201cService\u201d). By creating an account, publishing a plan, purchasing credits, or otherwise using the Service, you agree to these Terms.",
+				text: "These Terms and Conditions (the \u201cTerms\u201d) govern your access to and use of liteSubs, including the website, dashboard, public plan pages, REST API, and remote MCP server (together, the \u201cService\u201d). By creating an account, publishing a plan, purchasing credits, or otherwise using the Service, you agree to these Terms.",
 			},
 			{
 				type: "paragraph",
@@ -149,7 +149,7 @@ const sections: LegalSection[] = [
 			},
 			{
 				type: "paragraph",
-				text: "Integrations with third parties, including Stripe, Google Calendar, and AI assistants, are governed by those third parties\u2019 own terms. We are not responsible for their availability, outages, or changes, though we will make reasonable efforts to keep integrations working.",
+				text: "Integrations with third parties, including Stripe and AI assistants, are governed by those third parties\u2019 own terms. We are not responsible for their availability, outages, or changes, though we will make reasonable efforts to keep integrations working.",
 			},
 		],
 	},

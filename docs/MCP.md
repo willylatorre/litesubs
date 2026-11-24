@@ -19,13 +19,16 @@ renames `products`/`lite_subscriptions` to `plans`/`enrollments`, moves
 commercial terms into `plan_versions`, and removes the platform
 `user.stripe_customer_id`. `drizzle/0002_connected_accounts.sql` replaces the
 Express/account-type model with `connected_accounts` and drops the platform
-payout tables. `0003`–`0020` then add, in order: Connect OAuth for existing
+payout tables. `0003`–`0023` then add, in order: Connect OAuth for existing
 accounts, immutable published plan versions, creator-owned direct-charge
 purchases, credit grants, subscriptions and renewals, period-end cancellation,
 expiring invites, refunds, subscription-aware disconnection, native bookings,
 outgoing webhooks, split Google calendar roles, removal of the Cal.com tables,
 Better Auth usernames, removal of the booking tables (scheduling moved to
-Plannerie), removal of the commission, and creator tiers.
+Plannerie), removal of the commission, creator tiers, platform billing on
+`@better-auth/stripe`, the `paid_through_at` boundary that entitlement trusts,
+and the `paid_through_checked_at` stamp that stops an unpaid creator being
+re-queried on every dashboard load.
 
 **An existing database upgrades in place.** `npm run db:migrate` applies every
 unrecorded migration and preserves accounts, enrollments, and ledger rows. Every
@@ -85,6 +88,11 @@ GOOGLE_CLIENT_SECRET=<oauth client secret>
 # so checkout is simply not offered and the rest of the app runs on the free tier.
 STRIPE_PREMIUM_PRICE_ID=<price id for $5/month>
 STRIPE_WEBHOOK_BILLING=<signing secret for the platform endpoint>
+
+# Where /book/<creator>/<slug> forwards. Scheduling moved to Plannerie, so those
+# already-shared links redirect there. Unset, the route renders an explanation
+# instead of a 404 and nothing else changes.
+PLANNERIE_URL=<https origin of the scheduling product>
 ```
 
 **The Stripe webhook endpoint must be a Connect endpoint** (`connect: true`).
@@ -248,7 +256,7 @@ work with an `x-api-key` as well as an OAuth connection:
 | Endpoint | Purpose |
 | --- | --- |
 | `POST /api/v1/customers` | Provision a customer by email (unclaimed account, idempotent); pass `plan` to enroll them so credits can be granted immediately |
-| `POST /api/v1/integrationkeys` | Mint the consume-scoped key for this connection |
+| `POST /api/v1/integrationkeys` | Mint this connection's key (consumption plus management scopes) |
 | `GET /api/v1/integrationkeys` | List minted keys as metadata, never secrets |
 | `DELETE /api/v1/integrationkeys/:id` | Revoke a key minted by this connection |
 
