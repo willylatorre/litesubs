@@ -96,6 +96,10 @@ test("the snapshot gap is exactly the documented set", () => {
 		"0021_platform_billing",
 		"0022_platform_paid_through",
 		"0023_platform_paid_through_checked",
+		// T066 added a hand-written index migration. Repaired snapshots are a
+		// migration-history change (see docs/VERIFICATION.md), so this entry has
+		// none either and its absence is recorded here on purpose.
+		"0024_ledger_integrity",
 	]);
 });
 
