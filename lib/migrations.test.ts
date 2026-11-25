@@ -39,6 +39,24 @@ const MIGRATIONS = [
 	"drizzle/0023_platform_paid_through_checked.sql",
 ];
 
+/**
+ * `MIGRATIONS` above is a hand-maintained copy of the journal. Nothing compared
+ * them, so a new migration could be added to `drizzle/` and never exercised here,
+ * or a renamed one could leave this list applying a file that no longer exists.
+ * Both failures read as a passing suite because the missing case simply is not
+ * there.
+ */
+test("the hardcoded MIGRATIONS list matches the migration journal", async () => {
+	const journal = JSON.parse(
+		await readFile("drizzle/meta/_journal.json", "utf8"),
+	) as { entries: Array<{ tag: string }> };
+	assert.deepEqual(
+		MIGRATIONS,
+		journal.entries.map((entry) => `drizzle/${entry.tag}.sql`),
+		"MIGRATIONS has drifted from drizzle/meta/_journal.json. Add the new file to both, or the suite stops covering it.",
+	);
+});
+
 /** Drizzle skips entries whose timestamp is not newer than the last applied. */
 test("migration journal timestamps strictly increase", async () => {
 	const journal = JSON.parse(
