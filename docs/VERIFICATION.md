@@ -198,7 +198,14 @@ convention:
   `credit_grants(source_transaction_id) WHERE source_transaction_id IS NOT NULL`.
   One ledger row grants once. The partial predicate is deliberate: rows without a
   source are legitimate (the `0006` backfill, comps outside a ledger row), and
-  `null` never conflicts with `null` in a unique index.
+  `null` never conflicts with `null` in a unique index. The winning insert is the
+  one that commits; the loser's `ON CONFLICT DO NOTHING` returns no row and the
+  caller reports a duplicate. `DO NOTHING` rather than a caught `23505` is
+  deliberate: a failed statement aborts the enclosing transaction, so a catch
+  would discard every later write in it (the projection update, the paid-through
+  boundary) at COMMIT. The conflict target is omitted because drizzle 0.45.4
+  ignores `targetWhere` for `onConflictDoNothing`, which would emit a clause that
+  does not match a partial index.
 - `transactions_append_only` and `credit_allocations_append_only` — `BEFORE
   UPDATE` triggers that raise `restrict_violation`. They permit only a foreign
   key nulling itself: `plan_id`, `plan_version_id` and `subscription_invoice_id`
