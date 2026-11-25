@@ -147,10 +147,45 @@ function spendOrder() {
 }
 
 /**
+ * Recognise Postgres' unique-violation error through Drizzle's wrapper.
+ *
+ * Drizzle 0.45 re-throws the driver's error as `DrizzleQueryError` with the
+ * original on `cause` (`drizzle-orm/errors.js`), so checking the outer error
+ * alone would never see `23505`. Both shapes are inspected because a caller may
+ * also invoke the driver directly.
+ */
+export function uniqueViolation(error: unknown, constraint?: string) {
+	let current: unknown = error;
+	for (let depth = 0; depth < 4 && current; depth += 1) {
+		const candidate = current as {
+			code?: string;
+			constraint?: string;
+			cause?: unknown;
+		};
+		if (candidate.code === "23505")
+			return (
+				constraint === undefined ||
+				candidate.constraint === undefined ||
+				candidate.constraint === constraint
+			);
+		current = candidate.cause;
+	}
+	return false;
+}
+
+/**
  * Record a positive credit movement as a grant.
  *
  * Every balance increase goes through here so no path can create credits that
  * are unattributable or unexpirable.
+ *
+ * `credit_grant_source_unique_idx` is the idempotency boundary: one ledger row
+ * may grant once. When a concurrent delivery already inserted the grant for this
+ * source, the insert loses the race and this returns `{ duplicate: true }`
+ * instead of throwing, so the caller can treat a replay as a replay rather than
+ * a 500. The decision is made by the database at write time — never by reading
+ * for an existing grant first, which races precisely under the load it is meant
+ * to survive.
  */
 export async function createGrant(
 	tx: Tx,
@@ -165,30 +200,49 @@ export async function createGrant(
 		amount: number;
 		expiresAt?: Date | null;
 	},
-) {
+): Promise<
+	| { grant: typeof creditGrants.$inferSelect; duplicate: false }
+	| { grant: undefined; duplicate: true }
+> {
 	if (!Number.isSafeInteger(input.amount) || input.amount <= 0)
 		throw new ServiceError("INVALID_INPUT", "A grant must be positive");
-	const [grant] = await tx
-		.insert(creditGrants)
-		.values({
-			enrollmentId: input.enrollmentId,
-			creatorId: input.creatorId,
-			userId: input.userId,
-			planId: input.planId,
-			planVersionId: input.planVersionId ?? null,
-			sourceTransactionId: input.sourceTransactionId ?? null,
-			kind: input.kind,
-			amount: input.amount,
-			remaining: input.amount,
-			expiresAt: input.expiresAt ?? null,
-		})
-		.returning();
-	return grant;
+	try {
+		const [grant] = await tx
+			.insert(creditGrants)
+			.values({
+				enrollmentId: input.enrollmentId,
+				creatorId: input.creatorId,
+				userId: input.userId,
+				planId: input.planId,
+				planVersionId: input.planVersionId ?? null,
+				sourceTransactionId: input.sourceTransactionId ?? null,
+				kind: input.kind,
+				amount: input.amount,
+				remaining: input.amount,
+				expiresAt: input.expiresAt ?? null,
+			})
+			.returning();
+		return { grant, duplicate: false };
+	} catch (error) {
+		// No source means no idempotency boundary to collide on, so a unique
+		// violation here is not the expected duplicate and must surface.
+		if (
+			input.sourceTransactionId &&
+			uniqueViolation(error, "credit_grant_source_unique_idx")
+		)
+			return { grant: undefined, duplicate: true };
+		throw error;
+	}
 }
 
 /**
  * Apply a positive delta by creating a grant and raising the projection.
  * Used by comps, creator increases, and purchase fulfillment.
+ *
+ * Returns `duplicate: true` when this ledger row already produced a grant. The
+ * projection is left untouched in that case: the units were added by the writer
+ * that won the insert, and raising it again would inflate a balance whose grant
+ * does not exist.
  */
 export async function grantCredits(
 	tx: Tx,
@@ -204,12 +258,12 @@ export async function grantCredits(
 		expiresAt?: Date | null;
 	},
 ) {
-	const grant = await createGrant(tx, input);
-	await tx
-		.update(enrollments)
-		.set({ credits: sql`${enrollments.credits} + ${input.amount}` })
-		.where(eq(enrollments.id, input.enrollmentId));
-	return grant;
+	const created = await createGrant(tx, input);
+	if (created.duplicate) return created;
+	// Derive, do not increment: the projection is a cache of the grants, and an
+	// incremental write would preserve any drift already in it.
+	await syncProjection(tx, input.enrollmentId);
+	return created;
 }
 
 /**
@@ -279,19 +333,26 @@ export async function allocateDebit(
 	return allocations;
 }
 
-/** Lower the projection without touching grants (used with an allocation). */
-async function applyProjection(tx: Tx, enrollmentId: string, delta: number) {
-	const [updated] = await tx
+/**
+ * Rewrite the enrollment projection from the grants that are actually spendable.
+ *
+ * `enrollments.credits` is a cache of the grant ledger, never a second balance.
+ * Incrementing it (`+ delta`) let it drift from the truth: a grant that expires
+ * by time is already unspendable on read, but nothing lowered the column, so the
+ * two disagreed by exactly the expired amount. Deriving it on every write means
+ * the cache cannot carry a stale high or low value into a later decision.
+ *
+ * The caller must run this inside the transaction that changed the grants, after
+ * the change, so the same locked rows produce the same number the next reader
+ * will see.
+ */
+async function syncProjection(tx: Tx, enrollmentId: string) {
+	const balance = await usableBalance(tx, enrollmentId);
+	await tx
 		.update(enrollments)
-		.set({ credits: sql`${enrollments.credits} + ${delta}` })
-		.where(
-			and(
-				eq(enrollments.id, enrollmentId),
-				sql`${enrollments.credits} + ${delta} >= 0`,
-			),
-		)
-		.returning();
-	return updated;
+		.set({ credits: balance })
+		.where(eq(enrollments.id, enrollmentId));
+	return balance;
 }
 
 export async function changeCredits(
@@ -488,7 +549,7 @@ export async function adjustCredits(
 					balanceAfter: after,
 				})
 				.returning({ id: transactions.id });
-			await grantCredits(tx, {
+			const granted = await grantCredits(tx, {
 				enrollmentId: enrollment.id,
 				creatorId: principal.creatorId,
 				userId: enrollment.userId,
@@ -498,6 +559,16 @@ export async function adjustCredits(
 				amount: data.delta,
 				expiresAt,
 			});
+			// A fresh ledger row cannot already have a grant unless a concurrent
+			// writer inserted one for this row, which only happens if the row itself
+			// was reused. Roll back so the caller sees a conflict rather than a
+			// receipt for credits that were not granted.
+			if (granted.duplicate)
+				throw new ServiceError(
+					"GRANT_ALREADY_RECORDED",
+					"This ledger entry has already been granted",
+					409,
+				);
 			return {
 				transactionId: entry.id,
 				before,
@@ -554,14 +625,10 @@ export async function adjustCredits(
 			amount: debit,
 			transactionId: entry.id,
 		});
-		const updated = await applyProjection(tx, enrollment.id, -debit);
-		if (!updated)
-			throw new ServiceError(
-				"INSUFFICIENT_CREDITS",
-				"Not enough credits",
-				409,
-				{ balance: before },
-			);
+		// The grants were locked and checked above, so a short balance cannot
+		// reach here; recomputing the projection keeps the cache equal to the
+		// ledger rather than subtracting from a value that may already be stale.
+		await syncProjection(tx, enrollment.id);
 
 		return {
 			transactionId: entry.id,
@@ -653,6 +720,16 @@ export async function expireGrants(creatorId: string) {
 				amount: grant.remaining,
 			});
 			recorded += 1;
+		}
+		// An expiry lowers what is spendable, so the projection must follow it.
+		// Without this the column keeps claiming credits that `usableBalance`
+		// already excludes, which is exactly the drift the two models had.
+		if (recorded > 0) {
+			const enrollmentIds = [
+				...new Set(expired.map((grant) => grant.enrollmentId)),
+			];
+			for (const enrollmentId of enrollmentIds)
+				await syncProjection(tx, enrollmentId);
 		}
 		return { expiredGrants: recorded };
 	});
