@@ -107,6 +107,23 @@ All notable changes to this project will be documented in this file.
   stale claims about the live-release gate and the Cal.com webhook placeholder.
 
 ### Added
+- **A verification baseline and a safe-target guard.** `docs/VERIFICATION.md`
+  records the commands, what each one proves, and the failures that exist today.
+  `npm test` now refuses to run when a database URL points anywhere but a local
+  disposable database, because the migration suite drops and recreates its
+  database and a green run against production would be silent damage. The refusal
+  is a real error with a remedy, and it is tested — including that
+  `postgresql://user@db.example.com/prod` is rejected. The migrations were also
+  proved from both ends on a disposable database: all 24 apply to a fresh
+  database, a second pass is a no-op, and a database seeded at `0013_bookings`
+  upgrades with every money row byte-identical.
+- **The migration snapshots are known-broken, and now pinned.** Eight journal
+  entries have no snapshot, and the newest one (`0017`) does not describe what the
+  SQL produces. `drizzle-kit check` exits 0 anyway, and `drizzle-kit generate`
+  aborts, so the gap was invisible. `lib/migration-inventory.test.ts` asserts the
+  exact defect and `lib/migrations.test.ts` now fails if its hardcoded list drifts
+  from the journal. Repairing the snapshots is a migration-history change and was
+  deliberately not done here.
 - **Invite a customer from the Customers page**: the link generator previously
   existed only on the Creator dashboard and the plan views, so the page that
   lists customers had no way to add one — its empty state told you to "invite a
