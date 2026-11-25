@@ -769,7 +769,7 @@ export async function fulfillSubscriptionInvoice(input: {
 			.returning({ id: transactions.id });
 
 		if (canGrant) {
-			await grantCredits(tx, {
+			const granted = await grantCredits(tx, {
 				enrollmentId: enrollment.id,
 				creatorId: subscription.creatorId,
 				userId: subscription.userId,
@@ -780,6 +780,15 @@ export async function fulfillSubscriptionInvoice(input: {
 				amount: version.credits,
 				expiresAt: input.periodEnd,
 			});
+			// The invoice insert is this path's idempotency boundary, so a duplicate
+			// here means the ledger already granted this period. Roll back rather than
+			// record a second allowance for one paid invoice.
+			if (granted.duplicate)
+				throw new ServiceError(
+					"GRANT_ALREADY_RECORDED",
+					"This invoice has already been granted",
+					409,
+				);
 		}
 
 		await tx
@@ -929,6 +938,12 @@ export async function fulfillPayment(input: {
 			})
 			.returning();
 
+		// Read the balance the customer can actually spend while holding the row.
+		// `enrollment.credits` is a projection that expired grants leave behind, so
+		// recording it as `balanceBefore` would put a number in the audit that never
+		// matched what the customer could use.
+		const balanceBefore = await usableBalance(tx, enrollment.id);
+
 		// A purchase is a grant, so it is spendable, attributable to its version,
 		// and expirable by the same engine as every other credit movement.
 		const [entry] = await tx
@@ -947,12 +962,12 @@ export async function fulfillPayment(input: {
 				status: "completed",
 				usesStripeConnect: true,
 				stripeConnectAccountId: claimed.stripeAccountId,
-				balanceBefore: enrollment.credits,
-				balanceAfter: enrollment.credits + claimed.credits,
+				balanceBefore,
+				balanceAfter: balanceBefore + claimed.credits,
 			})
 			.returning({ id: transactions.id });
 
-		await grantCredits(tx, {
+		const granted = await grantCredits(tx, {
 			enrollmentId: enrollment.id,
 			creatorId: claimed.creatorId,
 			userId: claimed.userId,
@@ -962,6 +977,16 @@ export async function fulfillPayment(input: {
 			kind: "purchase",
 			amount: claimed.credits,
 		});
+		// The payment claim above is the primary idempotency boundary, so reaching
+		// this means a ledger row already existed for this source with a payment
+		// that was still pending. Throwing rolls the whole transaction back: no
+		// second ledger row, no second grant, and the payment stays as it was.
+		if (granted.duplicate)
+			throw new ServiceError(
+				"GRANT_ALREADY_RECORDED",
+				"This payment has already been granted",
+				409,
+			);
 
 		return {
 			status: "fulfilled" as const,

@@ -10,7 +10,7 @@ Run from the repository root. Node `>=24`, npm (the lockfile is npm's).
 
 | Command | What it proves | Needs a database |
 | --- | --- | --- |
-| `npm test` | 143 unit cases; every database suite skips itself | no |
+| `npm test` | 149 unit cases; every database suite skips itself | no |
 | `npx tsc --noEmit` | types | no |
 | `npm run check` | Biome lint + format | no |
 | `MIGRATION_TEST_DATABASE_URL=… npm run verify:migrations` | clean migrate, idempotent re-run, seeded upgrade | yes |
@@ -41,8 +41,8 @@ OAuth provider, because the plugin builds a URL from an empty issuer. See
 
 Measured on 2026-11-25, disposable local Postgres:
 
-- both env files loaded: **220 tests, 220 pass, 0 fail, 0 skipped**
-- `.env.test` only: **220 tests, 216 pass, 4 fail** — all four are the
+- both env files loaded: **226 tests, 226 pass, 0 fail, 0 skipped**
+- `.env.test` only: **226 tests, 222 pass, 4 fail** — all four are the
   `Invalid URL` issuer error, not application defects
 
 `MIGRATION_TEST_DATABASE_URL` must name its own database. Its suite runs
@@ -86,10 +86,10 @@ a secret — so it must accept a remote host. It keeps its own narrower protecti
 
 ## Migration inventory
 
-`drizzle/meta/_journal.json` has 24 entries and all 24 `.sql` files exist. Only
+`drizzle/meta/_journal.json` has 25 entries and all 25 `.sql` files exist. Only
 16 snapshots do. The gap is not cosmetic: **the newest snapshot is `0017`, so every
 future `drizzle-kit generate` diffs against `0017`**, while the database has
-already applied `0018`–`0023`.
+already applied `0018`–`0024`.
 
 | Journal entry | SQL | Snapshot | Consequence |
 | --- | --- | --- | --- |
@@ -104,6 +104,7 @@ already applied `0018`–`0023`.
 | `0021_platform_billing` | yes | **no** | `litesub_subscription` invisible to `generate` |
 | `0022_platform_paid_through` | yes | **no** | `paid_through_at` invisible to `generate` |
 | `0023_platform_paid_through_checked` | yes | **no** | `paid_through_checked_at` invisible to `generate` |
+| `0024_ledger_integrity` | yes | **no** | hand-written; see below |
 
 Measured, not inferred:
 
@@ -149,14 +150,14 @@ is a migration-history change and therefore **not** done here — see
 `npm run verify:migrations` runs both against `MIGRATION_TEST_DATABASE_URL` and
 prints a hash per table so two runs can be compared.
 
-Clean from scratch, 2026-11-25:
+Clean from scratch, 2026-11-25 (after `0024`):
 
 ```
-first pass: applied 24 migrations
+first pass: applied 25 migrations
 tables: 32
 second pass: applied 0 migrations (must be 0)
 idempotency: no-op
-drizzle.__drizzle_migrations rows: 24
+drizzle.__drizzle_migrations rows: 25
 ```
 
 Idempotency comes from the journal table, not from the SQL: the statements are
@@ -179,8 +180,114 @@ row preservation: all probed tables byte-identical
 final tables: 32
 ```
 
-`npm run db:migrate` was also run twice on a genuinely fresh database: 24 journal
+`npm run db:migrate` was also run twice on a genuinely fresh database: 25 journal
 rows and 32 tables, no error on the second run.
+
+## Concurrency and the money path
+
+`0024_ledger_integrity` is **hand-written**, because `drizzle-kit generate` is
+unusable on this tree (above). It needs no snapshot: it adds one index and two
+triggers, changes no table shape, and would have been emitted verbatim by a
+generated migration. Its journal `when` is `1795324099360`, strictly after
+`0023`'s `1795324098360`.
+
+Two guarantees are now enforced by the database rather than by a caller
+convention:
+
+- `credit_grant_source_unique_idx` — a partial unique index on
+  `credit_grants(source_transaction_id) WHERE source_transaction_id IS NOT NULL`.
+  One ledger row grants once. The partial predicate is deliberate: rows without a
+  source are legitimate (the `0006` backfill, comps outside a ledger row), and
+  `null` never conflicts with `null` in a unique index. The winning insert is the
+  one that commits; the loser's `ON CONFLICT DO NOTHING` returns no row and the
+  caller reports a duplicate. `DO NOTHING` rather than a caught `23505` is
+  deliberate: a failed statement aborts the enclosing transaction, so a catch
+  would discard every later write in it (the projection update, the paid-through
+  boundary) at COMMIT. The conflict target is omitted because drizzle 0.45.4
+  ignores `targetWhere` for `onConflictDoNothing`, which would emit a clause that
+  does not match a partial index.
+- `transactions_append_only` and `credit_allocations_append_only` — `BEFORE
+  UPDATE` triggers that raise `restrict_violation`. They permit only a foreign
+  key nulling itself: `plan_id`, `plan_version_id` and `subscription_invoice_id`
+  are declared `ON DELETE SET NULL`, which Postgres implements as an `UPDATE` of
+  the referencing row, so that exact non-null → null transition is allowed and any
+  other change is refused. `DELETE` is not blocked because user erasure cascades
+  and the sample-workspace cleanup deletes a demo plan.
+
+**The migration refuses pre-existing duplicates.** Applying it to a database that
+already contains the defect fails loudly, which is the correct behaviour:
+
+```
+ERROR:  could not create unique index "credit_grant_source_unique_idx"
+DETAIL:  Key (source_transaction_id)=(231e3504-…) is duplicated.
+```
+
+That is not hypothetical: it happened while measuring, because the probe that
+demonstrated the bug had left eight grants for one ledger row.
+
+### The concurrency proof
+
+`MCP_TEST_DATABASE_URL=… npx tsx --test lib/concurrency.integration.test.ts`
+(8 writers, one pool of up to 10 connections) and
+`npx tsx scripts/concurrency-proof.mts` (6 separate OS processes, so nothing but
+PostgreSQL is shared). Both must pass:
+
+| Scenario | Expected | Measured |
+| --- | --- | --- |
+| 8 writers, one checkout | exactly one grants | 1 grant, 1 ledger row, balance 10 |
+| 8 writers, 8 distinct checkouts | 8 grants | 8 grants, balance 80 |
+| 8 writers, one ledger row inserted directly | 1 insert wins | 1 grant, 7 `duplicate` |
+| 8 writers, one paid invoice | 1 receipt, 1 grant | 1 invoice, 1 grant |
+| write fails after the payment claim | full rollback, retry grants once | payment still `pending`, 0 grants, retry → 1 |
+| audit row rewritten in place | refused | `restrict_violation` |
+
+Process-level, as printed:
+
+```
+1. 6 PROCESSES deliver ONE checkout simultaneously
+   child outcomes: already_fulfilled,already_fulfilled,already_fulfilled,already_fulfilled,already_fulfilled,fulfilled
+   grants=1 ledger=1 usable=10 projection=10
+   PASS exactly one grant
+
+2. 6 PROCESSES deliver 6 DIFFERENT checkouts
+   grants=6 usable=60 projection=60
+   PASS one grant per payment
+
+3. 6 PROCESSES createGrant ONE source ledger row
+   child outcomes: duplicate,duplicate,duplicate,duplicate,duplicate,inserted
+   grants for that row: 1
+   PASS unique constraint held
+```
+
+**Mutation-proved.** Dropping the index and re-running the suite fails the
+direct-insert case with `actual: 8, expected: 1` — eight grants for one ledger
+row, which is the bug the index closes. The service-level checkout case still
+passes without the index, and that is honest rather than hidden: `fulfillPayment`
+is already guarded by its `pending → paid` claim, so the index is the backstop
+for paths that bypass or race that claim, not the mechanism behind case 1.
+
+### Which balance model is authoritative
+
+`credit_grants` is the source of truth. `enrollments.credits` is a cache.
+
+- Every read that a customer or creator sees is `usableBalance`/`usableBalances`,
+  a `sum(remaining)` filtered by `remaining > 0` and a live `expires_at`. No
+  display reads the column directly; the four call sites that spread an
+  enrollment object overwrite `credits` with the computed value.
+- Debits allocate against locked grants and never trust the column.
+- The two could **and did** disagree. Measured on the unmodified tree: a
+  10-credit grant, expired, read `column=10` and `usable=0`. The column was
+  incremented on grant and decremented only by an allocation, so time-based
+  expiry never lowered it.
+
+The column is kept because the schema's non-negative `CHECK` is a cheap backstop
+and existing dashboards spread the enrollment object. It is now **derived** from
+the grants on every write (`syncProjection`) instead of adjusted, so drift cannot
+accumulate, and `expireGrants` lowers it when it materializes an expiry. The
+authoritative answer for a spend decision is still `usableBalance`; the column is
+never read to allow or deny a debit.
+
+
 
 ## CI
 
@@ -197,8 +304,8 @@ so new scripts are not linted at all.
 
 | Gate | Today |
 | --- | --- |
-| `npm test` (offline) | 143 tests, 103 pass, 40 skip, 0 fail |
-| `npm test` (disposable DB) | 220 pass, 0 fail |
+| `npm test` (offline) | 149 tests, 103 pass, 46 skip, 0 fail |
+| `npm test` (disposable DB) | 226 pass, 0 fail |
 | `npx tsc --noEmit` | clean |
 | `npm run check` | **183 errors, 18 warnings** (pre-existing) |
 | `npm run build` | passes, no credentials needed |

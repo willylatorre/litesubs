@@ -51,7 +51,40 @@ All notable changes to this project will be documented in this file.
   0.99 sidebar, so hover and the selected row were effectively invisible.
 
 ### Fixed
-- **The platform fee was invisible in the dashboard.** `moneyByCurrency` computes
+- **One payment could grant credits twice.** `credit_grants.source_transaction_id`
+  linked a grant to its ledger row, but nothing at the database level prevented a
+  second grant naming the same row. Every fulfilment path therefore depended on an
+  application check, and an application check only holds while one writer runs:
+  two deliveries that read "not yet granted" before either commits both insert.
+  Measured on an unmodified tree, eight concurrent direct inserts for one ledger
+  row produced **eight grants**. Migration `0024` adds a partial unique index on
+  `source_transaction_id`; the losing insert is now an `ON CONFLICT DO NOTHING`
+  no-op rather than a 500 — deliberately, because a caught `23505` would abort the
+  surrounding transaction and silently discard every later write in it. Proven with
+  eight simultaneous writers and, separately, across six OS processes: one
+  checkout → one grant, six distinct checkouts → six grants.
+- **The credit balance had two models that could disagree.** `credit_grants`
+  (`remaining`, `expiresAt`) is the spendable truth — allocation and every read
+  path (`usableBalance`) use it — while `enrollments.credits` is a projection.
+  The projection was *incremented* rather than derived, so a grant that expired
+  by time stayed in the column: a 10-credit balance whose grant had expired read
+  `10` in the column and `0` as spendable. Both the grant and debit paths now
+  derive the column from the grants after the write, and the monthly-expiry
+  materializer lowers it too.
+- **A purchase's recorded opening balance could be wrong.** `fulfillPayment`
+  copied `enrollments.credits` as `balanceBefore`, so with a stale projection the
+  audit recorded 5 before, 15 after, for a purchase that actually took the
+  customer from 0 to 10. It now reads the spendable balance inside the
+  transaction.
+- **The credit and purchase audit could be rewritten in place.** `transactions`
+  and `credit_allocations` were ordinary mutable tables, so the history a balance
+  is reconstructed from could be edited without a trace. `0024` makes both
+  append-only with `BEFORE UPDATE` triggers. `DELETE` stays legal because user
+  erasure cascades, and the three `ON DELETE SET NULL` pointers may null
+  themselves when their target is removed; nothing that describes a movement —
+  parties, amount, money, balances, kind, description — can change.
+
+
   `platformFees` from the fee stored on each receipt, and its integration test
   asserts the figure — but `MoneyView` dropped the field, so nothing ever rendered
   it. A creator's "Collected" card showed a net total with no indication that

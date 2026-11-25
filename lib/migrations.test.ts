@@ -37,6 +37,7 @@ const MIGRATIONS = [
 	"drizzle/0021_platform_billing.sql",
 	"drizzle/0022_platform_paid_through.sql",
 	"drizzle/0023_platform_paid_through_checked.sql",
+	"drizzle/0024_ledger_integrity.sql",
 ];
 
 /**

@@ -151,6 +151,20 @@ function spendOrder() {
  *
  * Every balance increase goes through here so no path can create credits that
  * are unattributable or unexpirable.
+ *
+ * `credit_grant_source_unique_idx` is the idempotency boundary: one ledger row
+ * may grant once. When a concurrent delivery already inserted the grant for this
+ * source, `ON CONFLICT DO NOTHING` makes the losing insert a no-op and this
+ * returns `{ duplicate: true }`, so a replay stays a replay and the surrounding
+ * transaction is **not** aborted.
+ *
+ * `DO NOTHING` is chosen over catching `23505` deliberately: a failed statement
+ * aborts the whole Postgres transaction, so a catch would leave every later write
+ * in the same transaction silently discarded at COMMIT. The conflict target is
+ * omitted because a partial index cannot be inferred from `(source_transaction_id)`
+ * alone — drizzle drops `targetWhere` for `onConflictDoNothing` (verified in
+ * `drizzle-orm@0.45.4`, `pg-core/query-builders/insert.js:100-110`), so a targeted
+ * clause would emit SQL that does not match the index.
  */
 export async function createGrant(
 	tx: Tx,
@@ -165,10 +179,13 @@ export async function createGrant(
 		amount: number;
 		expiresAt?: Date | null;
 	},
-) {
+): Promise<
+	| { grant: typeof creditGrants.$inferSelect; duplicate: false }
+	| { grant: undefined; duplicate: true }
+> {
 	if (!Number.isSafeInteger(input.amount) || input.amount <= 0)
 		throw new ServiceError("INVALID_INPUT", "A grant must be positive");
-	const [grant] = await tx
+	const inserted = tx
 		.insert(creditGrants)
 		.values({
 			enrollmentId: input.enrollmentId,
@@ -183,12 +200,25 @@ export async function createGrant(
 			expiresAt: input.expiresAt ?? null,
 		})
 		.returning();
-	return grant;
+	// Only a grant that names a source has an idempotency boundary. Without one
+	// there is nothing to conflict on, and a conflicting unique value would be a
+	// real error the caller must see.
+	const [grant] = input.sourceTransactionId
+		? await inserted.onConflictDoNothing()
+		: await inserted;
+	return grant
+		? { grant, duplicate: false }
+		: { grant: undefined, duplicate: true };
 }
 
 /**
  * Apply a positive delta by creating a grant and raising the projection.
  * Used by comps, creator increases, and purchase fulfillment.
+ *
+ * Returns `duplicate: true` when this ledger row already produced a grant. The
+ * projection is left untouched in that case: the units were added by the writer
+ * that won the insert, and raising it again would inflate a balance whose grant
+ * does not exist.
  */
 export async function grantCredits(
 	tx: Tx,
@@ -204,12 +234,12 @@ export async function grantCredits(
 		expiresAt?: Date | null;
 	},
 ) {
-	const grant = await createGrant(tx, input);
-	await tx
-		.update(enrollments)
-		.set({ credits: sql`${enrollments.credits} + ${input.amount}` })
-		.where(eq(enrollments.id, input.enrollmentId));
-	return grant;
+	const created = await createGrant(tx, input);
+	if (created.duplicate) return created;
+	// Derive, do not increment: the projection is a cache of the grants, and an
+	// incremental write would preserve any drift already in it.
+	await syncProjection(tx, input.enrollmentId);
+	return created;
 }
 
 /**
@@ -279,19 +309,26 @@ export async function allocateDebit(
 	return allocations;
 }
 
-/** Lower the projection without touching grants (used with an allocation). */
-async function applyProjection(tx: Tx, enrollmentId: string, delta: number) {
-	const [updated] = await tx
+/**
+ * Rewrite the enrollment projection from the grants that are actually spendable.
+ *
+ * `enrollments.credits` is a cache of the grant ledger, never a second balance.
+ * Incrementing it (`+ delta`) let it drift from the truth: a grant that expires
+ * by time is already unspendable on read, but nothing lowered the column, so the
+ * two disagreed by exactly the expired amount. Deriving it on every write means
+ * the cache cannot carry a stale high or low value into a later decision.
+ *
+ * The caller must run this inside the transaction that changed the grants, after
+ * the change, so the same locked rows produce the same number the next reader
+ * will see.
+ */
+async function syncProjection(tx: Tx, enrollmentId: string) {
+	const balance = await usableBalance(tx, enrollmentId);
+	await tx
 		.update(enrollments)
-		.set({ credits: sql`${enrollments.credits} + ${delta}` })
-		.where(
-			and(
-				eq(enrollments.id, enrollmentId),
-				sql`${enrollments.credits} + ${delta} >= 0`,
-			),
-		)
-		.returning();
-	return updated;
+		.set({ credits: balance })
+		.where(eq(enrollments.id, enrollmentId));
+	return balance;
 }
 
 export async function changeCredits(
@@ -488,7 +525,7 @@ export async function adjustCredits(
 					balanceAfter: after,
 				})
 				.returning({ id: transactions.id });
-			await grantCredits(tx, {
+			const granted = await grantCredits(tx, {
 				enrollmentId: enrollment.id,
 				creatorId: principal.creatorId,
 				userId: enrollment.userId,
@@ -498,6 +535,16 @@ export async function adjustCredits(
 				amount: data.delta,
 				expiresAt,
 			});
+			// A fresh ledger row cannot already have a grant unless a concurrent
+			// writer inserted one for this row, which only happens if the row itself
+			// was reused. Roll back so the caller sees a conflict rather than a
+			// receipt for credits that were not granted.
+			if (granted.duplicate)
+				throw new ServiceError(
+					"GRANT_ALREADY_RECORDED",
+					"This ledger entry has already been granted",
+					409,
+				);
 			return {
 				transactionId: entry.id,
 				before,
@@ -554,14 +601,10 @@ export async function adjustCredits(
 			amount: debit,
 			transactionId: entry.id,
 		});
-		const updated = await applyProjection(tx, enrollment.id, -debit);
-		if (!updated)
-			throw new ServiceError(
-				"INSUFFICIENT_CREDITS",
-				"Not enough credits",
-				409,
-				{ balance: before },
-			);
+		// The grants were locked and checked above, so a short balance cannot
+		// reach here; recomputing the projection keeps the cache equal to the
+		// ledger rather than subtracting from a value that may already be stale.
+		await syncProjection(tx, enrollment.id);
 
 		return {
 			transactionId: entry.id,
@@ -653,6 +696,16 @@ export async function expireGrants(creatorId: string) {
 				amount: grant.remaining,
 			});
 			recorded += 1;
+		}
+		// An expiry lowers what is spendable, so the projection must follow it.
+		// Without this the column keeps claiming credits that `usableBalance`
+		// already excludes, which is exactly the drift the two models had.
+		if (recorded > 0) {
+			const enrollmentIds = [
+				...new Set(expired.map((grant) => grant.enrollmentId)),
+			];
+			for (const enrollmentId of enrollmentIds)
+				await syncProjection(tx, enrollmentId);
 		}
 		return { expiredGrants: recorded };
 	});
