@@ -19,7 +19,8 @@
 		"db:push": "drizzle-kit push",
 		"db:pull": "drizzle-kit pull",
 		"db:studio": "drizzle-kit studio",
-		"verify:targets": "tsx scripts/verify-targets.mts"
+		"verify:targets": "tsx scripts/verify-targets.mts",
+		"verify:migrations": "tsx scripts/verify-migrations.mts"
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.9.0",
