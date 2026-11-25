@@ -58,10 +58,11 @@ All notable changes to this project will be documented in this file.
   two deliveries that read "not yet granted" before either commits both insert.
   Measured on an unmodified tree, eight concurrent direct inserts for one ledger
   row produced **eight grants**. Migration `0024` adds a partial unique index on
-  `source_transaction_id`; the insert now loses the race and the write paths
-  translate Postgres `23505` into a no-op instead of a 500. Proven with eight
-  simultaneous writers and, separately, across six OS processes: one checkout →
-  one grant, six distinct checkouts → six grants.
+  `source_transaction_id`; the losing insert is now an `ON CONFLICT DO NOTHING`
+  no-op rather than a 500 — deliberately, because a caught `23505` would abort the
+  surrounding transaction and silently discard every later write in it. Proven with
+  eight simultaneous writers and, separately, across six OS processes: one
+  checkout → one grant, six distinct checkouts → six grants.
 - **The credit balance had two models that could disagree.** `credit_grants`
   (`remaining`, `expiresAt`) is the spendable truth — allocation and every read
   path (`usableBalance`) use it — while `enrollments.credits` is a projection.
