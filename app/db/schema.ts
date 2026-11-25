@@ -667,9 +667,9 @@ export const creditGrants = pgTable(
 		index("credit_grant_expiry_idx").on(table.expiresAt),
 		// The idempotency boundary for every positive movement. A grant is
 		// attributable to exactly one ledger row, and two inserters of the same
-		// source serialize here: the loser gets 23505 and translates it instead of
-		// crediting the same purchase twice. Partial because comps and expiry rows
-		// written without a source are legitimate and must not collide.
+		// source serialize here: the loser's `ON CONFLICT DO NOTHING` reports a
+		// duplicate instead of crediting the same purchase twice. Partial because
+		// comps and expiry rows without a source are legitimate and must not collide.
 		uniqueIndex("credit_grant_source_unique_idx")
 			.on(table.sourceTransactionId)
 			.where(sql`${table.sourceTransactionId} is not null`),

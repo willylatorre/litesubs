@@ -147,33 +147,6 @@ function spendOrder() {
 }
 
 /**
- * Recognise Postgres' unique-violation error through Drizzle's wrapper.
- *
- * Drizzle 0.45 re-throws the driver's error as `DrizzleQueryError` with the
- * original on `cause` (`drizzle-orm/errors.js`), so checking the outer error
- * alone would never see `23505`. Both shapes are inspected because a caller may
- * also invoke the driver directly.
- */
-export function uniqueViolation(error: unknown, constraint?: string) {
-	let current: unknown = error;
-	for (let depth = 0; depth < 4 && current; depth += 1) {
-		const candidate = current as {
-			code?: string;
-			constraint?: string;
-			cause?: unknown;
-		};
-		if (candidate.code === "23505")
-			return (
-				constraint === undefined ||
-				candidate.constraint === undefined ||
-				candidate.constraint === constraint
-			);
-		current = candidate.cause;
-	}
-	return false;
-}
-
-/**
  * Record a positive credit movement as a grant.
  *
  * Every balance increase goes through here so no path can create credits that
@@ -181,11 +154,17 @@ export function uniqueViolation(error: unknown, constraint?: string) {
  *
  * `credit_grant_source_unique_idx` is the idempotency boundary: one ledger row
  * may grant once. When a concurrent delivery already inserted the grant for this
- * source, the insert loses the race and this returns `{ duplicate: true }`
- * instead of throwing, so the caller can treat a replay as a replay rather than
- * a 500. The decision is made by the database at write time — never by reading
- * for an existing grant first, which races precisely under the load it is meant
- * to survive.
+ * source, `ON CONFLICT DO NOTHING` makes the losing insert a no-op and this
+ * returns `{ duplicate: true }`, so a replay stays a replay and the surrounding
+ * transaction is **not** aborted.
+ *
+ * `DO NOTHING` is chosen over catching `23505` deliberately: a failed statement
+ * aborts the whole Postgres transaction, so a catch would leave every later write
+ * in the same transaction silently discarded at COMMIT. The conflict target is
+ * omitted because a partial index cannot be inferred from `(source_transaction_id)`
+ * alone — drizzle drops `targetWhere` for `onConflictDoNothing` (verified in
+ * `drizzle-orm@0.45.4`, `pg-core/query-builders/insert.js:100-110`), so a targeted
+ * clause would emit SQL that does not match the index.
  */
 export async function createGrant(
 	tx: Tx,
@@ -206,33 +185,30 @@ export async function createGrant(
 > {
 	if (!Number.isSafeInteger(input.amount) || input.amount <= 0)
 		throw new ServiceError("INVALID_INPUT", "A grant must be positive");
-	try {
-		const [grant] = await tx
-			.insert(creditGrants)
-			.values({
-				enrollmentId: input.enrollmentId,
-				creatorId: input.creatorId,
-				userId: input.userId,
-				planId: input.planId,
-				planVersionId: input.planVersionId ?? null,
-				sourceTransactionId: input.sourceTransactionId ?? null,
-				kind: input.kind,
-				amount: input.amount,
-				remaining: input.amount,
-				expiresAt: input.expiresAt ?? null,
-			})
-			.returning();
-		return { grant, duplicate: false };
-	} catch (error) {
-		// No source means no idempotency boundary to collide on, so a unique
-		// violation here is not the expected duplicate and must surface.
-		if (
-			input.sourceTransactionId &&
-			uniqueViolation(error, "credit_grant_source_unique_idx")
-		)
-			return { grant: undefined, duplicate: true };
-		throw error;
-	}
+	const inserted = tx
+		.insert(creditGrants)
+		.values({
+			enrollmentId: input.enrollmentId,
+			creatorId: input.creatorId,
+			userId: input.userId,
+			planId: input.planId,
+			planVersionId: input.planVersionId ?? null,
+			sourceTransactionId: input.sourceTransactionId ?? null,
+			kind: input.kind,
+			amount: input.amount,
+			remaining: input.amount,
+			expiresAt: input.expiresAt ?? null,
+		})
+		.returning();
+	// Only a grant that names a source has an idempotency boundary. Without one
+	// there is nothing to conflict on, and a conflicting unique value would be a
+	// real error the caller must see.
+	const [grant] = input.sourceTransactionId
+		? await inserted.onConflictDoNothing()
+		: await inserted;
+	return grant
+		? { grant, duplicate: false }
+		: { grant: undefined, duplicate: true };
 }
 
 /**
