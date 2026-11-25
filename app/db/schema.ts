@@ -642,7 +642,13 @@ export const creditGrants = pgTable(
 		planVersionId: text("plan_version_id").references(() => planVersions.id, {
 			onDelete: "set null",
 		}),
-		/** The ledger row that created it, so history is source-linked both ways. */
+		/**
+		 * The ledger row that created it, so history is source-linked both ways.
+		 *
+		 * One ledger row grants at most once: `credit_grant_source_unique_idx`
+		 * makes that a database fact rather than a caller convention, so a
+		 * duplicate fulfilment loses the insert race instead of double-crediting.
+		 */
 		sourceTransactionId: text("source_transaction_id"),
 		kind: grantKindEnum("kind").notNull(),
 		/** Granted units, never changes after creation. */
@@ -659,6 +665,14 @@ export const creditGrants = pgTable(
 		index("credit_grant_creator_idx").on(table.creatorId),
 		index("credit_grant_user_idx").on(table.userId),
 		index("credit_grant_expiry_idx").on(table.expiresAt),
+		// The idempotency boundary for every positive movement. A grant is
+		// attributable to exactly one ledger row, and two inserters of the same
+		// source serialize here: the loser gets 23505 and translates it instead of
+		// crediting the same purchase twice. Partial because comps and expiry rows
+		// written without a source are legitimate and must not collide.
+		uniqueIndex("credit_grant_source_unique_idx")
+			.on(table.sourceTransactionId)
+			.where(sql`${table.sourceTransactionId} is not null`),
 		check("credit_grant_amount_positive", sql`${table.amount} > 0`),
 		check(
 			"credit_grant_remaining_bounded",

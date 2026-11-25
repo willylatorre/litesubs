@@ -169,6 +169,13 @@
       "when": 1795324098360,
       "tag": "0023_platform_paid_through_checked",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795324099360,
+      "tag": "0024_ledger_integrity",
+      "breakpoints": true
     }
   ]
 }
