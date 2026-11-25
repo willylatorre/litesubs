@@ -13,12 +13,13 @@
 		"format": "biome format",
 		"lint": "biome lint",
 		"check": "biome check",
-		"test": "tsx --test \"lib/**/*.test.ts\"",
+		"test": "tsx scripts/verify-targets.mts && tsx --import ./scripts/verify-targets.mts --test \"lib/**/*.test.ts\"",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "node scripts/check-migration-baseline.mjs && drizzle-kit migrate",
 		"db:push": "drizzle-kit push",
 		"db:pull": "drizzle-kit pull",
-		"db:studio": "drizzle-kit studio"
+		"db:studio": "drizzle-kit studio",
+		"verify:targets": "tsx scripts/verify-targets.mts"
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.9.0",
